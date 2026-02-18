@@ -1,0 +1,182 @@
+/* login.css */
+
+.login {
+  position: relative;
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 120px;
+  background-image: url("../assets/login-dg.png"); /* use relative path */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Overlay to darken background */
+.login::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* Ensure cards appear above overlay */
+.login > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* LEFT CARD */
+.left-card {
+  width: 440px;
+  height: 700px;
+  border-radius: 12px;
+  padding: 40px;
+  background: linear-gradient(180deg, #c7a6ff, #9db4ff);
+  color: white;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transform: translateY(-60px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.left-card h2 {
+  font-size: 36px;
+  margin-bottom: 20px;
+}
+
+.left-card p {
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* RIGHT CARD */
+.right-card {
+  width: 440px;
+  height: 700px;
+  border-radius: 12px;
+  padding: 40px;
+  background: #ffffff;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  transform: translateY(40px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* Logo */
+.right-card .logo {
+  width: 150px;
+  height: auto;
+  margin: 0 auto 20px auto;
+  display: block;
+  filter: brightness(0.8);
+}
+
+/* Headings & subtitle */
+.right-card h2 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.right-card .subtitle {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 30px;
+}
+
+/* Input fields */
+.right-card input {
+  width: 100%;
+  padding: 14px;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 15px;
+  transition: border 0.3s, box-shadow 0.3s;
+}
+.password-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding: 14px;
+  padding-right: 40px; /* space for eye icon */
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 15px;
+  transition: border 0.3s, box-shadow 0.3s;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #9b7bff;
+}
+
+.toggle-password:hover {
+  color: #7a5fff;
+}
+
+
+.right-card input:focus {
+  outline: none;
+  border-color: #9b7bff;
+  box-shadow: 0 0 6px rgba(155, 123, 255, 0.4);
+}
+
+/* Forgot password */
+.forgot {
+  font-size: 14px;
+  color: #9b7bff;
+  margin: 10px 0 20px 0;
+  cursor: pointer;
+  text-align: right;
+  transition: color 0.3s;
+}
+
+.forgot:hover {
+  color: #7a5fff;
+}
+
+/* Login button */
+.login-btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #b993ff, #8ca6db);
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.login-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+  .login {
+    flex-direction: column;
+    gap: 40px;
+  }
+  .left-card,
+  .right-card {
+    transform: translateY(0);
+  }
+}
