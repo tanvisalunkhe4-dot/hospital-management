@@ -1,218 +1,145 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import theme from '../theme/theme'; 
-
-const ADMIN_PIN = "1234"; // Your existing PIN logic
-
-const AddHospitalModal = ({ isOpen, onClose }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const [error, setError] = useState("");
-  
-  const [formData, setFormData] = useState({
-    name: '', 
-    hfrId: '', 
-    email: '', 
+const AddHospital = ({ onSuccess, onCancel }) => {
+  // Matches your backend payload keys exactly
+  const [hospitalData, setHospitalData] = useState({
+    name: '',
+    hfrId: '',
+    email: '',
     phone: '',
-    category: 'Private', 
+    category: 'Private',
     type: 'Multi-Specialty',
     address: '',
-    city: '',
+    city: 'Pune',
     state: 'Maharashtra',
-    licenseNo: '',
-    bedCapacity: ''
+    bedCapacity: 0
   });
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleVerify = () => {
-    if (pinInput === ADMIN_PIN) {
-      setIsAuthenticated(true);
-      setError("");
-    } else {
-      setError("Invalid Admin Credentials");
-      setPinInput("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      // Ensure the payload matches your 'new_hosp' mapping
+      await axios.post('http://127.0.0.1:8000/api/v1/superadmin/hospitals/register', hospitalData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      onSuccess();
+    } catch (error) {
+      alert("Registration failed. Check if HFR ID or Email already exists.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <div style={overlayStyle}>
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }} 
-        animate={{ opacity: 1, scale: 1 }} 
-        style={isAuthenticated ? largeModalStyle : modalStyle}
-      >
-        
-        <div style={headerStyle}>
-          <div>
-            <h2 style={{ color: theme.colors.primaryDark, margin: 0 }}>
-              {isAuthenticated ? "Register New Healthcare Facility" : "Admin Verification"}
-            </h2>
-            {isAuthenticated && <p style={{ fontSize: '13px', color: theme.colors.subtitle, margin: '4px 0 0 0' }}>Super Admin Portal: Facility Onboarding</p>}
-          </div>
-          <button onClick={() => { setIsAuthenticated(false); onClose(); }} style={closeButtonStyle}>✕</button>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{...modalCardStyle, maxWidth: '850px'}}>
+        <div style={modalHeaderStyle}>
+          <div style={iconBox}><Building2 color={theme.colors.primary} /></div>
+          <h2 style={titleStyle}>Provision Medical Node</h2>
+          <button onClick={onCancel} style={closeBtn}><X size={20} /></button>
         </div>
 
-        {!isAuthenticated ? (
-          /* --- (Your Existing Password Step Remains Untouched) --- */
-          <div style={formGridStyle}>
-            <p style={{ fontSize: '14px', color: theme.colors.subtitle }}>Please enter your Super Admin PIN to continue.</p>
-            <input 
-              type="password" 
-              placeholder="Enter PIN" 
-              style={{ ...inputStyle, textAlign: 'center', fontSize: '20px', letterSpacing: '8px' }}
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-            />
-            {error && <p style={{ color: 'red', fontSize: '12px', textAlign: 'center' }}>{error}</p>}
-            <button style={primaryButtonStyle} onClick={handleVerify}>Verify Identity</button>
-          </div>
-        ) : (
-          /* --- UPDATED PROFESSIONAL LARGE FORM --- */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form onSubmit={handleSubmit} style={formStyle}>
+          <div style={{...gridStyle, gridTemplateColumns: '1fr 1fr 1fr'}}>
             
-            {/* Section 1: Official Identity */}
-            <div style={sectionContainer}>
-              <h4 style={sectionTitle}>Facility Identity (ABDM)</h4>
-              <div style={grid2}>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>Hospital Name (Legal)</label>
-                  <input type="text" placeholder="e.g. Apollo Healthcare" style={inputStyle} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-                </div>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>ABDM HFR ID</label>
-                  <input type="text" placeholder="HFR-XXXX-XXXX" style={inputStyle} onChange={(e) => setFormData({...formData, hfrId: e.target.value})} />
-                </div>
-              </div>
+            {/* --- Row 1 --- */}
+            <div style={inputGroup}>
+              <label style={labelStyle}>Facility Name</label>
+              <input type="text" placeholder="Ruby Hall Clinic" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, name: e.target.value})} required />
             </div>
 
-            {/* Section 2: Contact & Admin Details */}
-            <div style={sectionContainer}>
-              <h4 style={sectionTitle}>Primary Contact (For Invite)</h4>
-              <div style={grid2}>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>Admin Email</label>
-                  <input type="email" placeholder="admin@hospital.com" style={inputStyle} onChange={(e) => setFormData({...formData, email: e.target.value})} />
-                </div>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>Phone Number</label>
-                  <input type="text" placeholder="+91 XXXXX XXXXX" style={inputStyle} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
-                </div>
-              </div>
+            <div style={inputGroup}>
+              <label style={labelStyle}>ABDM HFR ID</label>
+              <input type="text" placeholder="HFR-102-XXXX" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, hfrId: e.target.value})} required />
             </div>
 
-            {/* Section 3: Operational Details */}
-            <div style={sectionContainer}>
-              <h4 style={sectionTitle}>Operational Scale</h4>
-              <div style={grid3}>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>Facility Type</label>
-                  <select style={inputStyle} onChange={(e) => setFormData({...formData, type: e.target.value})}>
-                    <option>Multi-Specialty</option>
-                    <option>General Hospital</option>
-                    <option>Clinic</option>
-                    <option>Diagnostic Center</option>
-                  </select>
-                </div>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>Bed Capacity</label>
-                  <input type="number" placeholder="0" style={inputStyle} onChange={(e) => setFormData({...formData, bedCapacity: e.target.value})} />
-                </div>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>Category</label>
-                  <select style={inputStyle} onChange={(e) => setFormData({...formData, category: e.target.value})}>
-                    <option>Private</option>
-                    <option>Government</option>
-                    <option>Semi-Govt</option>
-                    <option>NGO</option>
-                  </select>
-                </div>
-              </div>
+            <div style={inputGroup}>
+              <label style={labelStyle}>Admin Email</label>
+              <input type="email" placeholder="admin@hospital.com" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, email: e.target.value})} required />
             </div>
 
-            {/* Section 4: Physical Address */}
-            <div style={sectionContainer}>
-              <h4 style={sectionTitle}>Location Information</h4>
-              <div style={inputGroup}>
-                <label style={labelStyle}>Full Address</label>
-                <input type="text" placeholder="Street, Building, Area" style={inputStyle} onChange={(e) => setFormData({...formData, address: e.target.value})} />
-              </div>
-              <div style={{...grid2, marginTop: '12px'}}>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>City</label>
-                  <input type="text" placeholder="City" style={inputStyle} onChange={(e) => setFormData({...formData, city: e.target.value})} />
-                </div>
-                <div style={inputGroup}>
-                  <label style={labelStyle}>State</label>
-                  <input type="text" value={formData.state} style={inputStyle} readOnly />
-                </div>
-              </div>
+            {/* --- Row 2 --- */}
+            <div style={inputGroup}>
+              <label style={labelStyle}>Phone Number</label>
+              <input type="tel" placeholder="+91 XXXX" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, phone: e.target.value})} required />
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-              <button 
-                style={{ ...primaryButtonStyle, background: '#e5e7eb', color: '#374151' }} 
-                onClick={() => setIsAuthenticated(false)}
-              >
-                Back to Verification
-              </button>
-              <button 
-                style={primaryButtonStyle} 
-                onClick={() => { console.log("Onboarding Hospital:", formData); onClose(); }}
-              >
-                Onboard Facility & Send Invite
-              </button>
+            <div style={inputGroup}>
+              <label style={labelStyle}>Category</label>
+              <select style={selectStyle} onChange={(e) => setHospitalData({...hospitalData, category: e.target.value})}>
+                <option value="Private">Private</option>
+                <option value="Government">Government</option>
+                <option value="Trust">Trust</option>
+              </select>
+            </div>
+
+            <div style={inputGroup}>
+              <label style={labelStyle}>Facility Type</label>
+              <input type="text" placeholder="Multi-Specialty" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, type: e.target.value})} required />
+            </div>
+
+            {/* --- Row 3 --- */}
+            <div style={inputGroup}>
+              <label style={labelStyle}>City</label>
+              <input type="text" placeholder="Pune" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, city: e.target.value})} required />
+            </div>
+
+            <div style={inputGroup}>
+              <label style={labelStyle}>State</label>
+              <input type="text" placeholder="Maharashtra" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, state: e.target.value})} required />
+            </div>
+
+            <div style={inputGroup}>
+              <label style={labelStyle}>Bed Capacity</label>
+              <input type="number" placeholder="100" style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, bedCapacity: parseInt(e.target.value)})} required />
+            </div>
+
+            {/* --- Row 4 --- */}
+            <div style={{ ...inputGroup, gridColumn: 'span 3' }}>
+              <label style={labelStyle}>Full Physical Address</label>
+              <input type="text" placeholder="Building, Street, Area..." style={inputStyle} 
+                onChange={(e) => setHospitalData({...hospitalData, address: e.target.value})} required />
             </div>
           </div>
-        )}
+
+          <div style={{display: 'flex', gap: '16px', marginTop: '20px'}}>
+             <button type="button" onClick={onCancel} style={secondaryBtn}>Cancel</button>
+             <button type="submit" style={submitButtonStyle} disabled={isSubmitting}>
+               {isSubmitting ? "Syncing..." : "Initialize Hospital"}
+             </button>
+          </div>
+        </form>
       </motion.div>
     </div>
   );
 };
-
-// --- UPDATED STYLES ---
-
-const largeModalStyle = { 
-  width: '95%', 
-  maxWidth: '800px', 
-  backgroundColor: '#fff', 
-  padding: '40px', 
-  borderRadius: theme.borderRadius.lg, 
-  boxShadow: theme.boxShadow.dropdown,
-  maxHeight: '90vh',
-  overflowY: 'auto'
-};
-
-const sectionContainer = {
-  padding: '20px',
-  borderRadius: '8px',
-  border: `1px solid ${theme.colors.border}`,
-  backgroundColor: '#f9fafb'
-};
-
-const sectionTitle = {
-  fontSize: '14px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  color: theme.colors.primary,
-  marginTop: 0,
-  marginBottom: '16px',
-  fontWeight: '700'
-};
-
-const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
-const grid3 = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' };
-
-// --- Reused styles ---
-const overlayStyle = { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, backdropFilter: 'blur(6px)' };
-const modalStyle = { width: '95%', maxWidth: '400px', backgroundColor: '#fff', padding: '40px', borderRadius: theme.borderRadius.lg, boxShadow: theme.boxShadow.dropdown };
-const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: `1px solid ${theme.colors.border}`, paddingBottom: '16px' };
-const closeButtonStyle = { background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: theme.colors.muted };
-const formGridStyle = { display: 'flex', flexDirection: 'column', gap: '20px' };
+// --- STYLES ---
+const overlayStyle = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
+const cardStyle = { maxWidth: '650px', width: '90%', background: '#fff', borderRadius: '24px', padding: '40px', position: 'relative', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' };
+const closeBtn = { position: 'absolute', top: '20px', right: '20px', border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' };
+const headerStyle = { textAlign: 'center', marginBottom: '32px' };
+const iconBox = { width: '50px', height: '50px', background: '#f0fdf4', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' };
+const titleStyle = { fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 };
+const subtitleStyle = { fontSize: '14px', color: '#64748b', marginTop: '8px' };
+const formStyle = { display: 'flex', flexDirection: 'column', gap: '24px' };
+const gridStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
 const inputGroup = { display: 'flex', flexDirection: 'column', gap: '8px' };
-const labelStyle = { fontSize: '12px', fontWeight: 'bold', color: theme.colors.text };
-const inputStyle = { width: '100%', padding: '12px', borderRadius: theme.borderRadius.sm, border: `1px solid ${theme.colors.border}`, outline: 'none', boxSizing: 'border-box', fontSize: '14px' };
-const primaryButtonStyle = { flex: 1, padding: '14px', background: theme.colors.buttonGradient, color: 'white', border: 'none', borderRadius: theme.borderRadius.sm, fontWeight: 'bold', cursor: 'pointer' };
+const labelStyle = { fontSize: '13px', fontWeight: '700', color: '#334155' };
+const inputWrapper = { position: 'relative' };
+const inputIcon = { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' };
+const inputStyle = { width: '100%', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', background: '#f8fafc', boxSizing: 'border-box' };
+const inputWithIcon = { ...inputStyle, paddingLeft: '40px' };
+const selectStyle = { ...inputStyle, appearance: 'none' };
+const buttonStyle = { width: '100%', padding: '16px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' };
 
-export default AddHospitalModal;
+export default AddHospital;

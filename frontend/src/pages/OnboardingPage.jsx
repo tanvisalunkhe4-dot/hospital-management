@@ -1,206 +1,280 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  ArrowLeft, User, Building2, ShieldCheck, 
+  Database, Lock, Smartphone, Mail, ChevronRight 
+} from 'lucide-react';
 import theme from '../theme/theme'; 
 
 const NexHealthOnboarding = ({ onLoginRedirect }) => {
   const [role, setRole] = useState(null);
   const [step, setStep] = useState(0);
-  const [patientVerifyMethod, setPatientVerifyMethod] = useState('abha'); 
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState(''); 
+  const [isLoading, setIsLoading] = useState(false);
+  const [consent, setConsent] = useState(false);
+  
+  // Patient-specific sub-method
+  const [patientMethod, setPatientMethod] = useState('phone'); 
 
   const handleRoleSelect = (selectedRole) => {
     setRole(selectedRole);
     setStep(1);
   };
 
+  const handleSignup = async () => {
+    // 1. Frontend Validation
+    if (!identifier || !password) {
+      alert("Please fill in all security fields.");
+      return;
+    }
+    if (!consent) {
+      alert("Please accept the ABDM data processing consent.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // 2. Prepare Payload for FastAPI
+      // For Admin: Identifier is the HFR ID
+      // For Patient: Identifier is Phone/Email
+      const payload = {
+        role: role,
+        identifier: identifier,
+        password: password,
+        hospital_id: role === 'Admin' ? identifier : null 
+      };
+
+      const response = await fetch('http://localhost:8000/api/v1/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // 3. Success Feedback
+        alert(`Successfully registered as ${role}!`);
+        onLoginRedirect(); 
+      } else {
+        // 4. Detailed Error from Backend (e.g. "Hospital ID not found")
+        alert(`Registration Error: ${data.detail || "Server error"}`);
+      }
+    } catch (err) {
+      alert("Network Error: Could not connect to NexHealth API.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div style={{ 
-      height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', fontFamily: theme.typography.fontFamily,
-      position: 'relative', overflow: 'hidden'
-    }}>
-      
-      {/* 1. LAYER 1: Background */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: 'url("https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=2000&auto=format&fit=crop")',
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        filter: 'blur(1px) grayscale(100%)', opacity: 0.15, zIndex: 0, transform: 'scale(1.1)' 
-      }} />
-      
-      <div style={{ position: 'absolute', inset: 0, backgroundColor: theme.colors.primaryDark, opacity: 0.05, zIndex: 1 }} />
-
-      {/* 2. LAYER 2: Logo */}
-      <div style={{ marginBottom: theme.spacing.huge, textAlign: 'center', zIndex: theme.zIndex.base + 1 }}>
-         <span style={{ fontSize: '1.8rem', fontWeight: theme.typography.weight.bold, color: theme.colors.text }}>
-            Nex<span style={{ color: theme.colors.primary }}>Health</span>
-         </span>
-      </div>
-
-      {/* 3. LAYER 3: Floating Form Card */}
+    <div style={pageContainerStyle}>
+      {/* Animated Background Grid */}
       <motion.div 
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        style={{
-          width: '90%', maxWidth: '560px', backgroundColor: theme.colors.cardWhite,
-          borderRadius: theme.borderRadius.lg, boxShadow: theme.boxShadow.dropdown, 
-          padding: '64px 48px', border: `1px solid ${theme.colors.border}`,
-          zIndex: theme.zIndex.base, position: 'relative'
-        }}
+        animate={{ backgroundPosition: ['0px 0px', '60px 60px'] }}
+        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+        style={gridLayer} 
+      />
+      
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        style={logoContainerStyle}
+      >
+         <span style={logoTextStyle}>Nex<span style={{ color: theme.colors.primary }}>Health</span></span>
+      </motion.div>
+
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }} 
+        animate={{ opacity: 1, scale: 1 }} 
+        style={cardStyle}
       >
         {step > 0 && (
-          <button onClick={() => setStep(step - 1)} style={backButtonStyle}>‹ Back</button>
+          <button onClick={() => setStep(step - 1)} style={backButtonStyle}>
+            <ArrowLeft size={16} /> Back
+          </button>
         )}
 
         <AnimatePresence mode="wait">
-          {/* STEP 0: Role Selection */}
           {step === 0 && (
             <motion.div key="step0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-                <h1 style={{ fontSize: '26px', fontWeight: theme.typography.weight.bold, color: theme.colors.primaryDark, marginBottom: '8px' }}>
-                  Create your free account
-                </h1>
-                <p style={{ color: theme.colors.subtitle, fontSize: theme.typography.fontSize.sm }}>
-                  Join India's unified healthcare ecosystem. ABDM Middleware Certified.
-                </p>
+              <div style={headerTextStyle}>
+                <h1 style={titleStyle}>Join NexHealth</h1>
+                <p style={subtitleStyle}>Select your portal to begin your digital healthcare journey.</p>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <RoleSelectionButton title="Continue as Patient" icon="👤" onClick={() => handleRoleSelect('Patient')} />
-                <RoleSelectionButton title="Continue as Practitioner" icon="🏥" onClick={() => handleRoleSelect('Practitioner')} />
+              <div style={flexColumnGap}>
+                <RoleButton 
+                  title="Patient Portal" 
+                  desc="Access your Ayushman Bharat health records." 
+                  icon={<User size={24} />} 
+                  onClick={() => handleRoleSelect('Patient')} 
+                />
+                <RoleButton 
+                  title="Hospital Admin" 
+                  desc="Register your facility and manage medical staff." 
+                  icon={<Building2 size={24} />} 
+                  onClick={() => handleRoleSelect('Admin')} 
+                />
               </div>
 
-              <div style={{ marginTop: '32px', textAlign: 'center', borderTop: `1px solid ${theme.colors.divider}`, paddingTop: '24px' }}>
-                <p style={{ fontSize: '14px', color: theme.colors.subtitle }}>
-                  Already have an account? {' '}
-                  <span onClick={onLoginRedirect} style={linkStyle}>Log In</span>
+              <div style={footerDividerStyle}>
+                <p style={{ fontSize: '14px', color: '#64748b' }}>
+                  Already have an account? <span onClick={onLoginRedirect} style={linkStyle}>Log In</span>
                 </p>
               </div>
             </motion.div>
           )}
 
-          {/* STEP 1: Verification Form */}
           {step === 1 && (
-            <motion.div key="step1" initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }}>
-              <div style={{ marginBottom: '32px' }}>
-                <h2 style={{ fontSize: '22px', fontWeight: theme.typography.weight.bold, color: theme.colors.text }}>
-                  {role === 'Patient' ? 'Link ABDM Record' : 'Facility Administration'}
-                </h2>
-                <p style={{ fontSize: theme.typography.fontSize.sm, color: theme.colors.subtitle, marginTop: '4px' }}>
+            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+              <div style={{ marginBottom: '24px' }}>
+                <h2 style={stepTitleStyle}>{role === 'Patient' ? 'Patient Sign Up' : 'Admin Registration'}</h2>
+                <p style={stepSubtitleStyle}>
                   {role === 'Patient' 
-                    ? 'Authentication is conducted via OTP through NHA registries.' 
-                    : 'Register as the primary administrator for your facility.'}
+                    ? 'Use your personal contact details to register.' 
+                    : 'Enter your verified Hospital HFR ID to link the facility.'}
                 </p>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                
-                {role === 'Patient' ? (
-                  <>
-                    <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
-                       <VerificationSubOption title="ABHA ID" active={patientVerifyMethod === 'abha'} onClick={() => setPatientVerifyMethod('abha')} />
-                       <VerificationSubOption title="Mobile Number" active={patientVerifyMethod === 'contact'} onClick={() => setPatientVerifyMethod('contact')} />
-                    </div>
-                    <label style={labelStyle}>{patientVerifyMethod === 'abha' ? 'ABHA Number' : 'Mobile Number'}</label>
-                    <input type="text" placeholder={patientVerifyMethod === 'abha' ? "XX-XXXX-XXXX-XXXX" : "+91-XXXXXXXXXX"} style={inputStyle} />
-                    <button style={primaryButtonStyle}>Create Patient Account</button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ marginBottom: '4px' }}>
-                      <label style={labelStyle}>Hospital / HFR ID</label>
-                      <input type="text" placeholder="e.g. HFR-1002-4452" style={inputStyle} />
-                    </div>
-
-                    <div style={infoBoxStyle}>
-                      <p style={{ fontSize: '12px', color: theme.colors.primaryDark, margin: 0, lineHeight: '1.5' }}>
-                        <b>Note:</b> This path is for <b>Hospital Admins only</b>. Once registered, you can invite Doctors, HODs, and Staff from your dashboard.
-                      </p>
-                    </div>
-
-                    <button style={primaryButtonStyle}>Register Facility Admin</button>
-                    
-                    <p style={{ textAlign: 'center', fontSize: '13px', color: theme.colors.muted }}>
-                      Are you a Doctor or Staff? <br/>
-                      <span style={{ fontWeight: '600', color: theme.colors.text }}>Please use the invite link sent to your email.</span>
-                    </p>
-                  </>
+              <div style={flexColumnGap}>
+                {role === 'Patient' && (
+                  <div style={methodToggleGroup}>
+                    <MethodToggle 
+                      active={patientMethod === 'phone'} 
+                      onClick={() => setPatientMethod('phone')} 
+                      icon={<Smartphone size={14} />} 
+                      label="Phone" 
+                    />
+                    <MethodToggle 
+                      active={patientMethod === 'email'} 
+                      onClick={() => setPatientMethod('email')} 
+                      icon={<Mail size={14} />} 
+                      label="Email" 
+                    />
+                  </div>
                 )}
 
-                <p style={{ textAlign: 'center', fontSize: '13px', color: theme.colors.muted, marginTop: '16px' }}>
-                  By clicking, you agree to the <span style={linkStyle}>Terms of Use</span> and <span style={linkStyle}>Privacy Policy</span>.
-                </p>
+                <div style={inputGroupStyle}>
+                  <label style={labelStyle}>
+                    {role === 'Patient' 
+                      ? (patientMethod === 'phone' ? 'Mobile Number' : 'Personal Email') 
+                      : 'Hospital Registration (HFR ID)'}
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="text" 
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder={role === 'Patient' 
+                        ? (patientMethod === 'phone' ? '+91 XXXXX XXXXX' : 'name@example.com') 
+                        : 'e.g. HOSP-MH-1029'} 
+                      style={inputStyle} 
+                    />
+                    <div style={inputIconStyle}>
+                       {role === 'Admin' ? <Building2 size={16} /> : (patientMethod === 'phone' ? <Smartphone size={16} /> : <Mail size={16} />)}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={inputGroupStyle}>
+                  <label style={labelStyle}>Security Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="password" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••" 
+                      style={inputStyle} 
+                    />
+                    <Lock size={16} style={inputIconStyle} />
+                  </div>
+                </div>
+
+                {/* ABDM Consent Checkbox */}
+                <div style={consentRowStyle}>
+                  <input 
+                    type="checkbox" 
+                    checked={consent} 
+                    onChange={(e) => setConsent(e.target.checked)} 
+                    style={checkboxStyle}
+                  />
+                  <p style={consentTextStyle}>
+                    I consent to NexHealth processing my data in accordance with <b>ABDM Digital Standards</b> and privacy laws.
+                  </p>
+                </div>
+
+                <button 
+                  style={{...primaryButtonStyle, opacity: isLoading ? 0.7 : 1}} 
+                  onClick={handleSignup}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Processing..." : `Complete ${role} Signup`}
+                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
-      {/* 4. LAYER 4: Badges */}
       <div style={badgeContainerStyle}>
-         <TrustBadge label="ABDM MIDDLEWARE" />
-         <TrustBadge label="HIPAA SECURE" />
-         <TrustBadge label="NHA CERTIFIED" />
+         <div style={trustItem}><ShieldCheck size={14} /> ABDM COMPLIANT</div>
+         <div style={trustItem}><Database size={14} /> AES-256 ENCRYPTED</div>
       </div>
     </div>
   );
 };
 
-// --- STYLES & HELPERS ---
+// --- STYLES (Keep existing but update primaryButtonStyle and inputStyle) ---
+const pageContainerStyle = { height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ffffff', position: 'relative', overflow: 'hidden', fontFamily: "'Inter', sans-serif" };
+const gridLayer = { position: 'absolute', inset: 0, zIndex: 0, backgroundImage: 'radial-gradient(#e2e8f0 1.5px, transparent 1.5px)', backgroundSize: '60px 60px', maskImage: 'linear-gradient(to bottom, black, transparent)' };
+const logoContainerStyle = { marginBottom: '32px', zIndex: 2 };
+const logoTextStyle = { fontSize: '2.2rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-0.04em' };
+const cardStyle = { width: '90%', maxWidth: '480px', backgroundColor: '#fff', borderRadius: '28px', boxShadow: '0 20px 50px rgba(0,0,0,0.05)', padding: '48px', border: '1px solid #f1f5f9', zIndex: 2, position: 'relative' };
+const headerTextStyle = { textAlign: 'center', marginBottom: '32px' };
+const titleStyle = { fontSize: '26px', fontWeight: '800', color: '#0f172a' };
+const subtitleStyle = { color: '#64748b', fontSize: '14px', marginTop: '6px' };
+const flexColumnGap = { display: 'flex', flexDirection: 'column', gap: '16px' };
+const inputGroupStyle = { marginBottom: '12px' };
+const labelStyle = { fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '8px', display: 'block' };
+const inputStyle = { width: '100%', padding: '14px 14px 14px 44px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box', background: '#f8fafc', transition: '0.2s outline' };
+const inputIconStyle = { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' };
+const primaryButtonStyle = { width: '100%', padding: '16px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', marginTop: '12px', transition: '0.3s' };
+const roleButtonStyle = { display: 'flex', alignItems: 'center', gap: '16px', padding: '18px', borderRadius: '16px', border: '1px solid #f1f5f9', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' };
+const backButtonStyle = { position: 'absolute', top: '20px', left: '24px', background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' };
+const methodToggleGroup = { display: 'flex', gap: '8px', marginBottom: '8px' };
+const linkStyle = { color: '#10b981', cursor: 'pointer', fontWeight: '700' };
+const footerDividerStyle = { marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #f1f5f9', textAlign: 'center' };
+const badgeContainerStyle = { marginTop: '32px', display: 'flex', gap: '24px', zIndex: 2 };
+const trustItem = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: '800', color: '#94a3b8', letterSpacing: '0.05em' };
+const consentRowStyle = { display: 'flex', gap: '10px', alignItems: 'flex-start', marginTop: '4px' };
+const checkboxStyle = { accentColor: '#10b981', marginTop: '3px' };
+const consentTextStyle = { fontSize: '11px', color: '#64748b', lineHeight: '1.4', margin: 0 };
+const stepTitleStyle = { fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 };
+const stepSubtitleStyle = { fontSize: '13px', color: '#64748b', marginTop: '4px' };
 
-const infoBoxStyle = {
-  padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', 
-  border: `1px solid #dcfce7`, marginBottom: '8px'
-};
-
-const backButtonStyle = { 
-  position: 'absolute', top: '24px', left: '24px', background: 'none', border: 'none', 
-  color: theme.colors.primary, fontWeight: '600', cursor: 'pointer', fontSize: '14px' 
-};
-
-const roleButtonStyle = {
-  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px',
-  padding: '16px', borderRadius: '12px', border: `1px solid ${theme.colors.border}`,
-  backgroundColor: '#fff', cursor: 'pointer', transition: '0.2s', width: '100%'
-};
-
-const inputStyle = {
-  width: '100%', padding: '16px', borderRadius: '8px', border: `1px solid ${theme.colors.border}`,
-  fontSize: '16px', marginTop: '8px', outline: 'none', boxSizing: 'border-box', background: '#f9fafb'
-};
-
-const labelStyle = { fontSize: '13px', fontWeight: '600', color: theme.colors.text, display: 'block' };
-
-const primaryButtonStyle = {
-  width: '100%', padding: '16px', background: theme.colors.buttonGradient, color: 'white', border: 'none', 
-  borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', marginTop: '12px',
-  boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.2)' 
-};
-
-const linkStyle = { color: theme.colors.primary, cursor: 'pointer', fontWeight: '600', textDecoration: 'underline' };
-
-const badgeContainerStyle = { marginTop: '40px', display: 'flex', gap: '32px', opacity: 0.5, filter: 'grayscale(100%)', zIndex: 10 };
-
-const RoleSelectionButton = ({ title, icon, onClick }) => (
-  <button onClick={onClick} style={roleButtonStyle}>
-    <span style={{ fontSize: '20px' }}>{icon}</span>
-    <span style={{ fontWeight: '500', color: theme.colors.text }}>{title}</span>
-  </button>
+// Sub-components
+const RoleButton = ({ title, desc, icon, onClick }) => (
+  <motion.button whileHover={{ y: -4, borderColor: '#10b981' }} onClick={onClick} style={roleButtonStyle}>
+    <div style={{ background: '#f0fdf4', color: '#10b981', padding: '12px', borderRadius: '10px' }}>{icon}</div>
+    <div>
+      <div style={{ fontWeight: '700', color: '#0f172a' }}>{title}</div>
+      <div style={{ fontSize: '12px', color: '#64748b' }}>{desc}</div>
+    </div>
+  </motion.button>
 );
 
-const VerificationSubOption = ({ title, active, onClick }) => (
+const MethodToggle = ({ active, onClick, icon, label }) => (
   <button onClick={onClick} style={{
-      flex: 1, padding: '12px', borderRadius: '8px', 
-      border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`, 
-      background: active ? theme.colors.primaryLight : '#fff',
-      color: active ? theme.colors.primaryDark : theme.colors.subtitle,
-      fontWeight: '600', cursor: 'pointer', fontSize: '13px'
-    }}>
-    {title}
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+    padding: '10px', borderRadius: '8px', border: `1px solid ${active ? '#10b981' : '#e2e8f0'}`,
+    background: active ? '#f0fdf4' : '#fff', color: active ? '#10b981' : '#64748b',
+    fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+  }}>
+    {icon} {label}
   </button>
-);
-
-const TrustBadge = ({ label }) => (
-  <span style={{ fontSize: '10px', fontWeight: 'bold', color: theme.colors.text, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
 );
 
 export default NexHealthOnboarding;
