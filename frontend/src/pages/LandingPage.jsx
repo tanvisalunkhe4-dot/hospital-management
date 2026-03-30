@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import theme from '../theme/theme';
 import logo from '../assets/logo.png';
-import AddHospitalModal from './AddHospitalModal';
 import { 
   Stethoscope, 
   Wallet, 
@@ -10,10 +9,13 @@ import {
   FlaskConical, 
   ReceiptIndianRupee, 
   Video, 
-  Users 
+  Users,
+  ChevronDown, UserPlus, ShieldCheck, Link as LinkIcon, 
+  DownloadCloud, UploadCloud, FileCheck, CreditCard
 } from 'lucide-react';
 
-const LandingPage = ({ onGetStarted }) => {  const features = [
+const LandingPage = ({ onNavigate, onGetStarted, onLoginClick }) => { 
+  const features = [
     { 
       name: "ABDM Compliance", 
       icon: (
@@ -24,419 +26,141 @@ const LandingPage = ({ onGetStarted }) => {  const features = [
       ), 
       desc: "Instant ABHA creation and seamless health record linking (ABD-M compliant)." 
     },
-    { 
-      name: "Doctor's Scribe", 
-      icon: <Stethoscope size={32} color="#10b981" />, 
-      desc: "AI-powered clinical notes and prescription management." 
-    },
-    { 
-      name: "Patient Wallet", 
-      icon: <Wallet size={32} color="#10b981" />, 
-      desc: "Seamless digital payments and credit management." 
-    },
-    { 
-      name: "Staff Inventory", 
-      icon: <Boxes size={32} color="#10b981" />, 
-      desc: "Real-time tracking of hospital supplies and medical stock." 
-    },
-    { 
-      name: "WhatsApp Delivery", 
-      // Using an actual WhatsApp SVG for authenticity
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="#25D366">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.937 3.659 1.432 5.631 1.433h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-        </svg>
-      ), 
-      desc: "Reports and appointments sent directly to phones." 
-    },
-    { 
-      name: "Lab & Diagnostics", 
-      icon: <FlaskConical size={32} color="#10b981" />, 
-      desc: "Integrated lab module for automated test results." 
-    },
-    { 
-      name: "GST Billing", 
-      icon: <ReceiptIndianRupee size={32} color="#10b981" />, 
-      desc: "Simplified tax-compliant invoicing for all services." 
-    },
-    { 
-      name: "Telehealth Hub", 
-      icon: <Video size={32} color="#10b981" />, 
-      desc: "Connect with patients via secure video calls." 
-    },
-    { 
-      name: "OPD Queue", 
-      icon: <Users size={32} color="#10b981" />, 
-      desc: "Live tracking of patient wait times and availability." 
-    },
+    { name: "Doctor's Scribe", icon: <Stethoscope size={32} color="#10b981" />, desc: "AI-powered clinical notes and prescription management." },
+    { name: "Patient Wallet", icon: <Wallet size={32} color="#10b981" />, desc: "Seamless digital payments and credit management." },
+    { name: "Staff Inventory", icon: <Boxes size={32} color="#10b981" />, desc: "Real-time tracking of hospital supplies and medical stock." },
+    { name: "Lab & Diagnostics", icon: <FlaskConical size={32} color="#10b981" />, desc: "Integrated lab module for automated test results." },
+    { name: "GST Billing", icon: <ReceiptIndianRupee size={32} color="#10b981" />, desc: "Simplified tax-compliant invoicing for all services." },
+    { name: "Telehealth Hub", icon: <Video size={32} color="#10b981" />, desc: "Connect with patients via secure video calls." },
+    { name: "OPD Queue", icon: <Users size={32} color="#10b981" />, desc: "Live tracking of patient wait times and availability." },
   ];
 
-  // Doubling the features to create a seamless infinite loop
   const doubledFeatures = [...features, ...features];
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const fadeInUp = {
-    initial: { opacity: 0, y: 40 },
-    animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
-  };
+  const [isAbdmMenuOpen, setIsAbdmMenuOpen] = useState(false);
 
   return (
-    <div style={{ 
-      background: '#f8fafc', 
-      minHeight: '100vh', 
-      fontFamily: theme.typography.fontFamily, 
-      overflowX: 'hidden' 
-    }}>
+    <div style={{ background: '#f8fafc', minHeight: '100vh', fontFamily: "'Inter', sans-serif", overflowX: 'hidden' }}>
       
-      {/* 1. Enhanced Navigation Bar */}
-{/* 1. Enhanced Navigation Bar */}
-<motion.nav 
-  initial={{ y: -100 }}
-  animate={{ y: 0 }}
-  style={{ 
-    display: 'flex', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: '0 80px',
-    height: '90px',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    backdropFilter: 'blur(12px)',
-    position: 'sticky', 
-    top: 0, 
-    zIndex: 1000, 
-    borderBottom: `1px solid ${theme.colors.divider}`,
-    boxShadow: '0 2px 15px rgba(0, 0, 0, 0.03)' 
-  }}
->
-  {/* Left: Branding */}
-  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-    <img src={logo} alt="logo" style={{ height: '50px' }} />
-    <span style={{ fontWeight: '800', fontSize: '1.7rem' }}>
-      Nex<span style={{ color: theme.colors.primary }}>Health</span>
-    </span>
-  </div>
-
-  {/* Right: Actions */}
-  <div style={{ display: 'flex', gap: '12px' }}>
-    <motion.button 
-      whileHover={{ scale: 1.05 }}
-      style={{ 
-        background: 'transparent', 
-        border: `2px solid ${theme.colors.primary}`, 
-        color: theme.colors.primary,
-        padding: '10px 20px',
-        borderRadius: '8px',
-        fontWeight: '700',
-        cursor: 'pointer'
-      }}
-    >
-      Login
-    </motion.button>
-    
-    <motion.button 
-      whileHover={{ scale: 1.05 }}
-      onClick={onGetStarted} 
-      style={{ 
-        background: theme.colors.buttonGradient, 
-        color: '#fff', 
-        padding: '10px 24px', 
-        borderRadius: '8px', 
-        border: 'none', 
-        fontWeight: '800', 
-        cursor: 'pointer'
-      }}
-    >
-      Get Started
-    </motion.button>
-  </div>
-</motion.nav>
-
-
-
-{/* 2. Hero Section - Updated with Glow & Connected Background */}
-<section style={{ 
-  display: 'grid', 
-  gridTemplateColumns: '1.2fr 1fr', 
-  padding: '100px 80px', 
-  alignItems: 'center',
-  background: 'linear-gradient(to bottom, #ffffff, #f0fdf4)',
-  position: 'relative',
-  overflow: 'hidden'
-}}>
-  {/* Left Content */}
-  <motion.div initial="initial" animate="animate" variants={fadeInUp}>
-    <div style={{ 
-      display: 'inline-flex', alignItems: 'center', gap: '8px', 
-      background: '#d1fae5', color: '#065f46', padding: '8px 16px', 
-      borderRadius: '20px', fontWeight: '700', fontSize: '0.9rem', marginBottom: '25px'
-    }}>
-      <span style={{ display: 'block', width: '8px', height: '8px', background: '#10b981', borderRadius: '50%' }}></span>
-      ABDM Compliant & ABHA Integrated
-    </div>
-
-    <h1 style={{ fontSize: '4.2rem', fontWeight: '900', color: '#0f172a', lineHeight: '1.05' }}>
-      Transforming Indian <br /> Healthcare with <br /> 
-      <span style={{ color: theme.colors.primary }}>NexHealth.</span>
-    </h1>
-    <p style={{ fontSize: '1.25rem', color: '#475569', margin: '25px 0', maxWidth: '530px', lineHeight: '1.6' }}>
-      A simple, integrated platform for Doctors, Patients, and Admin, designed for maximum efficiency and seamless ABHA linking.
-    </p>
-    
-    <div style={{ display: 'flex', gap: '20px' }}>
-      <motion.button 
-        whileHover={{ y: -5, boxShadow: '0 10px 20px rgba(5, 150, 105, 0.3)' }}
-        style={{ background: theme.colors.buttonGradient, color: '#fff', padding: '18px 45px', borderRadius: '15px', border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer' }}>
-        Get Started Free
-      </motion.button>
-      <motion.button 
-        whileHover={{ background: '#f1f5f9' }}
-        style={{ background: 'transparent', color: '#0f172a', padding: '18px 45px', borderRadius: '15px', border: '2px solid #e2e8f0', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer' }}>
-        Watch Demo
-      </motion.button>
-    </div>
-  </motion.div>
-  
-  {/* Right Content: Connected Floating Mockups */}
-  <div style={{ position: 'relative', height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-    
-    {/* 1. Subtle Background Glow */}
-    <div style={{
-      position: 'absolute',
-      width: '500px',
-      height: '500px',
-      background: 'radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, transparent 70%)',
-      zIndex: 0
-    }} />
-
-    {/* 2. Rotating Decorative Ring (Bridges the gap without being heavy) */}
-    <motion.div 
-      animate={{ rotate: 360 }}
-      transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-      style={{ 
-        position: 'absolute', 
-        width: '420px', 
-        height: '420px', 
-        border: '2px dashed rgba(16, 185, 129, 0.15)', 
-        borderRadius: '50%', 
-        zIndex: 0 
-      }}
-    />
-
-    {/* 3. Floating Component 1: Live OPD Wait Time Ticker */}
-    <motion.div 
-      initial={{ x: 100, opacity: 0 }}
-      animate={{ x: 0, opacity: 1, y: [0, -15, 0] }}
-      transition={{ 
-        x: { delay: 0.6, duration: 0.8 },
-        y: { duration: 5, repeat: Infinity, ease: "easeInOut" }
-      }}
-      style={{ 
-        position: 'absolute', top: '15%', right: '10px', background: '#10b981', 
-        color: '#fff', padding: '20px 25px', borderRadius: '28px', 
-        boxShadow: '0 25px 50px rgba(16, 185, 129, 0.3)', zIndex: 3, width: '200px'
-      }}
-    >
-      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '600', opacity: 0.9 }}>Live OPD Wait Time</p>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
-        <h3 style={{ margin: 0, fontSize: '2rem', fontWeight: '900' }}>12</h3>
-        <span style={{ fontSize: '0.9rem', fontWeight: '700' }}>mins</span>
-      </div>
-      <div style={{ height: '5px', width: '100%', background: 'rgba(255,255,255,0.3)', marginTop: '12px', borderRadius: '3px', overflow: 'hidden' }}>
-        <motion.div 
-          animate={{ x: ['-100%', '100%'] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-          style={{ height: '100%', width: '60%', background: '#fff' }}
-        />
-      </div>
-    </motion.div>
-    {/* --- 3.5 Interactive Dashboard Preview (Carepatron Style) --- */}
-<section style={{ padding: '100px 80px', background: theme.colors.cardWhite }}>
-  <div style={{ maxWidth: '1200px', margin: '0 auto', textAlign: 'center', marginBottom: '60px' }}>
-    <h2 style={{ fontSize: theme.typography.fontSize.h1, fontWeight: theme.typography.weight.bold, color: theme.colors.text }}>
-      One Unified Dashboard. <span style={{ color: theme.colors.primary }}>Total Control.</span>
-    </h2>
-    
-  </div>
-
-  <motion.div 
-    initial={{ y: 50, opacity: 0 }}
-    whileInView={{ y: 0, opacity: 1 }}
-    viewport={{ once: true }}
-    style={{ 
-      background: theme.colors.glassGradient,
-      backdropFilter: 'blur(10px)',
-      borderRadius: theme.borderRadius.xl,
-      padding: theme.spacing.md,
-      border: `1px solid ${theme.colors.border}`,
-      boxShadow: theme.boxShadow.dropdown,
-      maxWidth: '1100px',
-      margin: '0 auto',
-      position: 'relative',
-      overflow: 'hidden'
-    }}
-  >
-    {/* Browser Header */}
-    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', padding: '10px' }}>
-      <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: theme.colors.error }} />
-      <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: theme.colors.warning }} />
-      <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: theme.colors.success }} />
-    </div>
-
-    {/* Mockup Content */}
-    <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '20px', height: '500px' }}>
-      {/* Sidebar Mockup */}
-      <div style={{ background: theme.colors.background, borderRadius: theme.borderRadius.lg, padding: '20px' }}>
-        {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} style={{ height: '35px', width: '100%', background: '#fff', marginBottom: '15px', borderRadius: '6px', border: `1px solid ${theme.colors.divider}` }} />
-        ))}
-      </div>
-      {/* Main Content Mockup */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div style={{ background: '#fff', borderRadius: theme.borderRadius.lg, padding: '20px', boxShadow: theme.boxShadow.sm }}>
-          <h4 style={{ color: theme.colors.primary, marginBottom: '15px' }}>Patient Queue</h4>
-          {[1, 2, 3].map(i => (
-            <div key={i} style={{ height: '50px', width: '100%', background: theme.colors.background, marginBottom: '10px', borderRadius: '8px' }} />
-          ))}
+      {/* 1. Enhanced Navigation */}
+      <motion.nav 
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        style={navbarStyle}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span style={logoStyle}>Nex<span style={{ color: theme.colors.primary }}>Health</span></span>
         </div>
-        <div style={{ background: '#fff', borderRadius: theme.borderRadius.lg, padding: '20px', boxShadow: theme.boxShadow.sm }}>
-          <h4 style={{ color: theme.colors.accent, marginBottom: '15px' }}>Revenue Analytics</h4>
-          <div style={{ height: '150px', width: '100%', background: `linear-gradient(to top, ${theme.colors.primaryLight}, transparent)`, borderRadius: '8px', borderBottom: `2px solid ${theme.colors.primary}` }} />
+
+        <div style={linkContainer}>
+          <span style={navLink} onClick={() => onNavigate('about')}>About</span>
+          
+          <div style={{ position: 'relative' }} onMouseEnter={() => setIsAbdmMenuOpen(true)} onMouseLeave={() => setIsAbdmMenuOpen(false)}>
+            <div style={navLinkActive}>
+              Patient (ABDM)
+              <motion.span animate={{ rotate: isAbdmMenuOpen ? 180 : 0 }} style={{ display: 'flex' }}>
+                <ChevronDown size={14} />
+              </motion.span>
+            </div>
+
+            <AnimatePresence>
+              {isAbdmMenuOpen && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={dropdownMenuStyle}>
+                  {[
+                    { label: "Create ABHA ID", route: 'create-abha', icon: <UserPlus size={18} /> },
+                    { label: "Verify ABHA ID", route: 'verify-abha', icon: <ShieldCheck size={18} /> },
+                    { label: "Link Patient Record", route: 'link-records', icon: <LinkIcon size={18} /> },
+                    { label: "Fetch Health Records", route: 'fetch-records', icon: <DownloadCloud size={18} /> },
+                    { label: "Upload Health Records", route: 'upload-records', icon: <UploadCloud size={18} /> },
+                  ].map((item, idx) => (
+                    <div key={idx} style={dropdownItemStyle} onClick={() => onNavigate(item.route)}>
+                      <span style={{ color: theme.colors.primary }}>{item.icon}</span> {item.label}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <span style={navLink} onClick={() => onNavigate('features')}>Features</span>
+          <span style={navLink} onClick={() => onNavigate('solutions')}>Solutions</span>
         </div>
-      </div>
-    </div>
-  </motion.div>
-</section>
-
-
-    {/* 4. Floating Component 2: Digital Prescription Card */}
-    <motion.div 
-      initial={{ x: -100, opacity: 0 }}
-      animate={{ x: 0, opacity: 1, y: [0, 15, 0] }}
-      transition={{ 
-        x: { delay: 0.8, duration: 0.8 },
-        y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }
-      }}
-      style={{ 
-        position: 'absolute', bottom: '10%', left: '-20px', width: '310px', 
-        background: '#fff', borderRadius: '32px', padding: '25px', 
-        boxShadow: '0 40px 80px -15px rgba(0,0,0,0.12)', zIndex: 2,
-        border: '1px solid #f1f5f9'
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
-        <div style={{ background: '#25D366', padding: '8px', borderRadius: '10px' }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.937 3.659 1.432 5.631 1.433h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+        
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <button onClick={onLoginClick} style={loginBtnStyle}>Login</button>
+          <button onClick={onGetStarted} style={getStartedBtnStyle}>Get Started</button>
         </div>
-        <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1rem' }}>Digital Rx Sent!</span>
-      </div>
-      <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '16px', marginBottom: '12px', borderLeft: '4px solid #10b981' }}>
-        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Patient: Rahul Sharma</p>
-        <p style={{ margin: '4px 0 0 0', fontWeight: '800', color: '#10b981', fontSize: '1.1rem' }}>Amoxicillin 500mg</p>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ background: '#005A9C', padding: '5px 10px', borderRadius: '8px', color: '#fff', fontSize: '11px', fontWeight: '900' }}>ABHA</div>
-        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Linked to Health Record</span>
-      </div>
-    </motion.div>
+      </motion.nav>
 
-  </div>
-</section>
-{/* --- 3. Unified Green Infinite Right-to-Left Marquee --- */}
-<section style={{ padding: '80px 0 120px' }}>
-  <h2 style={{ textAlign: 'center', marginBottom: '60px', fontSize: '2.8rem', fontWeight: '900', color: '#0f172a' }}>
+      {/* 2. Professional Hero Section */}
+      <section style={heroContainerStyle}>
+        <div style={bgBlurLayer} />
+        <div style={gridLayer}>
+          <motion.div animate={{ y: [0, -80] }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} style={{ position: 'absolute', inset: 0, backgroundImage: 'inherit', backgroundSize: 'inherit' }} />
+        </div>
+
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} style={{ position: 'relative', zIndex: 2 }}>
+          <h1 style={heroH1}>
+            The Digital Spine of <br />
+            <span style={heroGradientText}>Indian Healthcare.</span>
+          </h1>
+          <p style={heroSub}>
+            A unified, ABDM-compliant ecosystem designed for doctors and clinics. 
+            Automate your practice, link health records, and focus on patients.
+          </p>
+          
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginBottom: '80px' }}>
+            <motion.button whileHover={{ y: -4 }} style={primaryBtn}>Start Free Trial</motion.button>
+            <motion.button whileHover={{ background: '#f1f5f9' }} style={secondaryBtn}>View Live Demo</motion.button>
+          </div>
+
+          {/* Centered Dashboard Mockup */}
+          <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} style={mockupOuter}>
+            <div style={mockupInner}>
+              <div style={mockSidebar}>
+                {[1,2,3,4,5].map(i => <div key={i} style={{ ...mockLine, width: i === 1 ? '100%' : '70%', background: i === 1 ? '#10b98133' : '#e2e8f0' }} />)}
+              </div>
+              <div style={{ flex: 1, padding: '40px' }}>
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
+                  <div style={mockMetricCard} />
+                  <div style={mockMetricCardLight} />
+                </div>
+                <div style={mockChartArea} />
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* 3. Feature Cards Flow - Infinite Marquee */}
+      {/* In your LandingPage.jsx */}
+<section style={{ padding: '100px 0' }}>
+  <h2 style={{ textAlign: 'center', marginBottom: '60px', fontSize: '2.8rem', fontWeight: '900' }}>
      Powerful Solutions for Every Department
   </h2>
-  
-  <div 
-    style={{ 
-      overflow: 'hidden', 
-      width: '100%',
-      // Creates the soft fade-in/out effect at the edges
-      maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-      WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)'
-    }}
-  >
+  <div style={marqueeWrapper}>
     <motion.div 
-      // Pauses the entire line when any card is hovered
-      whileHover={{ animationPlayState: "paused" }} 
-      animate={{ x: ["0%", "-50%"] }} // Smooth Right-to-Left movement
-      transition={{ 
-        repeat: Infinity, 
-        duration: 45, 
-        ease: "linear" 
-      }}
-      style={{ 
-        display: 'flex', 
-        gap: '30px', 
-        width: 'max-content', 
-        padding: '30px 0' 
-      }}
+      animate={{ x: ["0%", "-50%"] }} 
+      transition={{ repeat: Infinity, duration: 45, ease: "linear" }} 
+      style={{ display: 'flex', gap: '30px', width: 'max-content' }}
     >
       {doubledFeatures.map((f, i) => (
         <motion.div 
-          key={i}
-          whileHover={{ 
-            y: -15, 
-            backgroundColor: '#ffffff', // Card brightens to pure white
-            borderColor: '#10b981',     // Border becomes prominent green
-            boxShadow: '0 30px 60px -12px rgba(16, 185, 129, 0.2)', // Deep green glow
-          }}
-          style={{ 
-            flex: '0 0 320px',
-            backgroundColor: '#f0fdf4',   // Uniform Soft Mint background
-            padding: '40px 30px', 
-            borderRadius: '32px', 
-            border: '2px solid #d1fae5',   // Subtle initial green border
-            borderTop: '6px solid #10b981', // Thick consistent green accent
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'flex-start', 
-            gap: '15px',
-            cursor: 'pointer',
-            transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-          }}
+          key={i} 
+          whileHover={{ y: -15, borderColor: '#10b981' }} 
+          // Redirect Trigger
+          onClick={() => onNavigate('features')} 
+          style={{ ...featureCardStyle, cursor: 'pointer' }}
         >
-          {/* Consistent Circular Icon */}
-          <div style={{ 
-            fontSize: '2.2rem', 
-            background: '#ffffff', 
-            width: '70px', height: '70px',
-            borderRadius: '50%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            marginBottom: '10px',
-            boxShadow: '0 8px 15px rgba(16, 185, 129, 0.1)'
-          }}>
-            {f.icon}
-          </div>
-          
-          <h4 style={{ margin: 0, fontSize: '1.35rem', color: '#064e3b', fontWeight: '900' }}>
-            {f.name}
-          </h4>
-          
-          <p style={{ fontSize: '0.95rem', color: '#374151', lineHeight: '1.6', margin: 0 }}>
-            {f.desc}
-          </p>
-
-          <motion.span 
-            whileHover={{ x: 5 }} 
-            style={{ 
-              color: '#10b981', 
-              fontWeight: '800', 
-              fontSize: '0.9rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '5px', 
-              marginTop: 'auto' 
-            }}
-          >
-            Learn More <span style={{ fontSize: '1.2rem' }}>›</span>
-          </motion.span>
+          <div style={featureIconWrapper}>{f.icon}</div>
+          <h4 style={featureTitle}>{f.name}</h4>
+          <p style={featureDesc}>{f.desc}</p>
+          <span style={featureLink}>Learn More ›</span>
         </motion.div>
       ))}
     </motion.div>
   </div>
 </section>
+    
 {/* --- 3. Animated Trust & Compliance Bar --- */}
 <section style={{ 
   padding: `${theme.spacing.huge} 80px`, 
@@ -694,158 +418,186 @@ const LandingPage = ({ onGetStarted }) => {  const features = [
       </section>
       
 
-      {/* --- Full-Width Professional Footer --- */}
 {/* --- 100% FULL-WIDTH GREEN FOOTER --- */}
+{/* --- PROFESSIONAL NEXHEALTH FOOTER --- */}
 <footer style={{ 
-  /* This ensures the background color bleeds to the very edges of the screen */
   width: '100%',
-  backgroundColor: '#04210a', // Deep Forest Green matching your theme
+  backgroundColor: '#021205', // Slightly darker, richer black-green
+  backgroundImage: 'radial-gradient(circle at 50% -20%, #064e3b 0%, transparent 80%)', // Subtle green glow from top
   color: '#ffffff', 
-  padding: '100px 0 40px 0',
-  fontFamily: theme.typography.fontFamily,
-  borderTop: `4px solid ${theme.colors.primary}`, // Bold brand green top bar
-  
-  /* These lines are the safety net to kill the white side-bars */
-  display: 'block',
-  margin: '0',
-  boxSizing: 'border-box'
+  padding: '100px 0 60px 0',
+  fontFamily: "'Inter', sans-serif",
+  borderTop: `1px solid rgba(16, 185, 129, 0.2)`, // Thinner, more elegant border
+  position: 'relative',
+  zIndex: 2,
 }}>
-  {/* Inner Content Wrapper - This centers your text while the footer background stays 100% */}
   <div style={{ 
     width: '100%', 
-    maxWidth: '1400px', 
+    maxWidth: '1280px', 
     margin: '0 auto', 
-    padding: '0 80px',
+    padding: '0 40px',
     boxSizing: 'border-box'
   }}>
     
-    {/* Navigation Grid */}
     <div style={{ 
       display: 'grid', 
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-      gap: '40px',
+      gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', // Give the branding column more space
+      gap: '60px',
       marginBottom: '80px'
     }}>
       
-      {/* Column: Features */}
-      <div>
-        <h4 style={{ color: theme.colors.primary, fontSize: '0.9rem', marginBottom: '25px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Features</h4>
-        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '15px', fontSize: '0.95rem' }}>
-          {['Health Records', 'Practice Management', 'Telehealth', 'Clinical Notes', 'Patient Portal', 'Scheduling', 'Billing', 'Payments', 'Electronic Signing', 'Compliance'].map(item => (
-            <li key={item} style={{ cursor: 'pointer', opacity: 0.8 }} onMouseOver={e => e.target.style.color = theme.colors.primary} onMouseOut={e => e.target.style.color = '#fff'}>{item}</li>
+      {/* Brand & Mission Column */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img src={logo} alt="logo" style={{ height: '40px', filter: 'brightness(0) invert(1)' }} />
+          <span style={{ fontSize: '1.6rem', fontWeight: '800', letterSpacing: '-0.04em' }}>
+            Nex<span style={{ color: theme.colors.primary }}>Health</span>
+          </span>
+        </div>
+        <p style={{ fontSize: '0.95rem', color: '#94a3b8', lineHeight: '1.6', maxWidth: '280px' }}>
+          Building the digital infrastructure for modern Indian clinics. Fully ABDM compliant and doctor-first.
+        </p>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          {['LinkedIn', 'Twitter', 'GitHub'].map(s => (
+            <motion.div 
+              whileHover={{ y: -3, color: theme.colors.primary }}
+              key={s} 
+              style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}
+            >
+              {s}
+            </motion.div>
           ))}
-        </ul>
+        </div>
       </div>
 
-      {/* Column: Who We Serve */}
+      {/* Column: Features */}
       <div>
-        <h4 style={{ color: theme.colors.primary, fontSize: '0.9rem', marginBottom: '25px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Who we serve</h4>
-        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '15px', fontSize: '0.95rem' }}>
-          {['General Practice', 'Therapy', 'Psychology', 'Nursing', 'Mental Health', 'Nutrition', 'Medical Specialists'].map(item => (
-            <li key={item} style={{ cursor: 'pointer', opacity: 0.8 }}>{item}</li>
+        <h4 style={footerHeadingStyle}>Platform</h4>
+        <ul style={footerListStyle}>
+          {['ABDM Sync', 'AI Scribe', 'Inventory', 'Billing', 'Telehealth'].map(item => (
+            <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
           ))}
         </ul>
       </div>
 
       {/* Column: Resources */}
       <div>
-        <h4 style={{ color: theme.colors.primary, fontSize: '0.9rem', marginBottom: '25px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Resources</h4>
-        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '15px', fontSize: '0.95rem' }}>
-          {['Help Center', 'API Documentation', 'ABDM Sandbox', 'Security Standards', 'Developer Portal'].map(item => (
-            <li key={item} style={{ cursor: 'pointer', opacity: 0.8 }}>{item}</li>
+        <h4 style={footerHeadingStyle}>Resources</h4>
+        <ul style={footerListStyle}>
+          {['API Docs', 'Help Center', 'ABDM Sandbox', 'Security'].map(item => (
+            <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
           ))}
         </ul>
       </div>
 
-      {/* Column: Trust */}
+      {/* Column: Company */}
       <div>
-        <h4 style={{ color: theme.colors.primary, fontSize: '0.9rem', marginBottom: '25px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Trust</h4>
-        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '15px', fontSize: '0.95rem' }}>
-          {['Privacy Policy', 'Terms of Service', 'Data Sovereignty', 'HIPAA Compliance', 'DISHA Readiness'].map(item => (
-            <li key={item} style={{ cursor: 'pointer', opacity: 0.8 }}>{item}</li>
+        <h4 style={footerHeadingStyle}>Company</h4>
+        <ul style={footerListStyle}>
+          {['About Us', 'Careers', 'Privacy', 'Terms'].map(item => (
+            <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
           ))}
         </ul>
       </div>
 
-      {/* Branding Column */}
-      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-         <div style={{ color: theme.colors.primary, fontWeight: '800', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-           🌐 English (India)
-         </div>
-         <div style={{ opacity: 0.5, fontSize: '0.8rem', textAlign: 'right' }}>
-            ABDM Sandbox v2.0 <br />
-            ISO 27001 Certified
-         </div>
+      {/* Column: Status */}
+      <div style={{ textAlign: 'right' }}>
+        <h4 style={footerHeadingStyle}>System Status</h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end', color: '#10b981', fontSize: '0.85rem', fontWeight: '600' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+          All Systems Operational
+        </div>
+        <div style={{ marginTop: '20px', opacity: 0.5, fontSize: '0.75rem' }}>
+          v2.4.0 (Stable)<br />
+          Asia-South1 Region
+        </div>
       </div>
     </div>
 
-    {/* Bottom Identity Section */}
+    {/* Bottom Trust & Compliance Bar */}
     <div style={{ 
-      borderTop: '1px solid rgba(255,255,255,0.1)', 
+      borderTop: '1px solid rgba(255,255,255,0.05)', 
       paddingTop: '40px', 
       display: 'flex', 
       justifyContent: 'space-between', 
-      alignItems: 'center' 
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: '20px'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-        <img src={logo} alt="logo" style={{ height: '60px', filter: 'brightness(0) invert(1)' }} />
-        <span style={{ fontSize: '1.8rem', fontWeight: '900', letterSpacing: '-1.5px' }}>
-          Nex<span style={{ color: theme.colors.primary }}>Health</span>
-        </span>
+      <div style={{ display: 'flex', gap: '30px', opacity: 0.4, filter: 'grayscale(1)' }}>
+        {/* Placeholder for small certification logos */}
+        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>ABDM CERTIFIED</span>
+        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>ISO 27001</span>
+        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>HIPAA</span>
       </div>
       
-      <div style={{ display: 'flex', gap: '30px' }}>
-        {['In', 'Yt', 'Fb', 'Tw'].map(s => (
-          <span key={s} style={{ cursor: 'pointer', fontWeight: 'bold', color: '#fff', opacity: 0.6 }}>{s}</span>
-        ))}
+      <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+        © 2026 NexHealth. Built with ❤️ in India for the world.
       </div>
     </div>
-
-    <div style={{ marginTop: '40px', fontSize: '0.85rem', opacity: 0.4, textAlign: 'center', fontWeight: '500' }}>
-      © NexHealth 2026. Built for the Digital Spine of Indian Healthcare. ABDM Sandbox Certified.
-    
-    </div>
-  
-  <div style={utilityContainerStyle}>
-        <span style={adminLabelStyle}>Super Admin Portal</span>
-        <button onClick={() => setIsModalOpen(true)} style={fabStyle}>
-          <span>+</span>
-        </button>
-      </div>
-
-      {/* 2. Add the Modal component inside the main div */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <AddHospitalModal 
-            isOpen={isModalOpen} 
-            onClose={() => setIsModalOpen(false)} 
-          />
-        )}
-      </AnimatePresence>
   </div>
 </footer>
-
-
     </div>
   );
 };
-const utilityContainerStyle = {
-  position: 'fixed', bottom: '40px', right: '40px', zIndex: 100,
-  display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '12px'
+const navbarStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 80px', height: '80px', background: 'rgba(248, 250, 252, 0.8)', backdropFilter: 'blur(12px)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, borderBottom: '1px solid rgba(16, 185, 129, 0.1)' };
+const logoStyle = { fontWeight: '800', fontSize: '1.6rem', letterSpacing: '-0.03em', color: '#0f172a' };
+const linkContainer = { display: 'flex', gap: '32px' };
+const navLink = { fontSize: '15px', fontWeight: '500', color: '#475569', cursor: 'pointer' };
+const navLinkActive = { ...navLink, display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' };
+
+const heroContainerStyle = { padding: '160px 0 100px', textAlign: 'center', position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center' };
+const bgBlurLayer = { position: 'absolute', inset: 0, backgroundImage: "url('https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=1000')", backgroundSize: 'cover', filter: 'blur(120px)', opacity: 0.1, zIndex: 0 };
+const gridLayer = { position: 'absolute', inset: 0, zIndex: 1, backgroundSize: '80px 80px', backgroundImage: 'linear-gradient(to right, rgba(16, 185, 129, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(16, 185, 129, 0.06) 1px, transparent 1px)', maskImage: 'radial-gradient(circle at center, black 40%, transparent 90%)' };
+
+const heroH1 = { fontSize: '4.8rem', fontWeight: '800', color: '#0f172a', lineHeight: '1.05', letterSpacing: '-0.05em', marginBottom: '28px' };
+const heroGradientText = { background: 'linear-gradient(90deg, #10b981, #059669)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' };
+const heroSub = { fontSize: '1.3rem', color: '#475569', margin: '0 auto 48px auto', maxWidth: '700px', lineHeight: '1.6' };
+
+const primaryBtn = { background: '#10b981', color: '#fff', padding: '20px 44px', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 20px 40px rgba(16, 185, 129, 0.2)' };
+const secondaryBtn = { background: '#fff', color: '#0f172a', padding: '20px 44px', borderRadius: '14px', border: '1px solid #e2e8f0', fontWeight: '700', fontSize: '1.1rem', cursor: 'pointer' };
+const loginBtnStyle = { background: 'transparent', border: '1px solid #e2e8f0', padding: '10px 24px', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' };
+const getStartedBtnStyle = { background: '#10b981', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' };
+
+const mockupOuter = { width: '1000px', background: 'rgba(255,255,255,0.4)', backdropFilter: 'blur(20px)', borderRadius: '32px', padding: '12px', border: '1px solid rgba(255,255,255,0.7)', boxShadow: '0 40px 100px rgba(0,0,0,0.1)' };
+const mockupInner = { background: '#fff', borderRadius: '24px', height: '450px', display: 'flex', overflow: 'hidden' };
+const mockSidebar = { width: '200px', background: '#f8fafc', borderRight: '1px solid #f1f5f9', padding: '30px 20px' };
+const mockLine = { height: '10px', borderRadius: '4px', marginBottom: '20px' };
+const mockMetricCard = { flex: 1, height: '80px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #d1fae5' };
+const mockMetricCardLight = { flex: 1, height: '80px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9' };
+const mockChartArea = { height: '200px', width: '100%', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #e2e8f0' };
+
+const marqueeWrapper = { overflow: 'hidden', width: '100%', maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)' };
+const featureCardStyle = { flex: '0 0 320px', backgroundColor: '#f0fdf4', padding: '40px 30px', borderRadius: '32px', border: '2px solid #d1fae5', borderTop: '6px solid #10b981', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '15px', cursor: 'pointer', transition: '0.4s' };
+const featureIconWrapper = { fontSize: '2.2rem', background: '#fff', width: '70px', height: '70px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', boxShadow: '0 8px 15px rgba(16, 185, 129, 0.1)' };
+const featureTitle = { margin: 0, fontSize: '1.35rem', color: '#064e3b', fontWeight: '900' };
+const featureDesc = { fontSize: '0.95rem', color: '#374151', lineHeight: '1.6', margin: 0 };
+const featureLink = { color: '#10b981', fontWeight: '800', fontSize: '0.9rem', marginTop: 'auto' };
+
+const dropdownMenuStyle = { position: 'absolute', top: '40px', left: '0', width: '260px', background: '#fff', borderRadius: '16px', border: '1px solid rgba(16, 185, 129, 0.15)', boxShadow: '0 20px 40px rgba(0,0,0,0.08)', padding: '12px', zIndex: 1100 };
+const dropdownItemStyle = { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '10px', fontSize: '0.95rem', fontWeight: '500', color: '#334155', cursor: 'pointer' };
+const footerHeadingStyle = { 
+  color: '#f8fafc', 
+  fontSize: '0.85rem', 
+  marginBottom: '24px', 
+  fontWeight: '700', 
+  textTransform: 'uppercase', 
+  letterSpacing: '1px' 
 };
 
-const adminLabelStyle = { 
-  fontSize: '11px', fontWeight: '800', color: '#14532d', // theme.colors.primaryDark
-  backgroundColor: 'rgba(255,255,255,0.95)', padding: '6px 14px',
-  borderRadius: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-  border: '1px solid #e5e7eb', textTransform: 'uppercase'
+const footerListStyle = { 
+  listStyle: 'none', 
+  padding: 0, 
+  display: 'flex', 
+  flexDirection: 'column', 
+  gap: '14px' 
 };
 
-const fabStyle = {
-  width: '56px', height: '56px', borderRadius: '50%',
-  background: 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)',
-  color: 'white', border: 'none', cursor: 'pointer', fontSize: '28px',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  boxShadow: '0 10px 20px rgba(40, 167, 69, 0.3)'
+const footerLinkStyle = { 
+  cursor: 'pointer', 
+  color: '#94a3b8', 
+  fontSize: '0.9rem', 
+  transition: 'color 0.2s ease',
+  display: 'inline-block'
 };
 export default LandingPage;
