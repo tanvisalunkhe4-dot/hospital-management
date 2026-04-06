@@ -6,7 +6,7 @@ import AboutPage from './pages/AboutPage';
 import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
-
+import AdminDashboard from './components/Dashboards/AdminDashboard';
 // --- ABDM IMPORTS ---
 import CreateAbha from './pages/ABDM/CreateAbha';
 import VerifyAbha from './pages/ABDM/VerifyAbha';
@@ -29,6 +29,7 @@ function App() {
         <Route path="/onboarding" element={<OnboardingPageWrapper />} />
         <Route path="/login" element={<LoginWrapper />} />
         <Route path="/nex-master-control" element={<SuperAdminDashboard />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
 
         {/* General Navigation Routes */}
         <Route path="/about" element={<AboutPageWrapper />} />

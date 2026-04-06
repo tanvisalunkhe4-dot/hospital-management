@@ -4,8 +4,7 @@ import {
   ArrowLeft, User, Building2, ShieldCheck, 
   Database, Lock, Smartphone, Mail, ChevronRight 
 } from 'lucide-react';
-import theme from '../theme/theme'; 
-
+import theme from '../theme/theme';
 const NexHealthOnboarding = ({ onLoginRedirect }) => {
   const [role, setRole] = useState(null);
   const [step, setStep] = useState(0);
@@ -23,47 +22,47 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
   };
 
   const handleSignup = async () => {
-    // 1. Frontend Validation
+    // 1. Validation
     if (!identifier || !password) {
       alert("Please fill in all security fields.");
       return;
     }
-    if (!consent) {
-      alert("Please accept the ABDM data processing consent.");
-      return;
-    }
-
+    
     setIsLoading(true);
     try {
-      // 2. Prepare Payload for FastAPI
-      // For Admin: Identifier is the HFR ID
-      // For Patient: Identifier is Phone/Email
+      // 2. Prepare Payload
+      // NOTE: If Admin, 'identifier' is the HFR ID. 
+      // We should ideally also collect an email, or use a placeholder for now.
       const payload = {
         role: role,
-        identifier: identifier,
+        identifier: identifier, // This goes to User.email in your current backend
         password: password,
         hospital_id: role === 'Admin' ? identifier : null 
       };
-
+  
       const response = await fetch('http://localhost:8000/api/v1/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
+  
       const data = await response.json();
-
+  
       if (response.ok) {
-        // 3. Success Feedback
-        alert(`Successfully registered as ${role}!`);
+        // 3. SUCCESS: Show the generated Staff ID!
+        // Your backend returns { "staff_id": "NX-ADM-XXXX" }
+        if (role === 'Admin' || role === 'Staff') {
+          alert(`Registration Successful!\n\nYour Professional Staff ID is: ${data.staff_id}\n\nPlease save this to log in.`);
+        } else {
+          alert("Registration Successful!");
+        }
         onLoginRedirect(); 
       } else {
-        // 4. Detailed Error from Backend (e.g. "Hospital ID not found")
-        alert(`Registration Error: ${data.detail || "Server error"}`);
+        // 4. Detailed Error (e.g. "Hospital ID not found in registry")
+        alert(`Error: ${data.detail || "Registration failed"}`);
       }
     } catch (err) {
-      alert("Network Error: Could not connect to NexHealth API.");
-      console.error(err);
+      alert("Connection Refused: Ensure your FastAPI server is running on port 8000.");
     } finally {
       setIsLoading(false);
     }
@@ -193,19 +192,7 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
                   </div>
                 </div>
 
-                {/* ABDM Consent Checkbox */}
-                <div style={consentRowStyle}>
-                  <input 
-                    type="checkbox" 
-                    checked={consent} 
-                    onChange={(e) => setConsent(e.target.checked)} 
-                    style={checkboxStyle}
-                  />
-                  <p style={consentTextStyle}>
-                    I consent to NexHealth processing my data in accordance with <b>ABDM Digital Standards</b> and privacy laws.
-                  </p>
-                </div>
-
+                
                 <button 
                   style={{...primaryButtonStyle, opacity: isLoading ? 0.7 : 1}} 
                   onClick={handleSignup}
