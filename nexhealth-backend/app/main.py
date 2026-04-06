@@ -13,23 +13,21 @@ from .db.session import engine, get_db
 from .schemas import auth_schema as schemas 
 from .schemas.auth_schema import SignupRequest, LoginRequest, LoginResponse, HospitalCreate
 
-# Create the tables in PostgreSQL
-models.Base.metadata.create_all(bind=engine)
+# --- FIX: Import from the NEW folder ---
+# If your folder is named 'router', use this:
+from app.router import receptionist as receptionist_router
 
-app = FastAPI(title="NexHealth Backend")
-
-# Security Config
+# --- SECURITY CONFIG ---
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
-new_password = "admin1234"
-hashed = PWD_CONTEXT.hash(new_password)
-
-print(f"NEW HASH: {hashed}")
 SECRET_KEY = "NEXHEALTH_INTERNAL_SECRET" 
 ALGORITHM = "HS256"
 
-# --- HELPERS ---
 def get_password_hash(password: str):
     return PWD_CONTEXT.hash(password)
+
+# Create the tables in PostgreSQL
+models.Base.metadata.create_all(bind=engine)
+app = FastAPI(title="NexHealth Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,13 +41,11 @@ app.add_middleware(
 
 @app.get("/api/v1/superadmin/hospitals")
 async def get_all_hospitals(db: Session = Depends(get_db)):
-    """Fetch all registered hospitals for the SuperAdmin Dashboard"""
     hospitals = db.query(models.Hospital).all()
     return hospitals
 
-@app.post("/api/v1/superadmin/hospitals/register") # Added /register
+@app.post("/api/v1/superadmin/hospitals/register")
 async def create_hospital(payload: schemas.HospitalCreate, db: Session = Depends(get_db)):
-    # Check if hospital already exists
     existing = db.query(models.Hospital).filter(models.Hospital.hfr_id == payload.hfrId).first()
     if existing:
         raise HTTPException(status_code=400, detail="Hospital already registered")
@@ -66,7 +62,6 @@ async def create_hospital(payload: schemas.HospitalCreate, db: Session = Depends
         state=payload.state,
         bed_capacity=payload.bedCapacity
     )
-    
     db.add(new_hosp)
     db.commit()
     db.refresh(new_hosp)
@@ -74,49 +69,27 @@ async def create_hospital(payload: schemas.HospitalCreate, db: Session = Depends
 
 @app.delete("/api/v1/superadmin/hospitals/{hosp_id}")
 async def decommission_hospital(hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Decommissions a hospital node. 
-    Note: This will also remove associated users if using CASCADE in models.
-    """
-    # 1. Find the hospital
     hospital = db.query(models.Hospital).filter(models.Hospital.id == hosp_id).first()
-    
     if not hospital:
-        raise HTTPException(
-            status_code=404, 
-            detail="Hospital node not found in registry"
-        )
-
+        raise HTTPException(status_code=404, detail="Hospital not found")
     try:
-        # 2. Delete associated users first (to prevent Foreign Key errors)
         db.query(models.User).filter(models.User.hospital_id == hosp_id).delete()
-        
-        # 3. Delete the hospital
         db.delete(hospital)
         db.commit()
-        
-        return {
-            "status": "success",
-            "message": f"Facility {hospital.name} and all linked credentials decommissioned."
-        }
+        return {"status": "success", "message": f"Facility {hospital.name} decommissioned."}
     except Exception as e:
         db.rollback()
-        print(f"DELETION ERROR: {e}")
-        raise HTTPException(
-            status_code=500, 
-            detail="Failed to decommission node due to active data dependencies."
-        )
+        raise HTTPException(status_code=500, detail="Failed to decommission node.")
+
 # --- SIGNUP LOGIC ---
 
 @app.post("/api/v1/auth/signup")
 async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     linked_db_id = None
-    
-    # Only Admin/Staff need to be linked to a physical hospital via HFR ID
     if payload.role in ['Admin', 'Staff']:
         hosp = db.query(models.Hospital).filter(models.Hospital.hfr_id == payload.hospital_id).first()
         if not hosp:
-            raise HTTPException(status_code=404, detail="Hospital ID not found in registry")
+            raise HTTPException(status_code=404, detail="Hospital ID not found")
         linked_db_id = hosp.id 
 
     try:
@@ -131,60 +104,22 @@ async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
         return {"message": f"{payload.role} registered successfully"}
     except Exception as e:
         db.rollback()
-        print(f"DATABASE ERROR: {e}") 
-        raise HTTPException(status_code=500, detail="Database integrity error. Check if user already exists.")
+        raise HTTPException(status_code=500, detail="User already exists.")
 
 # --- LOGIN LOGIC ---
 
 @app.post("/api/v1/auth/login", response_model=LoginResponse)
 async def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    # 1. Normalize the identifier (lowercase email)
     search_identifier = payload.identifier.lower().strip()
-    hosp_db_id = None
-    
-    # 2. Scope check: Resolve hospital_id from HFR_ID for Admin/Staff
-    if payload.role in ['Admin', 'Staff']:
-        if not payload.hospitalId:
-            raise HTTPException(status_code=400, detail="Hospital ID is required for this role")
-        
-        hosp = db.query(models.Hospital).filter(models.Hospital.hfr_id == payload.hospitalId).first()
-        if not hosp:
-            raise HTTPException(status_code=404, detail="Invalid Hospital Facility ID")
-        hosp_db_id = hosp.id
+    user = db.query(models.User).filter(models.User.email == search_identifier).first()
 
-    # 3. Find User
-    query = db.query(models.User).filter(
-        or_(
-            models.User.email == search_identifier,
-            models.User.staff_id == search_identifier,
-            models.User.phone == search_identifier
-        )
-    )
-    
-    # IMPORTANT: Only filter by hospital_id if the user is NOT a SuperAdmin
-    if payload.role in ['Admin', 'Staff']:
-        query = query.filter(models.User.hospital_id == hosp_db_id)
-        
-    user = query.first()
-
-    # 4. Detailed Error Checking (Helps you debug "Invalid Credentials")
     if not user:
-        # Debugging print for your terminal
-        print(f"Login Failed: User {search_identifier} not found for role {payload.role}")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
+        raise HTTPException(status_code=401, detail="Invalid Email")
     if not PWD_CONTEXT.verify(payload.password, user.hashed_password):
-        print(f"Login Failed: Password mismatch for {search_identifier}")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    # 5. Strict Role Enforcement
+        raise HTTPException(status_code=401, detail="Invalid Password")
     if user.role != payload.role:
-        raise HTTPException(
-            status_code=403, 
-            detail=f"Access Denied: This account is a {user.role}, but you are trying to log in as {payload.role}"
-        )
+        raise HTTPException(status_code=403, detail=f"Role mismatch: {user.role}")
 
-    # 6. Generate Token
     token_data = {
         "sub": str(user.id), 
         "role": user.role, 
@@ -197,7 +132,11 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": {
             "role": user.role,
-            "sub_role": user.sub_role,
             "hospital_id": user.hospital_id
         }
     }
+
+# --- RECEPTIONIST ROUTER (Fixes 404) ---
+# We include it here. Since receptionist.py already has prefix="/api/v1/receptionist",
+# we just include the router object.
+app.include_router(receptionist_router.router)

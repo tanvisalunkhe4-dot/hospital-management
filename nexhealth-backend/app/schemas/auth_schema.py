@@ -23,9 +23,9 @@ class SignupRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     role: str
-    identifier: str
+    identifier: str # This is the Email
     password: str
-    hospitalId: Optional[str] = None
+    hospital_id: Optional[int] = None # Changed from hospitalId to hospital_id and str to int
 
 class LoginResponse(BaseModel):
     access_token: str

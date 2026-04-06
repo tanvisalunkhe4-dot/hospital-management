@@ -6,6 +6,7 @@ import AboutPage from './pages/AboutPage';
 import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
+import ReceptionistDashboard from './pages/Receptionist/ReceptionistDashboard';
 
 // --- ABDM IMPORTS ---
 import CreateAbha from './pages/ABDM/CreateAbha';
@@ -28,7 +29,10 @@ function App() {
         {/* Authentication Routes */}
         <Route path="/onboarding" element={<OnboardingPageWrapper />} />
         <Route path="/login" element={<LoginWrapper />} />
+        
+        {/* Dashboards */}
         <Route path="/nex-master-control" element={<SuperAdminDashboard />} />
+        <Route path="/reception-desk" element={<ReceptionistDashboardWrapper />} />
 
         {/* General Navigation Routes */}
         <Route path="/about" element={<AboutPageWrapper />} />
@@ -48,7 +52,7 @@ function App() {
   );
 }
 
-// --- Navigation Wrappers to maintain your existing component props ---
+// --- Navigation Wrappers ---
 
 const LandingPageWrapper = () => {
   const navigate = useNavigate();
@@ -71,9 +75,13 @@ const LoginWrapper = () => {
   return <Login onSignupRedirect={() => navigate('/onboarding')} onForgotPassword={() => console.log("Forgot password clicked")} />;
 };
 
+const ReceptionistDashboardWrapper = () => {
+  const navigate = useNavigate();
+  return <ReceptionistDashboard onLogout={() => navigate('/login')} />;
+};
+
 const FeaturesPageWrapper = () => {
   const navigate = useNavigate();
-  // Using navigate(-1) allows the "Back" arrow icon in the UI to act just like the browser back button
   return <FeaturesPage onBack={() => navigate('/')} />;
 };
 

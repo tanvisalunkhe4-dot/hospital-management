@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "NexHealth HMS"
     
     # Corrected URL with the @ symbol
-    DATABASE_URL: str = "postgresql://postgres:acid_123@localhost:5432/hospital_db"
+    DATABASE_URL: str
     # Standardized indentation for these variables
    
 

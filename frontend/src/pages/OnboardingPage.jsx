@@ -28,10 +28,7 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
       alert("Please fill in all security fields.");
       return;
     }
-    if (!consent) {
-      alert("Please accept the ABDM data processing consent.");
-      return;
-    }
+ 
 
     setIsLoading(true);
     try {
@@ -194,17 +191,7 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
                 </div>
 
                 {/* ABDM Consent Checkbox */}
-                <div style={consentRowStyle}>
-                  <input 
-                    type="checkbox" 
-                    checked={consent} 
-                    onChange={(e) => setConsent(e.target.checked)} 
-                    style={checkboxStyle}
-                  />
-                  <p style={consentTextStyle}>
-                    I consent to NexHealth processing my data in accordance with <b>ABDM Digital Standards</b> and privacy laws.
-                  </p>
-                </div>
+            
 
                 <button 
                   style={{...primaryButtonStyle, opacity: isLoading ? 0.7 : 1}} 

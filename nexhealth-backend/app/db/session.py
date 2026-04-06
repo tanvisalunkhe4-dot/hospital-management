@@ -5,7 +5,7 @@ from app.core.config import settings
 
 # 1. Create the engine
 engine = create_engine(settings.DATABASE_URL)
-
+print("USING DB:", settings.DATABASE_URL)
 # 2. Create SessionLocal
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
