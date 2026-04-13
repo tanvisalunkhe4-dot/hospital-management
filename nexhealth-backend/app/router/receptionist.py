@@ -1,24 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.db import models
-from app.schemas import patient_schema
+from app.schemas import patient_schema, appointment_schema, invoice_schema
 from app.db.session import get_db
 from passlib.context import CryptContext
 import logging
+import datetime 
+from typing import List
+from sqlalchemy import desc
 
 # Setup for logging
 router = APIRouter(prefix="/api/v1/receptionist", tags=["receptionist"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = logging.getLogger(__name__)
 
+# --- PATIENT REGISTRATION ---
+
 @router.post("/register-patient", response_model=patient_schema.PatientResponse, status_code=status.HTTP_201_CREATED)
 def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Depends(get_db)):
     """
-    Registers a new patient by creating an inactive User account and a linked Patient profile.
-    The patient will set their own password later via an invitation link.
+    Registers a new patient and creates a linked User account.
     """
-    
-    # 1. Check for existing user to prevent duplicates
     existing_user = db.query(models.User).filter(models.User.email == patient_in.email).first()
     if existing_user:
         logger.warning(f"Registration failed: Email {patient_in.email} already exists.")
@@ -28,12 +31,8 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         )
 
     try:
-        # Process ABHA ID for database NULLs
         processed_abha_id = patient_in.abha_id if patient_in.abha_id and patient_in.abha_id.strip() != "" else None
 
-        # 2. Create the User entry (Authentication Layer)
-        # We set hashed_password to None because the patient sets it later.
-        # is_active is set to False until they verify their account.
         new_user = models.User(
             email=patient_in.email,
             hashed_password=None, 
@@ -42,9 +41,8 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
             hospital_id=patient_in.hospital_id
         )
         db.add(new_user)
-        db.flush()  # Get new_user.id for the profile link
+        db.flush() 
 
-        # 3. Create the Patient entry (Profile Layer)
         new_patient = models.Patient(
             user_id=new_user.id,
             hospital_id=patient_in.hospital_id,
@@ -61,56 +59,256 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         )
         db.add(new_patient)
         
-        # 4. Finalize the transaction
         db.commit()
         db.refresh(new_patient)
         
-        logger.info(f"Successfully registered: {patient_in.first_name} under Hospital ID: {patient_in.hospital_id}")
+        logger.info(f"Successfully registered: {patient_in.first_name}")
         return new_patient
 
     except Exception as e:
         db.rollback() 
-        logger.error(f"DATABASE ERROR during registration: {str(e)}")
-        
-        if "UniqueViolation" in str(e) and "abha_id" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This ABHA ID is already registered."
-            )
-        
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database Error: {str(e)}"
-        )
+        logger.error(f"DATABASE ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error during registration.")
 
-@router.get("/patients/search", response_model=list[patient_schema.PatientResponse])
-def search_patients(query: str, db: Session = Depends(get_db)):
-    """
-    Search patient records by name or phone number.
-    """
-    patients = db.query(models.Patient).filter(
-        (models.Patient.first_name.ilike(f"%{query}%")) | 
-        (models.Patient.phone_number.contains(query))
-    ).all()
-    return patients
+# --- APPOINTMENT BOOKING ---
+
+@router.post("/book-appointment", response_model=appointment_schema.AppointmentResponse)
+def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int, db: Session = Depends(get_db)):
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == appt_in.patient_id,
+        models.Patient.hospital_id == hosp_id
+    ).first()
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found.")
+
+    try:
+        new_appt = models.Appointment(
+            patient_id=appt_in.patient_id,
+            hospital_id=hosp_id,
+            doctor_name=appt_in.doctor_name,
+            appointment_date=appt_in.appointment_date,
+            appointment_time=appt_in.appointment_time,
+            reason=appt_in.reason,
+            status="Scheduled"
+        )
+        db.add(new_appt)
+        db.commit()
+        db.refresh(new_appt)
+        return new_appt
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to book appointment.")
+
+# --- DASHBOARD & UTILITIES ---
 
 @router.get("/stats/{hosp_id}")
 async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Returns live statistics for the Receptionist Dashboard filtered by Hospital.
-    """
+    today = datetime.date.today()  
     patient_count = db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).count()
-    
+    appt_count = db.query(models.Appointment).filter(
+        models.Appointment.hospital_id == hosp_id,
+        models.Appointment.appointment_date == today
+    ).count()
+
+    # Calculate Total Collections (Sum of PAID invoices only)
+    total_collections = db.query(func.sum(models.Invoice.total_amount)).filter(
+        models.Invoice.hospital_id == hosp_id,
+        models.Invoice.status == "Paid"
+    ).scalar() or 0
+
+    # Count Unpaid/Pending Bills
+    unpaid_count = db.query(models.Invoice).filter(
+        models.Invoice.hospital_id == hosp_id,
+        models.Invoice.status == "Pending"
+    ).count()
+
     return {
         "total_patients": patient_count,
-        "appointments_today": 0,
-        "consultations": 0,
-        "pending_bills": 0
+        "appointments_today": appt_count,
+        "total_collections": total_collections,
+        "pending_bills": unpaid_count,
+        "consultations": 0 
     }
 
+@router.get("/patients/search", response_model=list[patient_schema.PatientResponse])
+def search_patients(query: str, hosp_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Patient).filter(
+        models.Patient.hospital_id == hosp_id,
+        (models.Patient.first_name.ilike(f"%{query}%")) | 
+        (models.Patient.phone_number.contains(query))
+    ).all()
+
 @router.get("/patients/recent", response_model=list[patient_schema.PatientResponse])
-def get_recent_patients(db: Session = Depends(get_db)):
-    """
-    Fetches the latest 5 registered patients for the dashboard table.
-    """
-    return db.query(models.Patient).order_by(models.Patient.id.desc()).limit(5).all()
+def get_recent_patients(hosp_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Patient).filter(
+        models.Patient.hospital_id == hosp_id
+    ).order_by(models.Patient.id.desc()).limit(5).all()
+
+@router.get("/appointments/today")
+def get_todays_appointments(hosp_id: int, db: Session = Depends(get_db)):
+    today = datetime.datetime.utcnow().date()
+    return db.query(models.Appointment).filter(
+        models.Appointment.hospital_id == hosp_id,
+        models.Appointment.appointment_date == today
+    ).order_by(models.Appointment.appointment_time.asc()).all()
+
+@router.get("/appointments/upcoming")
+def get_upcoming_appointments(hosp_id: int, db: Session = Depends(get_db)):
+    today = datetime.date.today()
+    next_week = today + datetime.timedelta(days=7)
+    return db.query(models.Appointment).filter(
+        models.Appointment.hospital_id == hosp_id,
+        models.Appointment.appointment_date > today,
+        models.Appointment.appointment_date <= next_week
+    ).order_by(models.Appointment.appointment_date.asc()).all()
+
+@router.get("/patients/all", response_model=List[patient_schema.PatientResponse])
+def get_all_patients(hosp_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).all()
+
+# --- APPOINTMENT ACTIONS ---
+
+@router.patch("/appointments/{appt_id}", response_model=appointment_schema.AppointmentResponse)
+def update_appointment(appt_id: int, hosp_id: int, appt_update: appointment_schema.AppointmentUpdate, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id, models.Appointment.hospital_id == hosp_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    update_data = appt_update.model_dump(exclude_unset=True)
+    try:
+        for key, value in update_data.items():
+            setattr(appt, key, value)
+        db.commit()
+        db.refresh(appt)
+        return appt
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Update failed.")
+
+@router.patch("/appointments/{appt_id}/status")
+def update_appointment_status(appt_id: int, hosp_id: int, status_update: dict, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id, models.Appointment.hospital_id == hosp_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    appt.status = status_update.get("status", appt.status)
+    db.commit()
+    return {"message": "Status updated"}
+
+@router.delete("/appointments/{appt_id}")
+def delete_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id, models.Appointment.hospital_id == hosp_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    db.delete(appt)
+    db.commit()
+    return {"message": "Deleted successfully"}
+
+# --- INVOICE & BILLING ACTIONS ---
+
+@router.post("/invoices/generate", response_model=invoice_schema.InvoiceResponse)
+def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Depends(get_db)):
+    try:
+        # 1. Fetch patient details first to ensure they exist and to get the name for the response
+        patient = db.query(models.Patient).filter(models.Patient.id == invoice_in.patient_id).first()
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+
+        last_invoice = db.query(models.Invoice).order_by(models.Invoice.id.desc()).first()
+        next_id = (last_invoice.id + 1) if last_invoice else 1
+        inv_number = f"INV-{datetime.date.today().year}-{next_id:04d}"
+
+        subtotal = sum(item.unit_price * item.quantity for item in invoice_in.items)
+        tax = subtotal * invoice_in.tax_rate
+        final_total = (subtotal + tax) - invoice_in.discount
+
+        new_invoice = models.Invoice(
+            invoice_number=inv_number,
+            patient_id=invoice_in.patient_id,
+            hospital_id=invoice_in.hospital_id,
+            total_amount=final_total,
+            tax_amount=tax,
+            discount=invoice_in.discount,
+            status="Pending"
+        )
+        db.add(new_invoice)
+        db.flush() 
+
+        for item in invoice_in.items:
+            db_item = models.InvoiceItem(
+                invoice_id=new_invoice.id,
+                service_name=item.service_name,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                subtotal=item.unit_price * item.quantity
+            )
+            db.add(db_item)
+
+        db.commit()
+        db.refresh(new_invoice)
+
+        # 2. Construct the response dictionary to include the required 'patient_name'
+        return {
+            "id": new_invoice.id,
+            "invoice_number": new_invoice.invoice_number,
+            "patient_id": new_invoice.patient_id,
+            "patient_name": f"{patient.first_name} {patient.last_name}",
+            "hospital_id": new_invoice.hospital_id,
+            "total_amount": new_invoice.total_amount,
+            "tax_amount": new_invoice.tax_amount,
+            "discount": new_invoice.discount,
+            "status": new_invoice.status,
+            "created_at": new_invoice.created_at,
+            # If your schema also expects the items, include them here:
+            "items": new_invoice.items 
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"INVOICE ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate invoice.")
+        
+@router.get("/invoices/all", response_model=List[invoice_schema.InvoiceResponse])
+def get_all_invoices(hosp_id: int, db: Session = Depends(get_db)):
+    # Join with Patient table to fetch the 'first_name' and 'last_name'
+    results = db.query(
+        models.Invoice.id,
+        models.Invoice.invoice_number,
+        models.Invoice.patient_id,
+        # Concatenating first and last name from the Patient model
+        (models.Patient.first_name + " " + models.Patient.last_name).label("patient_name"),
+        models.Invoice.total_amount,
+        models.Invoice.status,
+        models.Invoice.created_at,
+        models.Invoice.hospital_id
+    ).join(
+        models.Patient, 
+        models.Invoice.patient_id == models.Patient.id
+    ).filter(
+        models.Invoice.hospital_id == hosp_id
+    ).order_by(
+        desc(models.Invoice.created_at)
+    ).all()
+
+    return results
+
+@router.patch("/invoices/{invoice_id}/pay")
+def mark_invoice_as_paid(invoice_id: int, hosp_id: int, db: Session = Depends(get_db)):
+    invoice = db.query(models.Invoice).filter(
+        models.Invoice.id == invoice_id, 
+        models.Invoice.hospital_id == hosp_id
+    ).first()
+
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    try:
+        invoice.status = "Paid"
+        db.commit()
+        db.refresh(invoice)
+        return {"message": "Payment successful", "status": invoice.status}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Payment processing failed.")

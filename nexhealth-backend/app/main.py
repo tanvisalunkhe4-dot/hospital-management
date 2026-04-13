@@ -16,7 +16,7 @@ from .schemas.auth_schema import SignupRequest, LoginRequest, LoginResponse, Hos
 # --- FIX: Import from the NEW folder ---
 # If your folder is named 'router', use this:
 from app.router import receptionist as receptionist_router
-
+from app.router import doctor as doctor_router
 # --- SECURITY CONFIG ---
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = "NEXHEALTH_INTERNAL_SECRET" 
@@ -140,3 +140,4 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)):
 # We include it here. Since receptionist.py already has prefix="/api/v1/receptionist",
 # we just include the router object.
 app.include_router(receptionist_router.router)
+app.include_router(doctor_router.router)

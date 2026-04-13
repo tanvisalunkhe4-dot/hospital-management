@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, time 
 
 class PatientBase(BaseModel):
     first_name: str
@@ -23,6 +23,27 @@ class PatientResponse(PatientBase):
     doctor_name: str
     status: str
     created_at: datetime 
+
+    class Config:
+        from_attributes = True
+
+class PatientInQueue(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    gender: str
+
+    class Config:
+        from_attributes = True
+
+# app/schemas/patient_schema.py
+
+class DoctorQueueResponse(BaseModel):
+    id: int 
+    status: str
+    appointment_time: Optional[time]
+    priority: str = "Routine"
+    patient: PatientInQueue 
 
     class Config:
         from_attributes = True

@@ -7,7 +7,7 @@ import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
 import ReceptionistDashboard from './pages/Receptionist/ReceptionistDashboard';
-
+import DoctorDashboard from "./components/Dashboards/Doctor/DoctorDashboard";
 // --- ABDM IMPORTS ---
 import CreateAbha from './pages/ABDM/CreateAbha';
 import VerifyAbha from './pages/ABDM/VerifyAbha';
@@ -33,7 +33,7 @@ function App() {
         {/* Dashboards */}
         <Route path="/nex-master-control" element={<SuperAdminDashboard />} />
         <Route path="/reception-desk" element={<ReceptionistDashboardWrapper />} />
-
+        <Route path="/doctor-portal" element={<DoctorDashboardWrapper />} />
         {/* General Navigation Routes */}
         <Route path="/about" element={<AboutPageWrapper />} />
         <Route path="/features" element={<FeaturesPageWrapper />} />
@@ -47,6 +47,7 @@ function App() {
         <Route path="/upload-records" element={<UploadRecordsWrapper />} />
         <Route path="/consent-mgmt" element={<ConsentManagerWrapper />} />
         <Route path="/download-abha" element={<DownloadAbhaWrapper />} />
+
       </Routes>
     </Router>
   );
@@ -83,6 +84,11 @@ const ReceptionistDashboardWrapper = () => {
 const FeaturesPageWrapper = () => {
   const navigate = useNavigate();
   return <FeaturesPage onBack={() => navigate('/')} />;
+};
+
+const DoctorDashboardWrapper = () => {
+  const navigate = useNavigate();
+  return <DoctorDashboard onLogout={() => navigate('/login')} />;
 };
 
 // Generic Wrapper for ABDM and General pages

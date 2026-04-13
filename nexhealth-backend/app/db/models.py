@@ -1,10 +1,11 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, Float 
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 from sqlalchemy.sql import func
-from datetime import datetime
 from sqlalchemy.sql.functions import now    
-
+import datetime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Date, DateTime, Time, Text
+from sqlalchemy import JSON
 
 class Hospital(Base):
     __tablename__ = "hospitals"
@@ -44,8 +45,23 @@ class User(Base):
 
     # Relationships
     hospital = relationship("Hospital", back_populates="users")
-    # Changed back_populates to match the Patient class
     patient_profile = relationship("Patient", back_populates="user", uselist=False)
+    appointments = relationship("Appointment", back_populates="doctor")
+
+class Doctor(Base):
+    __tablename__ = "doctors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    
+    # Professional details
+    specialization = Column(String(100), default="General Physician")
+    license_number = Column(String(50), unique=True, nullable=True)
+    department = Column(String(100), nullable=True)
+    
+    # Relationships
+    user = relationship("User")
+    medical_records = relationship("MedicalRecord", back_populates="doctor")
 
 class Patient(Base):
     __tablename__ = "patients"
@@ -71,22 +87,27 @@ class Patient(Base):
     # Relationships 
     user = relationship("User", back_populates="patient_profile")
     appointments = relationship("Appointment", back_populates="patient", cascade="all, delete-orphan")
-    hospital = relationship("Hospital", back_populates="patients") # Added back_populates
+    hospital = relationship("Hospital", back_populates="patients")
+    invoices = relationship("Invoice", back_populates="patient")
 
     def __repr__(self):
         return f"<Patient {self.first_name} {self.last_name}>"
 
 class Appointment(Base):
     __tablename__ = "appointments"
+
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
-    doctor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    department = Column(String(50), nullable=False)
     
-    appointment_date = Column(DateTime, nullable=False)
-    reason = Column(Text, nullable=True)
-    status = Column(String(20), default="Scheduled") 
-    created_at = Column(DateTime(timezone=True), server_default=now())
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+    doctor_id = Column(Integer, ForeignKey("users.id"))
+    
+    doctor_name = Column(String)  # For quick display without a join
+    appointment_date = Column(Date)
+    appointment_time = Column(Time, nullable=True)
+    reason = Column(String, nullable=True)
+    status = Column(String, default="Scheduled") 
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("User")
@@ -107,3 +128,51 @@ class Bill(Base):
 
     patient = relationship("Patient")
     appointment = relationship("Appointment")
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_number = Column(String, unique=True, index=True) # e.g., INV-2026-001
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+    total_amount = Column(Float, default=0.0)
+    tax_amount = Column(Float, default=0.0)
+    discount = Column(Float, default=0.0)
+    status = Column(String, default="Pending") # Pending, Paid, Partially Paid, Cancelled
+    payment_method = Column(String, nullable=True) # Cash, UPI, Card
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    patient = relationship("Patient", back_populates="invoices")
+    items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+
+class InvoiceItem(Base):
+    __tablename__ = "invoice_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"))
+    service_name = Column(String) # e.g., "General Consultation"
+    quantity = Column(Integer, default=1)
+    unit_price = Column(Float)
+    subtotal = Column(Float)
+
+    invoice = relationship("Invoice", back_populates="items")
+
+
+class MedicalRecord(Base):
+    __tablename__ = "medical_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    appointment_id = Column(Integer, ForeignKey("appointments.id"))
+    # Point this to the DOCTORS table now
+    doctor_id = Column(Integer, ForeignKey("doctors.id")) 
+    
+    diagnosis = Column(String, nullable=True)
+    clinical_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=now())
+
+    # Relationships
+    patient = relationship("Patient")
+    doctor = relationship("Doctor", back_populates="medical_records")
