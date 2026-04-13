@@ -6,7 +6,7 @@ from sqlalchemy import or_
 import datetime
 import random
 import string
-
+from sqlalchemy import func  # Add this line
 from ..db.session import get_db
 from ..db import models
 from ..schemas.auth_schema import SignupRequest, LoginRequest, LoginResponse
@@ -85,25 +85,33 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-
     search_identifier = payload.identifier.strip()
     hosp_db_id = None
 
-    # Validate hospital for staff/admin
+    # 1. Validate hospital for staff/admin
     if payload.role in ['Admin', 'Staff']:
         if not payload.hospitalId:
             raise HTTPException(status_code=400, detail="Hospital ID required")
+            
+        # DEBUG PRINTS - Keep these to watch your terminal
+        print(f"DEBUG: Attempting login for {search_identifier}")
+        print(f"DEBUG: Hospital ID string entered: {payload.hospitalId}")
 
         hosp = db.query(models.Hospital).filter(
-            models.Hospital.hfr_id == payload.hospitalId.upper().strip()
+            or_(
+                models.Hospital.hfr_id == payload.hospitalId.upper().strip(),
+                models.Hospital.id.cast(models.String) == payload.hospitalId.strip()
+            )
         ).first()
 
         if not hosp:
+            print("DEBUG: Hospital lookup failed")
             raise HTTPException(status_code=404, detail="Invalid Hospital ID")
 
         hosp_db_id = hosp.id
+        print(f"DEBUG: Found Hospital Database ID: {hosp_db_id}")
 
-    # Flexible login (email / phone / staff_id)
+    # 2. Flexible user lookup
     query = db.query(models.User).filter(
         or_(
             models.User.email == search_identifier.lower(),
@@ -117,13 +125,30 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     user = query.first()
 
-    if not user or not PWD_CONTEXT.verify(payload.password, user.hashed_password):
+    # 3. Secure Verification with Error Handling
+    if not user:
+        print("DEBUG: User query returned None")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    try:
+        # Check password against hash
+        is_password_correct = PWD_CONTEXT.verify(payload.password, user.hashed_password)
+    except ValueError as e:
+        # This catches the "malformed bcrypt hash" error
+        print(f"CRITICAL ERROR: Corrupted hash in DB for user {user.id}: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Server error: User security record is corrupted. Please reset password."
+        )
+
+    if not is_password_correct:
+        print("DEBUG: Password verification failed")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if user.role != payload.role:
         raise HTTPException(status_code=403, detail="Role mismatch")
 
-    # Token generation
+    # 4. Token generation
     token_data = {
         "sub": str(user.id),
         "role": user.role,

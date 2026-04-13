@@ -50,3 +50,29 @@ def delete_hospital(hosp_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Hospital deleted"}
+
+@router.put("/hospitals/{hosp_id}")
+def update_hospital(hosp_id: int, payload: HospitalCreate, db: Session = Depends(get_db)):
+    # 1. Find the hospital
+    hospital = db.query(models.Hospital).filter(models.Hospital.id == hosp_id).first()
+
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital not found")
+
+    # 2. Update the fields
+    hospital.name = payload.name
+    hospital.hfr_id = payload.hfrId
+    hospital.admin_email = payload.email
+    hospital.phone = payload.phone
+    hospital.category = payload.category
+    hospital.facility_type = payload.type
+    hospital.address = payload.address
+    hospital.city = payload.city
+    hospital.state = payload.state
+    hospital.bed_capacity = payload.bedCapacity
+
+    # 3. Commit changes
+    db.commit()
+    db.refresh(hospital)
+
+    return {"message": "Hospital updated successfully", "hospital": hospital.name}

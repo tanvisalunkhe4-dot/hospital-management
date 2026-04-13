@@ -51,8 +51,7 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
       } else if (user.role === 'Staff') {
         navigate('/staff-portal');
       } else {
-        navigate('/patient-records');
-      }
+        navigate('/patient-dashboard/overview');      }
   
     } catch (error) {
       const errorMsg = error.response?.data?.detail || "Connection to NexHealth Server failed";

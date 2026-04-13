@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import OnboardingPage from './pages/OnboardingPage';
 import Login from './pages/Login';
@@ -6,19 +6,13 @@ import AboutPage from './pages/AboutPage';
 import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
-import AdminDashboard from './components/Dashboards/AdminDashboard';
-// --- ABDM IMPORTS ---
-import CreateAbha from './pages/ABDM/CreateAbha';
-import VerifyAbha from './pages/ABDM/VerifyAbha';
-import LinkRecords from './pages/ABDM/LinkRecords';
-import FetchRecords from './pages/ABDM/FetchRecords';
-import UploadRecords from './pages/ABDM/UploadRecords';
-import ConsentManager from './pages/ABDM/ConsentManager';
-import DownloadAbha from './pages/ABDM/DownloadAbha';
+import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
+import PatientDashboard from './components/Dashboards/PatientDashboard/pages/PatientDashboard';
 
 import './App.css'
 
 function App() {
+  const currentHospitalId = localStorage.getItem('hospital_id');
   return (
     <Router>
       <Routes>
@@ -29,22 +23,18 @@ function App() {
         <Route path="/onboarding" element={<OnboardingPageWrapper />} />
         <Route path="/login" element={<LoginWrapper />} />
         <Route path="/nex-master-control" element={<SuperAdminDashboard />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
-
-        {/* General Navigation Routes */}
+        <Route 
+  path="/admin-dashboard" 
+  element={<AdminDashboard key={localStorage.getItem('hospital_id')} />} 
+/>
+<Route path="/patient-dashboard/*" element={<PatientDashboard />} />
+<Route path="/patient-records/*" element={<Navigate to="/patient-dashboard/overview" replace />} />
+            {/* General Navigation Routes */}
         <Route path="/about" element={<AboutPageWrapper />} />
         <Route path="/features" element={<FeaturesPageWrapper />} />
         <Route path="/solutions" element={<SolutionsPageWrapper />} />
 
-        {/* ABDM SUB-PAGES ROUTES */}
-        <Route path="/create-abha" element={<CreateAbhaWrapper />} />
-        <Route path="/verify-abha" element={<VerifyAbhaWrapper />} />
-        <Route path="/link-records" element={<LinkRecordsWrapper />} />
-        <Route path="/fetch-records" element={<FetchRecordsWrapper />} />
-        <Route path="/upload-records" element={<UploadRecordsWrapper />} />
-        <Route path="/consent-mgmt" element={<ConsentManagerWrapper />} />
-        <Route path="/download-abha" element={<DownloadAbhaWrapper />} />
-      </Routes>
+         </Routes>
     </Router>
   );
 }
