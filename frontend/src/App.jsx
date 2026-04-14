@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import OnboardingPage from './pages/OnboardingPage';
 import Login from './pages/Login';
@@ -6,16 +6,17 @@ import AboutPage from './pages/AboutPage';
 import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
+
+// Portals you've been working on
 import ReceptionistDashboard from './pages/Receptionist/ReceptionistDashboard';
 import DoctorDashboard from "./components/Dashboards/Doctor/DoctorDashboard";
-// --- ABDM IMPORTS ---
-import CreateAbha from './pages/ABDM/CreateAbha';
-import VerifyAbha from './pages/ABDM/VerifyAbha';
-import LinkRecords from './pages/ABDM/LinkRecords';
-import FetchRecords from './pages/ABDM/FetchRecords';
-import UploadRecords from './pages/ABDM/UploadRecords';
-import ConsentManager from './pages/ABDM/ConsentManager';
-import DownloadAbha from './pages/ABDM/DownloadAbha';
+
+// New Dashboards from the merge
+import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
+import PatientDashboard from './components/Dashboards/PatientDashboard/pages/PatientDashboard';
+
+// ABDM Components (Make sure these are imported at the top!)
+// import { CreateAbha, VerifyAbha, LinkRecords, FetchRecords, UploadRecords, ConsentManager, DownloadAbha } from './pages/ABDM'; 
 
 import './App.css'
 
@@ -23,23 +24,27 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Main Landing Route */}
+        {/* Main Landing & Auth */}
         <Route path="/" element={<LandingPageWrapper />} />
-        
-        {/* Authentication Routes */}
         <Route path="/onboarding" element={<OnboardingPageWrapper />} />
         <Route path="/login" element={<LoginWrapper />} />
         
-        {/* Dashboards */}
+        {/* Core Dashboards */}
         <Route path="/nex-master-control" element={<SuperAdminDashboard />} />
         <Route path="/reception-desk" element={<ReceptionistDashboardWrapper />} />
         <Route path="/doctor-portal" element={<DoctorDashboardWrapper />} />
-        {/* General Navigation Routes */}
+        <Route path="/admin-dashboard" element={<AdminDashboard key={localStorage.getItem('hospital_id')} />} />
+        
+        {/* Patient Portal with Nested Routing */}
+        <Route path="/patient-dashboard/*" element={<PatientDashboard />} />
+        <Route path="/patient-records/*" element={<Navigate to="/patient-dashboard/overview" replace />} />
+
+        {/* General Navigation */}
         <Route path="/about" element={<AboutPageWrapper />} />
         <Route path="/features" element={<FeaturesPageWrapper />} />
         <Route path="/solutions" element={<SolutionsPageWrapper />} />
 
-        {/* ABDM SUB-PAGES ROUTES */}
+        {/* ABDM SUB-PAGES (Keeping your progress here) */}
         <Route path="/create-abha" element={<CreateAbhaWrapper />} />
         <Route path="/verify-abha" element={<VerifyAbhaWrapper />} />
         <Route path="/link-records" element={<LinkRecordsWrapper />} />
@@ -47,23 +52,16 @@ function App() {
         <Route path="/upload-records" element={<UploadRecordsWrapper />} />
         <Route path="/consent-mgmt" element={<ConsentManagerWrapper />} />
         <Route path="/download-abha" element={<DownloadAbhaWrapper />} />
-
       </Routes>
     </Router>
   );
 }
 
-// --- Navigation Wrappers ---
+// --- Navigation Wrappers (Optimized) ---
 
 const LandingPageWrapper = () => {
   const navigate = useNavigate();
-  return (
-    <LandingPage 
-      onGetStarted={() => navigate('/onboarding')} 
-      onLoginClick={() => navigate('/login')} 
-      onNavigate={(target) => navigate(`/${target}`)} 
-    />
-  );
+  return <LandingPage onGetStarted={() => navigate('/onboarding')} onLoginClick={() => navigate('/login')} onNavigate={(target) => navigate(`/${target}`)} />;
 };
 
 const OnboardingPageWrapper = () => {
@@ -81,19 +79,16 @@ const ReceptionistDashboardWrapper = () => {
   return <ReceptionistDashboard onLogout={() => navigate('/login')} />;
 };
 
-const FeaturesPageWrapper = () => {
-  const navigate = useNavigate();
-  return <FeaturesPage onBack={() => navigate('/')} />;
-};
-
 const DoctorDashboardWrapper = () => {
   const navigate = useNavigate();
   return <DoctorDashboard onLogout={() => navigate('/login')} />;
 };
 
-// Generic Wrapper for ABDM and General pages
 const AboutPageWrapper = () => { const n = useNavigate(); return <AboutPage onBack={() => n('/')} />; };
+const FeaturesPageWrapper = () => { const n = useNavigate(); return <FeaturesPage onBack={() => n('/')} />; };
 const SolutionsPageWrapper = () => { const n = useNavigate(); return <SolutionsPage onBack={() => n('/')} />; };
+
+// ABDM Wrappers (Ensure these components are imported!)
 const CreateAbhaWrapper = () => { const n = useNavigate(); return <CreateAbha onBack={() => n('/')} />; };
 const VerifyAbhaWrapper = () => { const n = useNavigate(); return <VerifyAbha onBack={() => n('/')} />; };
 const LinkRecordsWrapper = () => { const n = useNavigate(); return <LinkRecords onBack={() => n('/')} />; };

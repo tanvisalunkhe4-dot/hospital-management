@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Building2, ShieldCheck, 
   Database, Lock, Smartphone, Mail, ChevronRight 
 } from 'lucide-react';
-import theme from '../theme/theme'; 
+import theme from '../theme/theme';
 
 const NexHealthOnboarding = ({ onLoginRedirect }) => {
   const [role, setRole] = useState(null);
@@ -23,44 +23,47 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
   };
 
   const handleSignup = async () => {
-    // 1. Frontend Validation
+    // 1. Validation
     if (!identifier || !password) {
       alert("Please fill in all security fields.");
       return;
     }
- 
+
+    // Ensure consent is checked for Patients
+    if (role === 'Patient' && !consent) {
+      alert("Please accept the ABDM consent to proceed.");
+      return;
+    }
 
     setIsLoading(true);
     try {
-      // 2. Prepare Payload for FastAPI
-      // For Admin: Identifier is the HFR ID
-      // For Patient: Identifier is Phone/Email
       const payload = {
         role: role,
-        identifier: identifier,
+        identifier: identifier, 
         password: password,
         hospital_id: role === 'Admin' ? identifier : null 
       };
-
+  
       const response = await fetch('http://localhost:8000/api/v1/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
+  
       const data = await response.json();
-
+  
       if (response.ok) {
-        // 3. Success Feedback
-        alert(`Successfully registered as ${role}!`);
+        if (role === 'Admin' || role === 'Staff') {
+          alert(`Registration Successful!\n\nYour Professional Staff ID is: ${data.staff_id}\n\nPlease save this to log in.`);
+        } else {
+          alert("Registration Successful!");
+        }
         onLoginRedirect(); 
       } else {
-        // 4. Detailed Error from Backend (e.g. "Hospital ID not found")
-        alert(`Registration Error: ${data.detail || "Server error"}`);
+        alert(`Error: ${data.detail || "Registration failed"}`);
       }
     } catch (err) {
-      alert("Network Error: Could not connect to NexHealth API.");
-      console.error(err);
+      alert("Connection Refused: Ensure your FastAPI server is running on port 8000.");
     } finally {
       setIsLoading(false);
     }
@@ -68,26 +71,17 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
 
   return (
     <div style={pageContainerStyle}>
-      {/* Animated Background Grid */}
       <motion.div 
         animate={{ backgroundPosition: ['0px 0px', '60px 60px'] }}
         transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
         style={gridLayer} 
       />
       
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        style={logoContainerStyle}
-      >
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} style={logoContainerStyle}>
          <span style={logoTextStyle}>Nex<span style={{ color: theme.colors.primary }}>Health</span></span>
       </motion.div>
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.98 }} 
-        animate={{ opacity: 1, scale: 1 }} 
-        style={cardStyle}
-      >
+      <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} style={cardStyle}>
         {step > 0 && (
           <button onClick={() => setStep(step - 1)} style={backButtonStyle}>
             <ArrowLeft size={16} /> Back
@@ -130,44 +124,28 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
               <div style={{ marginBottom: '24px' }}>
                 <h2 style={stepTitleStyle}>{role === 'Patient' ? 'Patient Sign Up' : 'Admin Registration'}</h2>
                 <p style={stepSubtitleStyle}>
-                  {role === 'Patient' 
-                    ? 'Use your personal contact details to register.' 
-                    : 'Enter your verified Hospital HFR ID to link the facility.'}
+                  {role === 'Patient' ? 'Use your personal contact details to register.' : 'Enter your Hospital HFR ID to link the facility.'}
                 </p>
               </div>
 
               <div style={flexColumnGap}>
                 {role === 'Patient' && (
                   <div style={methodToggleGroup}>
-                    <MethodToggle 
-                      active={patientMethod === 'phone'} 
-                      onClick={() => setPatientMethod('phone')} 
-                      icon={<Smartphone size={14} />} 
-                      label="Phone" 
-                    />
-                    <MethodToggle 
-                      active={patientMethod === 'email'} 
-                      onClick={() => setPatientMethod('email')} 
-                      icon={<Mail size={14} />} 
-                      label="Email" 
-                    />
+                    <MethodToggle active={patientMethod === 'phone'} onClick={() => setPatientMethod('phone')} icon={<Smartphone size={14} />} label="Phone" />
+                    <MethodToggle active={patientMethod === 'email'} onClick={() => setPatientMethod('email')} icon={<Mail size={14} />} label="Email" />
                   </div>
                 )}
 
                 <div style={inputGroupStyle}>
                   <label style={labelStyle}>
-                    {role === 'Patient' 
-                      ? (patientMethod === 'phone' ? 'Mobile Number' : 'Personal Email') 
-                      : 'Hospital Registration (HFR ID)'}
+                    {role === 'Patient' ? (patientMethod === 'phone' ? 'Mobile Number' : 'Personal Email') : 'Hospital Registration (HFR ID)'}
                   </label>
                   <div style={{ position: 'relative' }}>
                     <input 
                       type="text" 
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder={role === 'Patient' 
-                        ? (patientMethod === 'phone' ? '+91 XXXXX XXXXX' : 'name@example.com') 
-                        : 'e.g. HOSP-MH-1029'} 
+                      placeholder={role === 'Patient' ? (patientMethod === 'phone' ? '+91 XXXXX XXXXX' : 'name@example.com') : 'e.g. HOSP-MH-1029'} 
                       style={inputStyle} 
                     />
                     <div style={inputIconStyle}>
@@ -190,11 +168,24 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
                   </div>
                 </div>
 
-                {/* ABDM Consent Checkbox */}
-            
-
+                {/* ABDM Consent Checkbox (Integrated from HEAD) */}
+                {role === 'Patient' && (
+                  <div style={consentRowStyle}>
+                    <input 
+                      type="checkbox" 
+                      checked={consent} 
+                      onChange={(e) => setConsent(e.target.checked)} 
+                      style={checkboxStyle} 
+                    />
+                    <p style={consentTextStyle}>
+                      I consent to NexHealth linking my records with ABDM and agree to the 
+                      <span style={linkStyle}> Terms of Service</span>.
+                    </p>
+                  </div>
+                )}
+                
                 <button 
-                  style={{...primaryButtonStyle, opacity: isLoading ? 0.7 : 1}} 
+                  style={{...primaryButtonStyle, opacity: (isLoading || (role === 'Patient' && !consent)) ? 0.7 : 1}} 
                   onClick={handleSignup}
                   disabled={isLoading}
                 >
@@ -214,7 +205,7 @@ const NexHealthOnboarding = ({ onLoginRedirect }) => {
   );
 };
 
-// --- STYLES (Keep existing but update primaryButtonStyle and inputStyle) ---
+// Styles remain identical to your provided CSS-in-JS
 const pageContainerStyle = { height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ffffff', position: 'relative', overflow: 'hidden', fontFamily: "'Inter', sans-serif" };
 const gridLayer = { position: 'absolute', inset: 0, zIndex: 0, backgroundImage: 'radial-gradient(#e2e8f0 1.5px, transparent 1.5px)', backgroundSize: '60px 60px', maskImage: 'linear-gradient(to bottom, black, transparent)' };
 const logoContainerStyle = { marginBottom: '32px', zIndex: 2 };
@@ -242,7 +233,6 @@ const consentTextStyle = { fontSize: '11px', color: '#64748b', lineHeight: '1.4'
 const stepTitleStyle = { fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 };
 const stepSubtitleStyle = { fontSize: '13px', color: '#64748b', marginTop: '4px' };
 
-// Sub-components
 const RoleButton = ({ title, desc, icon, onClick }) => (
   <motion.button whileHover={{ y: -4, borderColor: '#10b981' }} onClick={onClick} style={roleButtonStyle}>
     <div style={{ background: '#f0fdf4', color: '#10b981', padding: '12px', borderRadius: '10px' }}>{icon}</div>

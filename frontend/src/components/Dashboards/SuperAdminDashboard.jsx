@@ -10,7 +10,7 @@ import axios from 'axios';
 import { 
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area 
+   Area,LineChart, Line
 } from 'recharts';
 // --- THEME ---
 const theme = {
@@ -46,12 +46,18 @@ const AnalyticsView = ({ hospitals }) => {
     })).sort((a, b) => b.beds - a.beds).slice(0, 5);
   }, [hospitals]);
 
-  const growthData = useMemo(() => [
-    { month: 'Jan', nodes: 2 },
-    { month: 'Feb', nodes: 5 },
-    { month: 'Mar', nodes: hospitals.length }, 
-  ], [hospitals]);
-
+ // Example of what 100% live logic would look like
+ const growthData = useMemo(() => {
+  // We'll use a simple array to represent the growth trend
+  return [
+    { month: 'Jan', nodes: 2 }, // Baseline
+    { month: 'Feb', nodes: 5 }, // Baseline
+    { 
+      month: 'Mar', 
+      nodes: safeHospitals.length // 100% LIVE data for current month
+    }, 
+  ];
+}, [safeHospitals.length]); // Only recalculate when the number of hospitals changes
   const uniqueDistricts = useMemo(() => {
     return new Set(hospitals.map(h => h.city)).size;
   }, [hospitals]);
@@ -69,36 +75,42 @@ const AnalyticsView = ({ hospitals }) => {
       {/* TIER 2: GROWTH & DISTRIBUTION */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
         {/* Growth Area Chart */}
+        
         <div style={analyticsCard}>
           <div style={chartHeader}>
             <div style={smallIconBox}><Activity size={16} color={theme.colors.primary} /></div>
-            <h3 style={chartTitle}>Network Expansion Trend</h3>
+            <h3 style={chartTitle}>Infrastructure Deployment Scale</h3>
           </div>
           <div style={{ height: '280px', marginTop: '20px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={growthData}>
-                <defs>
-                  <linearGradient id="colorNodes" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={theme.colors.primary} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={theme.colors.primary} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
+              <LineChart data={growthData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12}} dy={5} />
-                <YAxis hide />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area 
-                  type="monotone" 
+                <XAxis 
+                  dataKey="month" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fontSize: 12, fill: '#94a3b8', fontWeight: 600}} 
+                  dy={10} 
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fontSize: 12, fill: '#94a3b8'}} 
+                />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: theme.colors.primary, strokeWidth: 1 }} />
+                <Line 
+                  type="stepAfter" // This creates the professional "stepped" look
                   dataKey="nodes" 
                   stroke={theme.colors.primary} 
-                  fillOpacity={1} 
-                  fill="url(#colorNodes)" 
-                  strokeWidth={3} 
+                  strokeWidth={4} 
+                  dot={{ r: 6, fill: theme.colors.primary, strokeWidth: 2, stroke: '#fff' }}
+                  activeDot={{ r: 8, strokeWidth: 0 }}
+                  animationDuration={1200}
                 />
-              </AreaChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>      
+        </div>    
 
         {/* Donut Distribution */}
         <div style={analyticsCard}>
@@ -179,88 +191,114 @@ const AnalyticsView = ({ hospitals }) => {
 
 
 // --- COMPONENT: HOSPITAL QUICK VIEW ---
-const HospitalDetailsCard = ({ hospital, onClose }) => {
+// --- COMPONENT: HOSPITAL QUICK VIEW & EDIT ---
+const HospitalDetailsCard = ({ hospital, onClose, onUpdate }) => {
+  // 1. Unified State Management
+  const [formData, setFormData] = useState({
+    name: hospital?.name || '',
+    hfrId: hospital?.hfr_id || hospital?.hfrId || '',
+    email: hospital?.admin_email || hospital?.email || '',
+    phone: hospital?.phone || '',
+    category: hospital?.category || 'Private',
+    type: hospital?.facility_type || hospital?.type || '',
+    address: hospital?.address || '',
+    city: hospital?.city || '',
+    state: hospital?.state || '',
+    bedCapacity: hospital?.bed_capacity || hospital?.bedCapacity || 0
+  });
+
+  const [isUpdating, setIsUpdating] = useState(false);
+
   if (!hospital) return null;
 
+  // 2. Save Logic
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`http://127.0.0.1:8000/api/v1/superadmin/hospitals/${hospital.id}`, formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      onUpdate(); 
+      onClose();
+    } catch (err) {
+      alert("Update failed. Check if the HFR ID is unique.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // 3. Render
   return (
     <div style={overlayStyle}>
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 10 }} 
-        animate={{ opacity: 1, scale: 1, y: 0 }} 
-        exit={{ opacity: 0, scale: 0.95, y: 10 }} 
-        style={{...modalCardStyle, maxWidth: '500px', padding: '0', overflow: 'hidden'}}
+        initial={{ opacity: 0, scale: 0.95 }} 
+        animate={{ opacity: 1, scale: 1 }} 
+        style={{...modalCardStyle, maxWidth: '600px', padding: '0', overflow: 'hidden'}}
       >
-        {/* Top Decorative Banner */}
         <div style={{ height: '6px', background: `linear-gradient(90deg, ${theme.colors.primary}, ${theme.colors.primaryDark})` }} />
         
-        <div style={{ padding: '32px' }}>
-          {/* Header Section */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <div style={{...iconBox, margin: 0, width: '48px', height: '48px', borderRadius: '14px', background: '#ecfdf5' }}>
-                <Hospital color={theme.colors.primary} size={24} />
-              </div>
-              <div>
-                <h2 style={{...titleStyle, fontSize: '20px', textAlign: 'left', letterSpacing: '-0.02em' }}>{hospital.name}</h2>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                  <span style={activeBadge}><div style={smallDot} /> Operational</span>
-                  <span style={{ color: theme.colors.textMuted, fontSize: '12px' }}>•</span>
-                  <code style={{...hfrBadge, background: 'transparent', padding: 0, color: theme.colors.textMuted }}>{hospital.hfr_id || hospital.hfrId}</code>
-                </div>
-              </div>
-            </div>
-            <button onClick={onClose} style={closeBtnStyle}><X size={20} /></button>
+        <form onSubmit={handleSave} style={{ padding: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <h2 style={titleStyle}>Edit Facility Registry</h2>
+            <button type="button" onClick={onClose} style={closeBtn}><X size={20} /></button>
           </div>
 
-          <hr style={{ border: 'none', borderTop: `1px solid ${theme.colors.border}`, marginBottom: '24px' }} />
-
-          {/* Core Metrics Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-            <div style={refinedInfoBox}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: theme.colors.textMuted, marginBottom: '4px' }}>
-                <Activity size={14} /> <span style={infoLabel}>Capacity</span>
-              </div>
-              <span style={infoValue}>{hospital.bed_capacity || hospital.bedCapacity || 0} Total Beds</span>
-            </div>
-            
-            <div style={refinedInfoBox}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: theme.colors.textMuted, marginBottom: '4px' }}>
-                <Globe size={14} /> <span style={infoLabel}>Classification</span>
-              </div>
-              <span style={infoValue}>{hospital.category} / {hospital.type}</span>
-            </div>
-          </div>
-
-          {/* Location & Contact Section */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <MapPin size={18} color={theme.colors.textMuted} style={{ marginTop: '2px' }} />
-              <div>
-                <span style={{...infoValue, display: 'block'}}>{hospital.city}, {hospital.state}</span>
-                <span style={{ fontSize: '13px', color: theme.colors.textMuted }}>{hospital.address || "Main Campus Registry Address"}</span>
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={inputGroup}>
+              <label style={labelStyle}>Facility Name</label>
+              <input 
+                style={inputStyle} 
+                value={formData.name} 
+                onChange={(e) => setFormData({...formData, name: e.target.value})} 
+              />
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <ShieldCheck size={18} color={theme.colors.textMuted} style={{ marginTop: '2px' }} />
-              <div>
-                <span style={{...infoValue, display: 'block'}}>{hospital.email}</span>
-                <span style={{ fontSize: '13px', color: theme.colors.textMuted }}>Authorized Administrator • {hospital.phone}</span>
-              </div>
+            <div style={inputGroup}>
+              <label style={labelStyle}>HFR ID</label>
+              <input 
+                style={inputStyle} 
+                value={formData.hfrId} 
+                onChange={(e) => setFormData({...formData, hfrId: e.target.value})} 
+              />
+            </div>
+
+            <div style={inputGroup}>
+              <label style={labelStyle}>Bed Capacity</label>
+              <input 
+                type="number" 
+                style={inputStyle} 
+                value={formData.bedCapacity} 
+                onChange={(e) => setFormData({...formData, bedCapacity: e.target.value})} 
+              />
+            </div>
+
+            <div style={inputGroup}>
+              <label style={labelStyle}>Category</label>
+              <select 
+                style={selectStyle} 
+                value={formData.category} 
+                onChange={(e) => setFormData({...formData, category: e.target.value})}
+              >
+                <option value="Private">Private</option>
+                <option value="Government">Government</option>
+                <option value="Trust">Trust</option>
+              </select>
             </div>
           </div>
 
-          {/* Action Footer */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={onClose} style={submitButtonStyle}>Close Registry</button>
+          <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+            <button type="button" onClick={onClose} style={secondaryBtn}>Cancel</button>
+            <button type="submit" style={submitButtonStyle} disabled={isUpdating}>
+              {isUpdating ? "Saving..." : "Update Node"}
+            </button>
           </div>
-        </div>
+        </form>
       </motion.div>
     </div>
   );
 };
-
-
 
 // --- COMPONENT: SYSTEM LOGS ---
 const SystemLogs = ({ logs }) => (
@@ -506,8 +544,9 @@ const SuperAdminDashboard = () => {
                       <td style={tdStyle}><code style={hfrBadge}>{h.hfr_id}</code></td>
                       <td style={tdStyle}>
                         <div style={{display:'flex', gap:'8px'}}>
-                          <button onClick={() => setSelectedHospital(h)} style={viewBtn}><Eye size={16} /></button>
-                          <button onClick={() => handleDelete(h.id, h.name)} style={deleteBtn}><Trash2 size={16} /></button>
+                        <button onClick={() => setSelectedHospital(h)} style={viewBtn}>
+  <Eye size={16} />
+</button>                          <button onClick={() => handleDelete(h.id, h.name)} style={deleteBtn}><Trash2 size={16} /></button>
                         </div>
                       </td>
                     </tr>
@@ -523,6 +562,13 @@ const SuperAdminDashboard = () => {
       </main>
 
       <AnimatePresence>
+  {selectedHospital && (
+    <HospitalDetailsCard 
+      hospital={selectedHospital} 
+      onClose={() => setSelectedHospital(null)} 
+      onUpdate={fetchHospitals} 
+    />
+  )}
         {showAddForm && <AddHospital onSuccess={() => { setShowAddForm(false); addLog('CREATE', 'Node provisioned'); fetchHospitals(); }} onCancel={() => setShowAddForm(false)} />}
       </AnimatePresence>
     </div>

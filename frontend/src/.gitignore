@@ -1,0 +1,32 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependency directories
+# This will catch node_modules in the root AND in the /frontend folder
+node_modules/
+frontend/node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Python Cache (CRITICAL for your backend)
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+env/
+
+# Environment files
+.env
+.env.local
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+
+# Ignore the vite chunks specifically if they persist
+**/.vite/deps/*

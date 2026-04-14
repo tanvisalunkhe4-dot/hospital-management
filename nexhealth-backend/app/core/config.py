@@ -1,13 +1,11 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "NexHealth HMS"
     
-    # Corrected URL with the @ symbol
-    DATABASE_URL: str
-    # Standardized indentation for these variables
-   
+    # DATABASE_URL is fetched from the .env file if available, 
+    # otherwise it defaults to the local PostgreSQL string below.
+    DATABASE_URL: str = "postgresql://postgres:Janhavi12@localhost:5432/hospital_db"
 
     class Config:
         env_file = ".env"
