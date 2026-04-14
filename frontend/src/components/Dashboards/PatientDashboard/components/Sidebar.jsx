@@ -70,16 +70,17 @@ const Sidebar = () => {
 // ================== "ENTERPRISE NODE" THEME ==================
 
 const sidebarStyle = { 
-  width: '300px', // Increased width for better spacing
+  width: '280px', 
   backgroundColor: '#ffffff', 
   borderRight: '1px solid #e2e8f0', 
   display: 'flex', 
   flexDirection: 'column', 
-  padding: '40px 24px', // Increased padding
+  padding: '40px 24px', 
   height: '100vh',
-  position: 'fixed',
-  left: 0,
+  position: 'sticky', // This is the secret!
   top: 0,
+  left: 0,
+  flexShrink: 0, // Prevents the sidebar from getting squished
   zIndex: 1000
 };
 

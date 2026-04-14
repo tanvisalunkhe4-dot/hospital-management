@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import Header from '../components/Header';
 
 // Feature Page Imports - Keeping everything in /pages for consistency
 import Overview from "./Overview";
@@ -15,10 +14,11 @@ const PatientDashboard = () => {
   return (
     <div style={dashboardLayout}>
       {/* Sidebar handles navigation via NavLinks */}
-      <Sidebar /> 
+      <div style={{ width: '260px', flexShrink: 0 }}>
+    <Sidebar />
+  </div>
       
       <div style={mainContent}>
-        <Header />
         
         <div style={pageWrapper}>
           <Routes>
@@ -50,16 +50,14 @@ const mainContent = {
   flex: 1, 
   display: 'flex', 
   flexDirection: 'column',
-  marginLeft: '300px',
-  minWidth:0
+  minWidth: 0,
+  borderLeft: '1px solid #e2e8f0' // 🔥 clean professional divider
 };
 
 const pageWrapper = { 
-  padding: '40px', 
- 
-  overflowY: 'auto',
-  backgroundColor: '#f8fafc', 
-  maxWidth: '1400px'
+  padding: '40px',              // keep spacing
+  backgroundColor: '#f8fafc',
+  width: '100%',                // full width
+  margin: 0                     // remove centering
 };
-
 export default PatientDashboard;

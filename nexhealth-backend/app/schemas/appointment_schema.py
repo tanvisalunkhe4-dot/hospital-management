@@ -1,12 +1,17 @@
 from pydantic import BaseModel
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Optional
 
 # Base fields shared by all appointment schemas
 class AppointmentBase(BaseModel):
+    patient_id: Optional[int] = None
+    hospital_id: Optional[int] = None
+    doctor_id: Optional[int] = None
     doctor_name: Optional[str] = None
+    hospital_name: Optional[str] = None
     appointment_date: Optional[date] = None
     appointment_time: Optional[time] = None
+    status: Optional[str] = None
     reason: Optional[str] = None
 
 # Used for creating a NEW appointment (Fields are required here)
@@ -22,7 +27,10 @@ class AppointmentUpdate(AppointmentBase):
 
 class AppointmentResponse(AppointmentCreate):
     id: int
-    status: str
+    doctor_id: Optional[int] = None
+    hospital_name: Optional[str] = None
+    status: Optional[str] = "Scheduled"
     hospital_id: int
+    created_at: Optional[datetime] = None
     class Config:
         from_attributes = True

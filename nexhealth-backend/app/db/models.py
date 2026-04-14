@@ -33,6 +33,7 @@ class Hospital(Base):
     users = relationship("User", back_populates="hospital")
     departments = relationship("Department", back_populates="hospital") # Added this
     patients = relationship("Patient", back_populates="hospital")
+    invoices = relationship("Invoice", back_populates="hospital")
 
 class User(Base):
     __tablename__ = "users"
@@ -53,9 +54,17 @@ class User(Base):
     hospital = relationship("Hospital", back_populates="users")
     department = relationship("Department", foreign_keys=[department_id])
     patient_profile = relationship("Patient", back_populates="user", uselist=False)
-
+    staff_profile = relationship("Staff", back_populates="user", uselist=False)
 class Patient(Base):
     __tablename__ = "patients"
+    
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    phone_number = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    visit_type = Column(String, nullable=True) # e.g., OPD, Emergency
+    doctor_name = Column(String, nullable=True)
+    status = Column(String, default="Registered")
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     abha_id = Column(String, unique=True, index=True, nullable=True)
@@ -69,28 +78,35 @@ class Patient(Base):
     hospital = relationship("Hospital", back_populates="patients")
     appointments = relationship("Appointment", back_populates="patient")
     medical_records = relationship("MedicalRecord", back_populates="patient")
+    invoices = relationship("Invoice", back_populates="patient")
 
 class Appointment(Base):
     __tablename__ = "appointments"
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
-    hospital_id = Column(Integer, ForeignKey("hospital.id"))
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     doctor_id = Column(Integer, ForeignKey("staff.id"))
-    doctor_name = Column(String)
 
     hospital_name = Column(String)
     appointment_date = Column(Date)
     appointment_time = Column(Time)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
     patient = relationship("Patient", back_populates="appointments")
-    doctor = relationship("Staff")
+    doctor = relationship("Staff",back_populates="appointments" )
 
 class MedicalRecord(Base):
     __tablename__ = "medical_records"
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
+    doctor_id = Column(Integer, ForeignKey("doctors.id"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    diagnosis = Column(Text, nullable=True)
+    clinical_notes = Column(Text, nullable=True)
+
     appointment_id = Column(Integer, ForeignKey("appointments.id"))
     record_type = Column(String) # e.g., "Prescription", "Lab Report"
     issued_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -98,7 +114,8 @@ class MedicalRecord(Base):
     description = Column(String, nullable=True)
 
     patient = relationship("Patient", back_populates="medical_records")
-    
+    doctor = relationship("Doctor", back_populates="medical_records")
+
 class Department(Base):
     __tablename__ = "departments"
     id = Column(Integer, primary_key=True, index=True)
@@ -111,7 +128,11 @@ class Department(Base):
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))   
      # Relationships
     hospital = relationship("Hospital", back_populates="departments")
-
+    staff_members = relationship(
+        "Staff", 
+        back_populates="department",
+        foreign_keys="[Staff.dept_id]"
+    )
 # ================== CORE IDENTITY ==================
 class Staff(Base):
     __tablename__ = "staff"
@@ -121,19 +142,26 @@ class Staff(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     role = Column(String) # 'Doctor', 'Nurse', 'Pharmacist', etc.
-    dept_id = Column(Integer, ForeignKey("departments.id"))
+    dept_id = Column(Integer, ForeignKey("departments.id"))   
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     salary = Column(Float)
     qualification = Column(String)
-
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # One-to-One Relationships to specialized profiles
+    user = relationship("User", back_populates="staff_profile")   
+
+    appointments = relationship("Appointment", back_populates="doctor")
     doctor_profile = relationship("Doctor", back_populates="staff_info", uselist=False)
     nurse_profile = relationship("Nurse", back_populates="staff_info", uselist=False)
     receptionist_profile = relationship("Receptionist", back_populates="staff_info", uselist=False)
     lab_tech_profile = relationship("LabTechnician", back_populates="staff_info", uselist=False)
     pharmacist_profile = relationship("Pharmacist", back_populates="staff_info", uselist=False)
-
-# ================== SPECIALIZED ROLE TABLES ==================
+    department = relationship(
+        "Department", 
+        back_populates="staff_members", 
+        foreign_keys=[dept_id] # Use dept_id here
+    )
+    # ================== SPECIALIZED ROLE TABLES ==================
 
 class Doctor(Base):
     __tablename__ = "doctors"
@@ -143,6 +171,7 @@ class Doctor(Base):
     license_no = Column(String, unique=True)
     is_hod = Column(Boolean, default=False)
     
+    medical_records = relationship("MedicalRecord", back_populates="doctor")
     staff_info = relationship("Staff", back_populates="doctor_profile")
 
 class Nurse(Base):
@@ -200,15 +229,7 @@ class SecurityConfig(Base):
     ip_whitelist_enabled = Column(Boolean, default=False)
     session_timeout = Column(Integer, default=30)
 
-class BackupLog(Base):
-    __tablename__ = "backup_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
-    filename = Column(String)
-    # Use this lambda to ensure the time is captured when the record is created
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    status = Column(String)
 
 class SystemLog(Base):
     __tablename__ = "system_logs"
@@ -268,3 +289,29 @@ class SystemConfig(Base):
     email_alerts = Column(Boolean, default=True)
 
     hospital = relationship("Hospital")
+
+# ================== 5. BILLING & INVOICING ==================
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_number = Column(String, unique=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+    total_amount = Column(Float, default=0.0)
+    status = Column(String, default="Pending")
+    payment_method = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    patient = relationship("Patient", back_populates="invoices")
+    hospital = relationship("Hospital", back_populates="invoices")
+    items = relationship("InvoiceItem", back_populates="invoice")
+
+class InvoiceItem(Base):
+    __tablename__ = "invoice_items"
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"))
+    service_name = Column(String)
+    unit_price = Column(Float)
+    subtotal = Column(Float)
+    invoice = relationship("Invoice", back_populates="items")

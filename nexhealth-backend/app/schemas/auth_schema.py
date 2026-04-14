@@ -128,26 +128,20 @@ class PatientBase(BaseModel):
     date_of_birth: Optional[datetime] = None
     gender: Optional[str] = None
     blood_group: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None # Added for Profile Card
-    address: Optional[str] = None
-    city: Optional[str] = None # Added for Profile Card
-    emergency_contact: Optional[str] = None
+    hospital_id: Optional[int] = None
 
 class PatientProfile(PatientBase):
     id: int
     user_id: int
-    full_name: str
-    is_verified: bool = False
-    uhid: str 
+    created_at: datetime
 
     class Config:
         from_attributes = True
-class PatientUpdate(BaseModel): # ✅ This was likely missing!
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    emergency_contact: Optional[str] = None
-    full_name: Optional[str] = None
+class PatientUpdate(BaseModel):
+    abha_id: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
+    gender: Optional[str] = None
+    blood_group: Optional[str] = None
     
 class PatientDashboardSummary(BaseModel):
     next_appointment: Optional[datetime] = None
@@ -161,8 +155,8 @@ class PatientDashboardSummary(BaseModel):
 
 class AppointmentRead(BaseModel):
     id: int
-    doctor_name: str
-    hospital_name: str
+    doctor_name: Optional[str] = None
+    hospital_name: Optional[str] = None
     appointment_date: datetime
     status: str 
     reason: Optional[str] = None
@@ -172,10 +166,10 @@ class AppointmentRead(BaseModel):
 
 class MedicalRecordRead(BaseModel):
     id: int
-    record_type: str 
-    hospital_name: str
+    record_type: Optional[str] = None
+    hospital_name: Optional[str] = None
     issued_date: datetime
-    file_url: str 
+    file_url: Optional[str] = None
     description: Optional[str] = None
 
     class Config:

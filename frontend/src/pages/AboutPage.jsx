@@ -183,7 +183,6 @@ const phaseBadge = { position: 'absolute', top: '25px', right: '25px', color: '#
 const roadmapTitle = { fontSize: '1.35rem', fontWeight: '800', color: '#0f172a', marginBottom: '12px' };
 const roadmapDesc = { color: '#64748b', lineHeight: '1.7', fontSize: '0.95rem' };
 
-// --- UPDATED FOOTER STYLES (MATCHES LANDING PAGE) ---
 const footerContainer = { 
   background: '#064e3b', // Deep Emerald Green 
   color: '#ecfdf5', 

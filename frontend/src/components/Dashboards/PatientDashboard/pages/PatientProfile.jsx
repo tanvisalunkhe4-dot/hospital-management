@@ -167,3 +167,4 @@ const tagRed = { backgroundColor: '#fee2e2', color: '#b91c1c', padding: '6px 12p
 const tagBlue = { backgroundColor: '#eff6ff', color: '#1e40af', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '800' };
 
 export default PatientProfile;
+

@@ -1,10 +1,10 @@
-from locale import currency
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
 class InvoiceItemBase(BaseModel):
     service_name: str
+    # Kept for backward compatibility with existing invoice generation route.
     quantity: int = 1
     unit_price: float
 
@@ -18,11 +18,13 @@ class InvoiceCreate(BaseModel):
 class InvoiceResponse(BaseModel):
     id: int
     invoice_number: str
-    patient_name: str
+    patient_id: int
+    hospital_id: int
     total_amount: float
     status: str
+    payment_method: Optional[str] = None
     created_at: datetime
-    patient_id: int 
+    patient_name: Optional[str] = None
 
     class Config:
         from_attributes = True

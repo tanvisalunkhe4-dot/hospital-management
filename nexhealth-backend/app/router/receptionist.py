@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 # --- PATIENT REGISTRATION ---
 
+# --- PATIENT REGISTRATION ---
+
 @router.post("/register-patient", response_model=patient_schema.PatientResponse, status_code=status.HTTP_201_CREATED)
 def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Depends(get_db)):
     """
@@ -33,9 +35,14 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
     try:
         processed_abha_id = patient_in.abha_id if patient_in.abha_id and patient_in.abha_id.strip() != "" else None
 
+        # 1. Provide a default hashed password and full_name to satisfy DB constraints
+        temp_password = f"{patient_in.first_name}@{patient_in.phone_number[-4:] if patient_in.phone_number else '123'}"
+        hashed_pwd = pwd_context.hash(temp_password)
+
         new_user = models.User(
             email=patient_in.email,
-            hashed_password=None, 
+            full_name=f"{patient_in.first_name} {patient_in.last_name}",
+            hashed_password=hashed_pwd,
             role="Patient", 
             is_active=False,
             hospital_id=patient_in.hospital_id
@@ -43,6 +50,7 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         db.add(new_user)
         db.flush() 
 
+        # 2. Create the linked Patient record
         new_patient = models.Patient(
             user_id=new_user.id,
             hospital_id=patient_in.hospital_id,
@@ -69,7 +77,6 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         db.rollback() 
         logger.error(f"DATABASE ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error during registration.")
-
 # --- APPOINTMENT BOOKING ---
 
 @router.post("/book-appointment", response_model=appointment_schema.AppointmentResponse)
