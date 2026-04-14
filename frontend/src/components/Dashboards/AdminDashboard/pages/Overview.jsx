@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Users, LayoutGrid, ShieldCheck, Search,
@@ -65,12 +65,21 @@ const DashboardView = ({ staff = [], depts = [], logs = [], onNavigate }) => {
   const [deptSearch, setDeptSearch] = useState("");
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-  const roleData = [
-    { name: 'Doctors', value: staff.filter(s => s.role === 'Doctor').length, color: '#10b981' },
-    { name: 'Nurses', value: staff.filter(s => s.role === 'Nurse').length, color: '#3b82f6' },
-    { name: 'Admin', value: staff.filter(s => s.role === 'Admin').length, color: '#f59e0b' },
-  ].filter(item => item.value > 0);
+  const roleCounts = staff.reduce((acc, s) => {
+    const roleName = s.role || 'Unassigned';
+    acc[roleName] = (acc[roleName] || 0) + 1;
+    return acc;
+  }, {});
 
+  // MAPS DATA TO CHART: Automatically handles 4, 5, or more roles
+  const roleData = Object.keys(roleCounts).map((role, index) => {
+    const nexHealthColors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
+    return {
+      name: role,
+      value: roleCounts[role],
+      color: nexHealthColors[index % nexHealthColors.length]
+    };
+  });
   const chartData = roleData.length > 0 ? roleData : [{ name: 'Empty', value: 1, color: '#f1f5f9' }];
 
   const filteredDepts = depts.filter(d => 
@@ -164,26 +173,44 @@ const DashboardView = ({ staff = [], depts = [], logs = [], onNavigate }) => {
 
           <div style={tableCard}>
             <div style={tableHeader}><h3 style={chartTitle}>Personnel Breakdown</h3></div>
-            <div style={{ height: '240px', padding: '20px', display: 'flex', alignItems: 'center' }}>
-              <div style={{ width: '50%', height: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={chartData} innerRadius={65} outerRadius={85} paddingAngle={8} dataKey="value" stroke="none">
-                      {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                    </Pie>
-                    <Tooltip cornerRadius={8} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{ width: '50%', display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '20px' }}>
-                {roleData.map(r => (
-                  <div key={r.name} style={legendItem}>
-                    <span style={{ height: '8px', width: '8px', borderRadius: '50%', backgroundColor: r.color }}></span>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>{r.name}</span>
-                    <span style={{ marginLeft: 'auto', fontWeight: '700', color: '#1e293b' }}>{r.value}</span>
-                  </div>
-                ))}
-              </div>
+            <div style={{ height: '240px', padding: '20px', display: 'flex', alignItems: 'center', position: 'relative' }}>
+  <div style={{ width: '50%', height: '100%', position: 'relative' }}>
+    {/* CENTER OVERLAY: Shows live total in the middle of the donut */}
+    <div style={{
+      position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+      textAlign: 'center', pointerEvents: 'none'
+    }}>
+      <div style={{ fontSize: '24px', fontWeight: '800', color: '#1e293b' }}>{staff.length}</div>
+      <div style={{ fontSize: '10px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Total</div>
+    </div>
+    
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie 
+          data={chartData} 
+          innerRadius={65} 
+          outerRadius={85} 
+          paddingAngle={4} // Reduced slightly for more slices
+          dataKey="value" 
+          stroke="none"
+        >
+          {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+        </Pie>
+        <Tooltip cornerRadius={8} />
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
+
+  {/* DYNAMIC LEGEND: Grows automatically based on how many roles you have */}
+  <div style={{ width: '50%', display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '20px' }}>    {roleData.map(r => (
+      <div key={r.name} style={legendItem}>
+        <span style={{ height: '8px', minWidth: '8px', borderRadius: '50%', backgroundColor: r.color }}></span>
+        <span style={{ fontSize: '12px', fontWeight: '600', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</span>
+        <span style={{ marginLeft: 'auto', fontWeight: '700', color: '#1e293b' }}>{r.value}</span>
+      </div>
+    ))}
+  </div>
+
             </div>
           </div>
         </div>
