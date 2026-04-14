@@ -1,14 +1,13 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, Float
-from sqlalchemy import event
-
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.functions import now
+from sqlalchemy import event
 from app.db.session import Base
-from typing import Optional
 from datetime import datetime, timezone
-
+from sqlalchemy import Date, Time
 class Revenue(Base):
     __tablename__ = "revenue"
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     amount = Column(Float, nullable=False)
     category = Column(String) 
@@ -33,6 +32,7 @@ class Hospital(Base):
     # Relationships
     users = relationship("User", back_populates="hospital")
     departments = relationship("Department", back_populates="hospital") # Added this
+    patients = relationship("Patient", back_populates="hospital")
 
 class User(Base):
     __tablename__ = "users"
@@ -62,9 +62,11 @@ class Patient(Base):
     date_of_birth = Column(DateTime, nullable=True) # Added for medical records
     gender = Column(String, nullable=True)
     blood_group = Column(String, nullable=True)
-
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))    
+    
     user = relationship("User", back_populates="patient_profile")
+    hospital = relationship("Hospital", back_populates="patients")
     appointments = relationship("Appointment", back_populates="patient")
     medical_records = relationship("MedicalRecord", back_populates="patient")
 
@@ -72,20 +74,25 @@ class Appointment(Base):
     __tablename__ = "appointments"
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
+    hospital_id = Column(Integer, ForeignKey("hospital.id"))
+    doctor_id = Column(Integer, ForeignKey("staff.id"))
     doctor_name = Column(String)
+
     hospital_name = Column(String)
-    appointment_date = Column(DateTime)
+    appointment_date = Column(Date)
+    appointment_time = Column(Time)
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     reason = Column(String, nullable=True)
 
     patient = relationship("Patient", back_populates="appointments")
+    doctor = relationship("Staff")
 
 class MedicalRecord(Base):
     __tablename__ = "medical_records"
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
+    appointment_id = Column(Integer, ForeignKey("appointments.id"))
     record_type = Column(String) # e.g., "Prescription", "Lab Report"
-    hospital_name = Column(String)
     issued_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     file_url = Column(String) # Link to the file storage
     description = Column(String, nullable=True)

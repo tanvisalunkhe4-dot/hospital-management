@@ -21,19 +21,20 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
     try {
       // 1. Clear old session data to prevent data leaking between hospital switches
       localStorage.clear();
-
       const response = await axios.post('http://localhost:8000/api/v1/auth/login',{
         role: role,
         identifier: formData.identifier,
         password: formData.password,
         // Send the HFR-ID (e.g., HFR-905-1134) to help the backend find the right DB entry
-        hospitalId: (role === 'Admin' || role === 'Staff') ? formData.hospitalId : null
+        hospital_id: (role === 'Admin' || role === 'Staff') ? formData.hospitalId : null
       });
   
       const { access_token, user } = response.data;
       
       // 2. Store security token
       localStorage.setItem('token', access_token);
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('user_role', user.role);
       
       // 3. CRITICAL: Store the numeric hospital_id (e.g., 3 for City Care) 
       // This ensures your Dashboard fetches the CORRECT data silo.
@@ -43,16 +44,19 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
       
       localStorage.setItem('user_data', JSON.stringify(user));
   
+
       // --- ROUTING LOGIC ---
       if (user.role === 'Super Admin') {
-        navigate('/nex-master-control'); 
-      } else if (user.role === 'Admin') {
-        navigate('/admin-dashboard');
-      } else if (user.role === 'Staff') {
-        navigate('/staff-portal');
-      } else {
-        navigate('/patient-dashboard/overview');      }
-  
+  navigate('/nex-master-control'); 
+} else if (user.role === 'Admin') {
+  navigate('/admin-dashboard');
+} else if (user.role === 'Staff') {
+  navigate('/staff-portal');
+} else if (user.role === 'Receptionist') {
+  navigate('/reception-desk'); // Add this line!
+} else {
+  navigate('/patient-dashboard/overview');
+}
     } catch (error) {
       const errorMsg = error.response?.data?.detail || "Connection to NexHealth Server failed";
       alert(`Login Error: ${errorMsg}`);
