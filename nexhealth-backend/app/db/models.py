@@ -30,7 +30,8 @@ class Hospital(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     # Relationships
-    users = relationship("User", back_populates="hospital")
+    staff = relationship("Staff", back_populates="hospital", cascade="all, delete-orphan")
+    users = relationship("User", back_populates="hospital", cascade="all, delete-orphan")    
     departments = relationship("Department", back_populates="hospital") # Added this
     patients = relationship("Patient", back_populates="hospital")
     invoices = relationship("Invoice", back_populates="hospital")
@@ -161,6 +162,7 @@ class Staff(Base):
         back_populates="staff_members", 
         foreign_keys=[dept_id] # Use dept_id here
     )
+    hospital = relationship("Hospital", back_populates="staff")
     # ================== SPECIALIZED ROLE TABLES ==================
 
 class Doctor(Base):

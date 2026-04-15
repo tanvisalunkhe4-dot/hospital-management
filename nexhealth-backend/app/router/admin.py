@@ -158,6 +158,16 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         )
         
         db.add(new_staff)
+        # --- STEP 3.5: AUTOMATICALLY CREATE LOGIN ACCOUNT ---
+        # This removes the need for manual SQL inserts
+        new_user = models.User(
+            staff_id=generated_id,
+            hashed_password=hashed_pwd, 
+            role=data.role,
+            hospital_id=data.hospital_id,
+            is_active=True
+        )
+        db.add(new_user)
         db.flush() # Generates new_staff.id for child tables
 
         # 4. PREPARE SPECIALIZED DATA (Role-Specific)

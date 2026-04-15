@@ -282,8 +282,17 @@ const StaffRegistry = ({
   
 
   const onSaveStaff = async (formData) => {
-    const currentHospitalId = localStorage.getItem("hospital_id");
+    const storedId = localStorage.getItem("hospital_id");
+    const currentHospitalId = storedId ? parseInt(storedId) : null;    
 
+    if (!currentHospitalId) {
+      setNotification({ 
+          message: 'System Error: Hospital ID missing. Please re-login.', 
+          type: 'error' 
+      });
+      addLog('ERR', 'Hospital ID is Null');
+      return;
+  }
     try {
         const { id, department, staff_id, ...cleanData } = formData;
 
@@ -310,7 +319,7 @@ const StaffRegistry = ({
             // If POST also gives a 422, move hospital_id to the URL here too.
             const registrationPayload = {
                 ...payload,
-                hospital_id: parseInt(currentHospitalId), // Keep in body for Registration
+                hospital_id: currentHospitalId, // Keep in body for Registration
                 password: "DefaultPassword123!" 
             };
 

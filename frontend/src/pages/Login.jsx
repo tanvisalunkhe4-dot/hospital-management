@@ -30,6 +30,7 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
     };
     try {
       localStorage.clear();
+      const isStaffOrAdmin = ['Admin', 'Staff', 'Receptionist'].includes(role);
       const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
         role: role,
         identifier: formData.identifier,
