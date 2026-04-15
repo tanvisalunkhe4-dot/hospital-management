@@ -93,8 +93,28 @@ const BASE_URL = "http://localhost:8000/api/v1/admin";const StaffFormModal = ({ 
   const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
-    if (initialData) setFormData(initialData);
-    else setFormData(initialFormState);
+    if (initialData && isOpen) {
+      // Map existing member data to your form's state structure
+      setFormData({
+        id: initialData.id,
+        full_name: initialData.full_name || "",
+        email: initialData.email || "",
+        phone: initialData.phone || "",
+        role: initialData.role || "Doctor",
+        // Convert dept_id to string so it matches the <select> value
+        department: initialData.dept_id ? initialData.dept_id.toString() : "",
+        qualification: initialData.qualification || "",
+        experience: initialData.experience || "",
+        shift_type: initialData.shift_type || "Day",
+        salary: initialData.salary || "",
+        is_hod: !!initialData.is_hod,
+        license_no: initialData.license_no || "",
+        ward_no: initialData.ward_no || "",
+        specialization: initialData.specialization || ""
+      });
+    } else if (!initialData && isOpen) {
+      setFormData(initialFormState);
+    }
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
@@ -154,25 +174,19 @@ const BASE_URL = "http://localhost:8000/api/v1/admin";const StaffFormModal = ({ 
             <div style={rowGrid}>
             <FormField label="Department" icon={Briefcase}>
   <select 
-    style={selectStyle} 
-    value={formData.department || ""} 
-    onChange={(e) => setFormData({...formData, department: e.target.value})}
-    required
-  >
-    {/* Default placeholder */}
-    <option value="" disabled>Select Infrastructure Node</option>
-    
-    {/* Dynamic options from your DB */}
-    {depts.length > 0 ? (
-      depts.map((d) => (
-        <option key={d.id} value={d.id}>
-          {d.name} ({d.dept_code})
-        </option>
-      ))
-    ) : (
-      <option disabled>No departments initialized</option>
-    )}
-  </select>
+  style={selectStyle} 
+  value={formData.department || ""} // Uses the string-mapped dept_id from the useEffect above
+  onChange={(e) => setFormData({...formData, department: e.target.value})}
+  required
+>
+  <option value="" disabled>Select Infrastructure Node</option>
+  {depts.map((d) => (
+    // Ensure the value is a string so the select component can track it correctly
+    <option key={d.id} value={d.id.toString()}>
+      {d.name} ({d.dept_code})
+    </option>
+  ))}
+</select>
 </FormField>
               
               {formData.role === "Doctor" && (
@@ -189,7 +203,12 @@ const BASE_URL = "http://localhost:8000/api/v1/admin";const StaffFormModal = ({ 
 
             <div style={rowGrid}>
               <FormField label="Qualification" icon={Award}>
-                <input style={nakedInput} placeholder="e.g. MBBS, MD" value={formData.qualification ||""} onChange={(e) => setFormData({...formData, qualification: e.target.value})} />
+              <input 
+  style={nakedInput} 
+  placeholder="e.g. MBBS, MD" 
+  value={formData.qualification || ""} // Fallback ensures it stays controlled
+  onChange={(e) => setFormData({...formData, qualification: e.target.value})} 
+/>
               </FormField>
               <FormField label="Experience" icon={Clock}>
                 <input type="number" style={nakedInput} placeholder="Years" value={formData.experience ||""} onChange={(e) => setFormData({...formData, experience: e.target.value})} />
@@ -266,39 +285,49 @@ const StaffRegistry = ({
     const currentHospitalId = localStorage.getItem("hospital_id");
 
     try {
-      const { id, staff_id, ...cleanData } = formData;
-  
-      const payload = {
-        ...cleanData,
-        password: "DefaultPassword123!", 
-        hospital_id: parseInt(currentHospitalId),
-        salary: parseInt(formData.salary) || 0,
-        experience: parseInt(formData.experience) || 0,
-        dept_id: formData.department ? parseInt(formData.department) : null, 
-        is_hod: !!formData.is_hod 
-      };
+        const { id, department, staff_id, ...cleanData } = formData;
 
-      if (editingMember) {
-        // ✅ Use BASE_URL as defined on line 64
-        await axios.put(`${BASE_URL}/staff/${editingMember.id}`, payload);
-        addLog('UPD', `Node ${editingMember.id} synchronized`);
-      } else {
-        await axios.post(`${BASE_URL}/staff/register`, payload);
-        addLog('NEW', 'New personnel node deployed');
-      }
-  
-      setIsModalOpen(false); 
-      if (onRefresh) onRefresh(); // ✅ Sync Parent
-      setNotification({ message: 'Success!', type: 'success' });
-      setTimeout(() => setNotification({ message: '', type: '' }), 3000);
-  
+        // Base payload for both Add and Edit
+        const payload = {
+            ...cleanData,
+            salary: formData.salary !== "" ? parseInt(formData.salary) : 0,
+            experience: formData.experience !== "" ? parseInt(formData.experience) : 0,
+            dept_id: formData.department ? parseInt(formData.department) : null,
+            is_hod: !!formData.is_hod,
+            status: formData.status || "Active"
+        };
+
+        if (id) {
+            // EDIT MODE: Use Query Parameter as requested by your 422 error
+            await axios.put(
+                `${BASE_URL}/staff/${id}?hospital_id=${currentHospitalId}`, 
+                payload
+            );
+            addLog('UPD', `Node ${id} synchronized`);
+        } else {
+            // REGISTRATION MODE: 
+            // Usually, POST requests keep hospital_id in the body.
+            // If POST also gives a 422, move hospital_id to the URL here too.
+            const registrationPayload = {
+                ...payload,
+                hospital_id: parseInt(currentHospitalId), // Keep in body for Registration
+                password: "DefaultPassword123!" 
+            };
+
+            await axios.post(`${BASE_URL}/staff/register`, registrationPayload);
+            addLog('NEW', 'New personnel node deployed');
+        }
+
+        setIsModalOpen(false); 
+        if (onRefresh) onRefresh();
+        setNotification({ message: 'Success!', type: 'success' });
+
     } catch (error) {
-      addLog('ERR', 'Sync Failed');
-      setNotification({ message: 'Error saving data.', type: 'error' });
+        console.error("Sync Error:", error.response?.data);
+        addLog('ERR', 'Operation Failed');
+        setNotification({ message: 'Error: Check system logs', type: 'error' });
     }
-  };
-  
-
+};
   const filteredStaff = staff.filter(m => 
     m.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.role?.toLowerCase().includes(searchTerm.toLowerCase())

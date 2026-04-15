@@ -123,14 +123,17 @@ const AdminDashboard = () => {
     if (!window.confirm("Are you sure you want to decommission this personnel node?")) return;
   
     try {
-      // Adding the hospital_id as a query param for backend verification
-      await axios.delete(`http://localhost:8000/api/v1/admin/staff/${id}?hospital_id=${storedId}`);
-      fetchData(); // Refresh to show the empty state for the new hospital
+      // CHANGE: Move storedId from the '?' area into the main URL path
+      // Logic: /staff/{staff_id}/{hospital_id}
+      await axios.delete(`http://localhost:8000/api/v1/admin/staff/${id}/${storedId}`);
+      
+      fetchData(); 
+      console.log("Infrastructure node decommissioned successfully.");
     } catch (err) {
-      console.error("Deletion failed: Node might belong to another facility.", err);
-      alert("Authorization Error: You do not have permission to delete this record.");
+      console.error("Deletion failed:", err.response?.data);
+      alert("System Error: Ensure this staff member doesn't have active records before deleting.");
     }
-  };
+};
 
   const handleEdit = (member) => {
     setEditingMember(member);

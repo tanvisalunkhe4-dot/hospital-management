@@ -19,6 +19,15 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+
+    const { identifier, password, hospitalId } = formData;
+
+    const loginData = {
+      identifier: identifier.trim(), // Removes the accidental space
+      password: password,
+      hospital_id: hospitalId.trim(),
+      role: role
+    };
     try {
       localStorage.clear();
       const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
