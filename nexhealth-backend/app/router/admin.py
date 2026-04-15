@@ -107,28 +107,36 @@ def update_department(
         print(f"Update Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to synchronize department node.")
 # --- STAFF MANAGEMENT ENDPOINTS ---
+
 @router.post("/staff/register")
 def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
     try:
         # 1. HASH THE PASSWORD
         hashed_pwd = pwd_context.hash(data.password) 
 
-        # 2. GENERATE ROLE-BASED ID (Safe Method)
-        # Prevents collisions even if records are deleted
-        role_prefixes = {"Doctor": "DOC", "Nurse": "NUR", "Receptionist": "REC"}
+        # 2. GENERATE ROLE-BASED ID
+        role_prefixes = {
+            "Doctor": "DOC", 
+            "Nurse": "NUR", 
+            "Receptionist": "REC",
+            "Lab Technician": "LAB",
+            "Pharmacist": "PHR"
+        }
         prefix = role_prefixes.get(data.role, "STF")
         
-        # Look for the last staff member created with this specific role prefix
-        last_staff = db.query(models.Staff)\
-            .filter(models.Staff.staff_id.like(f"{prefix}-2026-%"))\
+        # We check for ANY staff member in 2026 to ensure the number is always unique
+        last_entry = db.query(models.Staff)\
+            .filter(
+                models.Staff.staff_id.contains("-2026-"),
+                models.Staff.hospital_id == data.hospital_id
+            )\
             .order_by(models.Staff.id.desc())\
             .first()
 
-        if last_staff:
+        if last_entry:
             try:
-                # Extract the numeric part from the end (e.g., 'DOC-2026-005' -> 5)
-                last_id_str = last_staff.staff_id.split('-')[-1]
-                new_id_num = int(last_id_str) + 1
+                last_id_parts = last_entry.staff_id.split('-')
+                new_id_num = int(last_id_parts[-1]) + 1
             except (ValueError, IndexError):
                 new_id_num = 1
         else:
@@ -136,7 +144,7 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
 
         generated_id = f"{prefix}-2026-{new_id_num:03d}"
 
-        # 3. PREPARE PRIMARY STAFF OBJECT
+        # 3. PREPARE PRIMARY STAFF OBJECT (Indented inside try)
         new_staff = models.Staff(
             staff_id=generated_id,
             full_name=data.full_name,
@@ -150,17 +158,14 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         )
         
         db.add(new_staff)
-        # flush() generates the new_staff.id but doesn't commit to the DB yet
-        db.flush() 
+        db.flush() # Generates new_staff.id for child tables
 
         # 4. PREPARE SPECIALIZED DATA (Role-Specific)
         if data.role == "Doctor":
-            # Manual validation check to prevent empty doctor records
             if not data.license_no:
                 raise HTTPException(status_code=400, detail="License number is required for Doctors")
-                
             new_doc = models.Doctor(
-                staff_ref_id=new_staff.id, # Uses the ID we just flushed
+                staff_ref_id=new_staff.id,
                 specialization=data.specialization,
                 license_no=data.license_no,
                 is_hod=data.is_hod or False
@@ -175,7 +180,7 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
             )
             db.add(new_nurse)
 
-        # 5. FINAL COMMIT (Atomic: All or Nothing)
+        # 5. FINAL COMMIT (Atomic)
         db.commit()
         db.refresh(new_staff)
 
@@ -187,17 +192,13 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        # CRITICAL: Undo everything if ANY part of the process fails
         db.rollback() 
         print(f"Deployment Failure: {str(e)}") 
-        
-        # Handle specific Database errors gracefully
         if "unique constraint" in str(e).lower():
             raise HTTPException(
                 status_code=400, 
                 detail=f"Conflict: The generated ID {generated_id} or License Number already exists."
             )
-            
         raise HTTPException(status_code=500, detail=f"Infrastructure Error: {str(e)}")
 
 @router.get("/staff/{hospital_id}", response_model=List[StaffResponse])

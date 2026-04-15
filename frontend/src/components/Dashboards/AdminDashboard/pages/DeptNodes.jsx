@@ -168,18 +168,17 @@ const DeptNodes = ({
             </tr>
           </thead>
           <tbody>
-  {depts.length === 0 ? (
+  {filteredDepts.length === 0 ? (  // <--- Use filteredDepts here
     <tr>
       <td colSpan="5" style={{ padding: "100px 0", textAlign: "center" }}>
         <div style={{ color: "#94a3b8", fontWeight: "700" }}>
           <Activity size={48} style={{ marginBottom: "16px", opacity: 0.5, margin: '0 auto' }} />
-          <p>No active infrastructure nodes found.</p>
-          <p style={{ fontSize: "12px" }}>Check your database connection or hospital ID.</p>
+          <p>{searchTerm ? "No matching nodes found." : "No active infrastructure nodes found."}</p>
         </div>
       </td>
     </tr>
   ) : (
-    depts.map((d) => {
+    filteredDepts.map((d) => {
       // 1. Setup Display Variables
       const displayName = d.name || d.department_name || "Unknown Dept";
       const displayCode = d.dept_code || d.code || "N/A";

@@ -18,6 +18,15 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+
+    const { identifier, password, hospitalId } = formData;
+
+    const loginData = {
+      identifier: identifier.trim(), // Removes the accidental space
+      password: password,
+      hospital_id: hospitalId.trim(),
+      role: role
+    };
     try {
       // 1. Clear old session data to prevent data leaking between hospital switches
       localStorage.clear();

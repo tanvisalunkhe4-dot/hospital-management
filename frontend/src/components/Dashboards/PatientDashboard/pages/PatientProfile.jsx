@@ -1,54 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Phone, MapPin, Fingerprint, 
-  ShieldCheck, Edit3, Lock, AlertCircle, Loader2 
+  ShieldCheck, Edit3, Loader2, AlertCircle 
 } from 'lucide-react';
 import axios from 'axios';
-
-// --- CONFIGURATION ---
-const useMock = true; // 🟢 Set to FALSE when your FastAPI table is ready
-
-const MOCK_DATA = {
-  full_name: "John Doe",
-  uhid: "2026-8842",
-  gender: "Male",
-  blood_group: "O+ Positive",
-  abha_id: "12-3456-7890-1234",
-  abha_address: "johndoe@abdm",
-  is_verified: true,
-  email: "john.doe@example.com",
-  emergency_contact: "+91 98765 43210",
-  address: "123 Green Valley, Pune, Maharashtra",
-};
-
-const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
-});
 
 const PatientProfile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchProfileData = async () => {
-      setLoading(true);
-      if (useMock) {
-        // Simulate a short network delay
-        setTimeout(() => {
-          setProfile(MOCK_DATA);
-          setLoading(false);
-        }, 800);
-      } else {
-        try {
-          const response = await api.get('/patient/profile'); 
-          setProfile(response.data);
-        } catch (error) {
-          console.error("Identity Synchronization Error:", error);
-        } finally {
-          setLoading(false);
+      try {
+        setLoading(true);
+        
+        // 1. Grab the token from storage
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          console.error("No token found in localStorage");
+          return;
         }
+    
+        // 2. Perform the GET request with the Authorization header
+        const response = await axios.get('http://localhost:8000/api/v1/patient/profile', {
+          headers: {
+            // Ensure "Bearer " (with a space) is prefixed to the token
+            'Authorization': `Bearer ${token}`
+          }
+        });
+    
+        setProfile(response.data);
+      } catch (error) {
+        if (error.response && error.response.status === 401) {
+          console.error("Session expired or invalid token. Redirecting to login...");
+          // Optional: navigate('/login');
+        }
+        console.error("Identity Synchronization Error:", error);
+      } finally {
+        setLoading(false);
       }
     };
+
     fetchProfileData();
   }, []);
 
@@ -61,11 +55,19 @@ const PatientProfile = () => {
     );
   }
 
-  if (!profile) return <div style={container}>Error loading profile.</div>;
+  if (error) {
+    return (
+      <div style={container}>
+        <div style={{ ...card, borderColor: '#fecaca', backgroundColor: '#fef2f2' }}>
+          <AlertCircle color="#ef4444" />
+          <p style={{ color: '#b91c1c', fontWeight: '600' }}>Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={container}>
-      {/* Header */}
       <div style={headerSection}>
         <div>
           <h1 style={title}>Personal Profile</h1>
@@ -86,21 +88,23 @@ const PatientProfile = () => {
           <div style={infoContent}>
             <DataRow label="Full Name" value={profile.full_name} />
             <DataRow label="Gender" value={profile.gender} />
+            {/* Using the blood_group field from your database */}
             <DataRow label="Blood Group" value={profile.blood_group} isCritical />
           </div>
         </div>
 
-        {/* 2. ABDM Linkage */}
+        {/* 2. ABDM Linkage (ABHA) */}
         <div style={card}>
           <div style={cardHeader}>
             <div style={{...iconBox, backgroundColor: '#ecfdf5'}}><Fingerprint size={20} color="#059669" /></div>
             <h3 style={cardTitle}>ABDM Linkage</h3>
-            {profile.is_verified && <span style={verifiedBadge}><ShieldCheck size={12} /> Verified</span>}
+            {profile.abha_number && <span style={verifiedBadge}><ShieldCheck size={12} /> Verified</span>}
           </div>
           <div style={infoContent}>
-            <DataRow label="ABHA Number" value={profile.abha_id} />
-            <DataRow label="Health ID" value={profile.abha_address} />
-            <DataRow label="Status" value={profile.is_verified ? "Active Profile" : "Pending"} />
+            {/* Mapping abha_number from your patient.py schema */}
+            <DataRow label="ABHA Number" value={profile.abha_number} />
+            <DataRow label="Health ID" value={profile.abha_address || 'Not Linked'} />
+            <DataRow label="Status" value={profile.abha_number ? "Active Profile" : "Pending"} />
           </div>
         </div>
 
@@ -112,37 +116,14 @@ const PatientProfile = () => {
           </div>
           <div style={infoContent}>
             <DataRow label="Email Address" value={profile.email} />
-            <DataRow label="Emergency Contact" value={profile.emergency_contact} />
+            <DataRow label="Mobile Number" value={profile.phone} />
             <DataRow label="Current Residence" value={profile.address} />
-          </div>
-        </div>
-
-        {/* 4. Health Snapshot */}
-        <div style={card}>
-          <div style={cardHeader}>
-            <div style={{...iconBox, backgroundColor: '#fff1f2'}}><AlertCircle size={20} color="#e11d48" /></div>
-            <h3 style={cardTitle}>Health Snapshot</h3>
-          </div>
-          <div style={{...infoContent, marginTop: '12px'}}>
-            <p style={description}>Active clinical markers in your NexHealth vault.</p>
-            <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
-              <span style={tagRed}>Type: {profile.blood_group}</span>
-              <span style={tagBlue}>{profile.is_verified ? "ABDM Verified" : "Unverified"}</span>
-            </div>
           </div>
         </div>
       </div>
     </div>
   );
 };
-
-// Reusable Row Component
-const DataRow = ({ label, value, isCritical }) => (
-  <div style={infoRow}>
-    <span style={labelStyle}>{label}</span>
-    <span style={{...valueStyle, color: isCritical ? '#ef4444' : '#0f172a'}}>{value || 'Not Provided'}</span>
-  </div>
-);
 
 // --- STYLES (Keep your existing enterprise styles here) ---
 const loaderWrapper = { height: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' };

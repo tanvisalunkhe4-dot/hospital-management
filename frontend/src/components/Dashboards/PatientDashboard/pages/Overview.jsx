@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import {
-  Calendar, Activity, ClipboardList, Clock,
-  ArrowUpRight, AlertCircle
+import { 
+  Calendar, Activity, ClipboardList, Clock, 
+  ArrowUpRight, AlertCircle, CheckCircle2 
 } from 'lucide-react';
 
 const Overview = () => {
@@ -12,14 +12,13 @@ const Overview = () => {
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(
-          'http://localhost:8000/api/v1/patient/dashboard-summary',
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setData(res.data);
-      } catch (err) {
-        console.error(err);
+        const token = localStorage.getItem('token'); 
+        const response = await axios.get('http://localhost:8000/api/v1/patient/dashboard-summary', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setData(response.data);
+      } catch (error) {
+        console.error("Dashboard sync error:", error);
       } finally {
         setLoading(false);
       }
@@ -28,140 +27,92 @@ const Overview = () => {
   }, []);
 
   const stats = [
-    {
-      label: 'Next Appointment',
-      value: data?.next_appointment || 'No upcoming',
-      icon: Calendar,
-      color: '#10b981',
-      bg: '#ecfdf5'
-    },
-    {
-      label: 'Blood Group',
-      value: data?.blood_group || 'O+',
-      icon: Activity,
-      color: '#ef4444',
-      bg: '#fef2f2'
-    },
-    {
-      label: 'Pending Reports',
-      value: `${data?.pending_reports || 0} Reports`,
-      icon: ClipboardList,
-      color: '#3b82f6',
-      bg: '#eff6ff'
-    },
-    {
-      label: 'Last Visit',
-      value: data?.last_visit || '—',
-      icon: Clock,
-      color: '#f59e0b',
-      bg: '#fffbeb'
-    }
+    { label: 'Next Appointment', value: data?.next_appointment || 'No upcoming', icon: Calendar, color: '#059669', bg: '#f0fdf4' },
+    { label: 'Blood Group', value: data?.blood_group || 'O+', icon: Activity, color: '#dc2626', bg: '#fef2f2' },
+    { label: 'Pending Reports', value: `${data?.pending_reports || 0} Reports`, icon: ClipboardList, color: '#2563eb', bg: '#eff6ff' },
+    { label: 'Last Visit', value: data?.last_visit || '12 Feb 2026', icon: Clock, color: '#d97706', bg: '#fffbeb' },
   ];
 
-  const feed = [
-    { time: '10:23 PM', type: 'SYNC', text: 'Profile synchronized successfully' },
-    { time: '02:15 PM', type: 'SYSTEM', text: 'Medical records updated' }
-  ];
-
-  if (loading) return <div style={styles.loader}>Loading dashboard...</div>;
+  if (loading) return <div style={styles.loader}>Initializing Clinical Workspace...</div>;
 
   return (
     <div style={styles.container}>
-      
-      {/* HEADER */}
-      <div style={styles.header}>
+      {/* Header Section */}
+      <header style={styles.header}>
         <div>
-          <h1 style={styles.title}>
-            Welcome back, <span style={{ color: '#10b981' }}>{data?.name || 'Patient'}</span>
+          <h1 style={styles.welcomeMsg}>
+            Welcome back, <span style={{color: '#059669'}}>{data?.name || 'Patient'}</span> 👋
           </h1>
-          <p style={styles.subtitle}>Your health overview at a glance</p>
+          <p style={styles.subtitle}>Your health overview and clinical status from the NexHealth Digital Spine.</p>
         </div>
-
-        <div style={styles.headerRight}>
-          <div style={styles.uhid}>
-            <span>UHID</span>
-            <b>{data?.uhid || '---'}</b>
-          </div>
-
-          <button style={styles.primaryBtn}>
-            <Calendar size={18} /> Book Appointment
-          </button>
+        <div style={styles.headerActions}>
+           <div style={styles.uhidCapsule}>
+              <span style={styles.uhidLabel}>UHID</span>
+              <span style={styles.uhidValue}>{data?.uhid || '---'}</span>
+           </div>
+           <button style={styles.primaryBtn}>
+             <Calendar size={18}/> 
+             <span>Book Appointment</span>
+           </button>
         </div>
-      </div>
+      </header>
 
-      {/* ALERT */}
+      {/* Actionable Alerts */}
       {!data?.is_profile_complete && (
-        <div style={styles.alert}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <AlertCircle color="#059669" />
+        <div style={styles.alertCard}>
+          <div style={styles.alertContent}>
+            <div style={styles.alertIcon}><AlertCircle color="#059669" /></div>
             <div>
-              <b>Complete your profile</b>
-              <p style={{ margin: 0, fontSize: 13 }}>
-                Unlock full medical features by verifying your profile.
-              </p>
+              <h4 style={styles.alertTitle}>Security & Identity Verification</h4>
+              <p style={styles.alertText}>Verify your clinical profile to enable automated record synchronization with the Master Node.</p>
             </div>
           </div>
-
-          <button style={styles.secondaryBtn}>
-            Complete <ArrowUpRight size={14} />
-          </button>
+          <button style={styles.outlineBtn}>Complete Setup <ArrowUpRight size={16}/></button>
         </div>
       )}
 
-      {/* STATS */}
-      <div style={styles.grid}>
-        {stats.map((s, i) => (
-          <div
-          key={i}
-          style={styles.card}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-5px)';
-            e.currentTarget.style.boxShadow = '0 14px 30px rgba(0,0,0,0.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.05)';
-          }}
-        >
-            <div style={{ ...styles.iconBox, background: s.bg }}>
-              <s.icon color={s.color} />
+      {/* Performance Stats Grid */}
+      <div style={styles.statsGrid}>
+        {stats.map((stat, i) => (
+          <div key={i} style={styles.statCard}>
+            <div style={{...styles.iconBox, backgroundColor: stat.bg}}>
+              <stat.icon size={22} color={stat.color} />
             </div>
             <div>
-              <p style={styles.label}>{s.label}</p>
-              <h3 style={styles.value}>{s.value}</h3>
+              <p style={styles.statLabel}>{stat.label}</p>
+              <h3 style={styles.statValue}>{stat.value}</h3>
             </div>
           </div>
         ))}
       </div>
 
-      {/* MAIN */}
-      <div style={styles.main}>
-        
-        {/* FEED */}
-        <div style={styles.bigCard}>
-          <h3 style={styles.cardTitle}>Activity Feed</h3>
-
-          <div style={{ marginTop: 20 }}>
-            {feed.map((f, i) => (
-              <div key={i} style={styles.feedItem}>
-                <div style={{
-                  ...styles.dot,
-                  background: f.type === 'SYNC' ? '#10b981' : '#3b82f6'
-                }} />
-
-                <span style={styles.time}>{f.time}</span>
-                <p style={styles.feedText}>{f.text}</p>
-              </div>
-            ))}
+      {/* Information Layer */}
+      <div style={styles.mainGrid}>
+        <div style={styles.glassCard}>
+          <div style={styles.cardHeader}>
+            <h3 style={styles.cardTitle}>Recent Activity Log</h3>
+            <span style={styles.liveBadge}>LIVE UPDATES</span>
+          </div>
+          <div style={styles.feedList}>
+            <div style={styles.feedItem}>
+              <CheckCircle2 size={14} color="#059669" />
+              <span style={styles.timeStyle}>10:23 PM</span>
+              <p style={styles.feedText}>Profile synchronized with Master Node</p>
+            </div>
+            <div style={styles.feedItem}>
+              <CheckCircle2 size={14} color="#059669" />
+              <span style={styles.timeStyle}>02:15 PM</span>
+              <p style={styles.feedText}>Diagnostic records updated from City Care Center</p>
+            </div>
           </div>
         </div>
 
-        {/* INSIGHTS */}
-        <div style={styles.bigCard}>
+        <div style={styles.glassCard}>
           <h3 style={styles.cardTitle}>Health Insights</h3>
-
-          <div style={styles.insight}>
-            💧 Drink at least 3L water daily to improve metabolism & skin health.
+          <div style={styles.insightBox}>
+             <p style={styles.insightText}>
+               <b>Hydration Goal:</b> Consuming 3L of water daily optimizes renal filtration and enhances metabolic skin health.
+             </p>
           </div>
         </div>
       </div>
@@ -169,200 +120,166 @@ const Overview = () => {
   );
 };
 
-export default Overview;
-
-
-
-
-
-/* ================== STYLES ================== */
+/* ================== PROFESSIONAL STYLES ================== */
 const styles = {
-
-  container: {
-    padding: '32px',
-    background: 'linear-gradient(to bottom, #f8fafc, #f1f5f9)',
+  container: { 
+    maxWidth: '1440px', 
+    margin: '0 auto', 
+    padding: '40px 24px',
+    backgroundColor: '#f8fafc',
     minHeight: '100vh'
   },
-
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: '32px'
+  header: { 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-end', 
+    marginBottom: '40px' 
   },
-
-  title: {
-    fontSize: '32px',
-    fontWeight: '800',
-    margin: 0,
-    letterSpacing: '-0.5px',
-    color: '#0f172a'
+  welcomeMsg: { 
+    fontSize: '32px', 
+    fontWeight: '800', 
+    color: '#0f172a', 
+    margin: 0, 
+    letterSpacing: '-1px' 
   },
-
-  subtitle: {
-    color: '#64748b',
-    marginTop: '6px',
-    fontSize: '14px'
+  subtitle: { color: '#64748b', fontSize: '15px', marginTop: '6px' },
+  headerActions: { display: 'flex', gap: '16px', alignItems: 'center' },
+  uhidCapsule: { 
+    display: 'flex', 
+    backgroundColor: '#fff', 
+    border: '1px solid #e2e8f0', 
+    borderRadius: '12px', 
+    overflow: 'hidden',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
   },
-
-  headerRight: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center'
+  uhidLabel: { 
+    backgroundColor: '#f8fafc', 
+    padding: '10px 14px', 
+    fontSize: '11px', 
+    fontWeight: '800', 
+    color: '#94a3b8', 
+    borderRight: '1px solid #e2e8f0',
+    textTransform: 'uppercase'
   },
-
-  uhid: {
-    background: '#fff',
-    padding: '8px 14px',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0',
-    fontSize: '12px',
-    fontWeight: '600'
-  },
-
-  primaryBtn: {
-    background: 'linear-gradient(135deg,#10b981,#059669)',
-    color: '#fff',
-    border: 'none',
-    padding: '12px 18px',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontWeight: '600',
-    boxShadow: '0 8px 20px rgba(16,185,129,0.25)',
+  uhidValue: { padding: '10px 14px', fontSize: '13px', fontWeight: '700', color: '#0f172a' },
+  primaryBtn: { 
+    backgroundColor: '#059669', 
+    color: '#fff', 
+    border: 'none', 
+    padding: '12px 24px', 
+    borderRadius: '12px', 
+    fontWeight: '700', 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: '10px', 
+    cursor: 'pointer', 
+    boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.25)',
     transition: 'all 0.2s ease'
   },
-
-  secondaryBtn: {
-    background: '#059669',
-    color: '#fff',
-    border: 'none',
-    padding: '10px 14px',
-    borderRadius: '10px',
+  alertCard: { 
+    backgroundColor: '#f0fdf4', 
+    border: '1px solid #d1fae5', 
+    borderRadius: '20px', 
+    padding: '24px', 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: '40px' 
+  },
+  alertContent: { display: 'flex', gap: '20px', alignItems: 'center' },
+  alertIcon: { 
+    backgroundColor: '#fff', 
+    padding: '12px', 
+    borderRadius: '14px', 
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' 
+  },
+  alertTitle: { margin: 0, color: '#064e3b', fontWeight: '800', fontSize: '16px' },
+  alertText: { margin: '4px 0 0', fontSize: '14px', color: '#065f46', opacity: 0.8 },
+  outlineBtn: { 
+    backgroundColor: '#059669', 
+    color: '#fff', 
+    border: 'none', 
+    padding: '12px 20px', 
+    borderRadius: '10px', 
+    fontWeight: '700', 
+    fontSize: '14px', 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: '8px', 
+    cursor: 'pointer' 
+  },
+  statsGrid: { 
+    display: 'grid', 
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
+    gap: '24px', 
+    marginBottom: '40px' 
+  },
+  statCard: { 
+    backgroundColor: '#fff', 
+    padding: '28px', 
+    borderRadius: '24px', 
+    border: '1px solid #e2e8f0', 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: '20px', 
+    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
     cursor: 'pointer',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px'
+    boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
   },
-
-  alert: {
-    background: 'linear-gradient(135deg,#ecfdf5,#d1fae5)',
-    border: '1px solid #bbf7d0',
-    padding: '18px',
-    borderRadius: '16px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '32px'
+  iconBox: { width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  statLabel: { 
+    fontSize: '12px', 
+    fontWeight: '700', 
+    color: '#94a3b8', 
+    textTransform: 'uppercase', 
+    margin: 0, 
+    letterSpacing: '0.8px' 
   },
-
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4,1fr)',
-    gap: '24px',
-    marginBottom: '32px'
+  statValue: { fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '4px 0 0 0' },
+  mainGrid: { 
+    display: 'grid', 
+    gridTemplateColumns: '2fr 1fr', 
+    gap: '32px' 
   },
-
-  card: {
-    background: '#fff',
-    padding: '22px',
-    borderRadius: '18px',
-    display: 'flex',
-    gap: '16px',
-    alignItems: 'center',
-    boxShadow: '0 6px 18px rgba(0,0,0,0.05)',
-    transition: 'all 0.25s ease',
-    cursor: 'pointer'
+  glassCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: '24px', 
+    border: '1px solid #e2e8f0', 
+    padding: '32px', 
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' 
   },
-
-  iconBox: {
-    width: '48px',
-    height: '48px',
-    borderRadius: '14px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-
-  label: {
-    fontSize: '11px',
-    color: '#94a3b8',
-    margin: 0,
-    textTransform: 'uppercase',
-    fontWeight: '700',
+  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
+  cardTitle: { fontSize: '18px', fontWeight: '800', color: '#0f172a', margin: 0 },
+  liveBadge: { 
+    fontSize: '10px', 
+    fontWeight: '800', 
+    color: '#059669', 
+    backgroundColor: '#d1fae5', 
+    padding: '4px 10px', 
+    borderRadius: '6px',
     letterSpacing: '0.5px'
   },
-
-  value: {
-    margin: '2px 0 0',
-    fontWeight: '800',
-    fontSize: '18px'
+  feedList: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  feedItem: { display: 'flex', alignItems: 'center', gap: '16px' },
+  timeStyle: { color: '#94a3b8', fontWeight: '600', fontSize: '13px', minWidth: '70px' },
+  feedText: { margin: 0, color: '#475569', fontWeight: '500', fontSize: '14px' },
+  insightBox: { 
+    marginTop: '20px', 
+    padding: '24px', 
+    backgroundColor: '#f8fafc', 
+    borderRadius: '16px', 
+    borderLeft: '4px solid #059669' 
   },
-
-  main: {
-    display: 'grid',
-    gridTemplateColumns: '2fr 1fr',
-    gap: '24px'
-  },
-
-  bigCard: {
-    background: 'rgba(255,255,255,0.8)',
-    backdropFilter: 'blur(10px)',
-    padding: '26px',
-    borderRadius: '20px',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.06)',
-    border: '1px solid rgba(255,255,255,0.4)',
-    transition: 'all 0.25s ease'
-  },
-
-  cardTitle: {
+  insightText: { margin: 0, fontSize: '15px', color: '#475569', lineHeight: '1.7' },
+  loader: { 
+    display: 'flex', 
+    height: '100vh', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    color: '#059669', 
     fontWeight: '700',
-    fontSize: '15px',
-    marginBottom: '12px'
-  },
-
-  feedItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '12px 0',
-    borderBottom: '1px solid #f1f5f9'
-  },
-
-  dot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%'
-  },
-
-  time: {
-    fontSize: '12px',
-    color: '#94a3b8',
-    width: '70px'
-  },
-
-  feedText: {
-    margin: 0,
-    fontSize: '14px',
-    color: '#475569'
-  },
-
-  insight: {
-    marginTop: '16px',
-    padding: '16px',
-    borderRadius: '14px',
-    background: 'linear-gradient(135deg,#ecfdf5,#bbf7d0)',
-    fontSize: '14px',
-    lineHeight: '1.5'
-  },
-
-  loader: {
-    textAlign: 'center',
-    padding: '120px',
-    fontWeight: '600',
-    color: '#10b981'
+    fontSize: '18px'
   }
 };
+
+export default Overview;
