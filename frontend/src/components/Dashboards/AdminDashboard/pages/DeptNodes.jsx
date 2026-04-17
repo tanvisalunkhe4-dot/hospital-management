@@ -19,6 +19,7 @@ const DeptNodes = ({
     dept_type: "Clinical",
     contact_number: "",
     description: "",
+    head_of_dept: "",
     medical_hod: "",
     admin_hod: ""
   };
@@ -162,6 +163,7 @@ const DeptNodes = ({
             <tr style={tableHeaderRow}>
               <th style={th}>DEPARTMENT NODE</th>
               <th style={th}>IDENTIFIER</th>
+              <th style={th}>HEAD OF DEPARTMENT</th>
               <th style={th}>CAPACITY</th>
               <th style={th}>STATUS</th>
               <th style={thRight}>ACTIONS</th>
@@ -170,7 +172,7 @@ const DeptNodes = ({
           <tbody>
   {filteredDepts.length === 0 ? (  // <--- Use filteredDepts here
     <tr>
-      <td colSpan="5" style={{ padding: "100px 0", textAlign: "center" }}>
+      <td colSpan="6" style={{ padding: "100px 0", textAlign: "center" }}>
         <div style={{ color: "#94a3b8", fontWeight: "700" }}>
           <Activity size={48} style={{ marginBottom: "16px", opacity: 0.5, margin: '0 auto' }} />
           <p>{searchTerm ? "No matching nodes found." : "No active infrastructure nodes found."}</p>
@@ -182,6 +184,7 @@ const DeptNodes = ({
       // 1. Setup Display Variables
       const displayName = d.name || d.department_name || "Unknown Dept";
       const displayCode = d.dept_code || d.code || "N/A";
+      const displayHeadOfDept = d.head_of_dept || "Not assigned";
       
       // 2. Calculate Relationship Data (Only once!)
       const assignedCount = staff.filter(
@@ -214,6 +217,10 @@ const DeptNodes = ({
           
           <td style={td}>
             <span style={roleBadgeStyleFn("Doctor")}>{displayCode}</span>
+          </td>
+
+          <td style={td}>
+            <div style={capacityText}>{displayHeadOfDept}</div>
           </td>
           
           <td style={td}>

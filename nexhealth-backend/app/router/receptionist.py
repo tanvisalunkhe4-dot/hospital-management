@@ -44,7 +44,9 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
             full_name=f"{patient_in.first_name} {patient_in.last_name}",
             hashed_password=hashed_pwd,
             role="Patient", 
-            is_active=False,
+            # Receptionist-created patients should be able to access their portal
+            # immediately with the generated credentials.
+            is_active=True,
             hospital_id=patient_in.hospital_id
         )
         db.add(new_user)

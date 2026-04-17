@@ -19,18 +19,23 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id = payload.get("sub")
+        if user_id is None:
             raise credentials_exception
-    except JWTError:
+
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if user is None:
+            raise credentials_exception
+
+        return user
+    except (JWTError, ValueError, TypeError):
+        # JWTError: bad token/signature/expiry
+        # ValueError/TypeError: sub missing or not int-castable
         raise credentials_exception
-        
-    user = db.query(User).filter(User.identifier == username).first()
-    if user is None:
-        raise credentials_exception
-    return user
 
 def get_current_active_user(current_user: User = Depends(get_current_user)):
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+    # Treat only an explicit False flag as inactive to avoid blocking
+    # legacy rows where is_active may be null/unset.
+    if current_user.is_active is False:
+        raise HTTPException(status_code=403, detail="Inactive user")
     return current_user

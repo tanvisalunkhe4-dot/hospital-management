@@ -14,8 +14,9 @@ from ..schemas.auth_schema import SignupRequest, LoginRequest, LoginResponse
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
-SECRET_KEY = "NEXHEALTH_INTERNAL_SECRET"
+SECRET_KEY = "nexhealth_secret_key"
 ALGORITHM = "HS256"
+
 
 
 def get_password_hash(password: str):
@@ -71,6 +72,22 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
     try:
         db.add(new_user)
+        db.flush()
+
+        if payload.role == "Patient":
+            # Patient endpoints load profile via Patient.user_id == current_user.id.
+            # Ensure a linked patient row exists at signup time.
+            identifier_value = payload.identifier.strip()
+            fallback_name = identifier_value.split("@")[0] if "@" in identifier_value else identifier_value
+            fallback_name = fallback_name or "Patient"
+
+            patient_profile = models.Patient(
+                user_id=new_user.id,
+                first_name=fallback_name,
+                last_name="User",
+            )
+            db.add(patient_profile)
+
         db.commit()
         db.refresh(new_user)
     except Exception as e:
@@ -159,6 +176,26 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     elif user.role != payload.role:
         print(f"DEBUG: Role mismatch. Sent: {payload.role}, DB: {user.role}")
         raise HTTPException(status_code=403, detail="Role mismatch")
+
+    # Backfill for legacy patient users created before patient-profile auto creation.
+    if user.role == "Patient":
+        existing_patient_profile = (
+            db.query(models.Patient).filter(models.Patient.user_id == user.id).first()
+        )
+        if not existing_patient_profile:
+            identifier_value = user.email or search_identifier
+            fallback_name = identifier_value.split("@")[0] if "@" in identifier_value else identifier_value
+            fallback_name = (fallback_name or "Patient").strip()
+
+            db.add(
+                models.Patient(
+                    user_id=user.id,
+                    first_name=fallback_name,
+                    last_name="User",
+                )
+            )
+            db.commit()
+            db.refresh(user)
 
     # --- 5. TOKEN GENERATION ---
     token_data = {

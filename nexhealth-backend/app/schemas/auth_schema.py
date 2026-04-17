@@ -83,6 +83,7 @@ class DepartmentBase(BaseModel):
     name: str
     hospital_id: int
     dept_code: Optional[str] = None
+    head_of_dept: Optional[str] = None
     location: Optional[str] = None
     contact_number: Optional[str] = None
     dept_type: str = "Clinical"

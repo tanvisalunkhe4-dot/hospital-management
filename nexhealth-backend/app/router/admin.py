@@ -162,9 +162,13 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         # This removes the need for manual SQL inserts
         new_user = models.User(
             staff_id=generated_id,
+            full_name=data.full_name,
+            email=data.email,
             hashed_password=hashed_pwd, 
             role=data.role,
             hospital_id=data.hospital_id,
+            department_id=data.dept_id,
+            sub_role=data.role,
             is_active=True
         )
         db.add(new_user)
