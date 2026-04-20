@@ -99,10 +99,12 @@ const ReceptionistDashboard = () => {
           ))}
         </nav>
 
+
         <button onClick={() => { localStorage.clear(); window.location.href='/login'; }} style={logoutBtn}>
           <LogOut size={18} /> Sign Out
         </button>
       </aside>
+      
 
       <main style={{ marginLeft: sidebarWidth, flex: 1, padding: '40px' }}>
         
@@ -131,19 +133,31 @@ const ReceptionistDashboard = () => {
         </header>
 
         <AnimatePresence mode="wait">
-          <motion.div key={currentView} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+          <motion.div 
+            key={currentView} 
+            initial={{ opacity: 0, y: 10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -10 }} 
+            transition={{ duration: 0.2 }}
+          >
+            {/* 1. Updated Dashboard Overview */}
             {currentView === 'overview' && (
               <DashboardOverview 
                 stats={stats} 
+                todaysAppointments={todaysAppointments} 
                 pendingBills={pendingCount}
                 recentPatients={recentPatients} 
                 onAction={() => setCurrentView('register')} 
-                onShowTodayAppointments={() => setCurrentView('today_appointments')}
-                onShowAllPatients={() => setCurrentView('patients_list')}
-                onShowBilling={() => setCurrentView('billing')} 
+                onShowToday={() => setCurrentView('today_appointments')}
+                onShowPatients={() => setCurrentView('patients_list')}
+                onShowBilling={() => setCurrentView('billing')}
+                onViewPatient={(p) => setSelectedPatient(p)}
+                hosp_id={hospId}
+                refresh={fetchData} 
               />
             )}
 
+            {/* 2. Patient Directory */}
             {currentView === 'patients_list' && (
               <PatientDirectoryView 
                 patients={allPatients} 
@@ -153,6 +167,7 @@ const ReceptionistDashboard = () => {
               />
             )}
 
+            {/* 3. Today's Appointments Full View */}
             {currentView === 'today_appointments' && (
               <TodayAppointmentsView 
                 appointments={todaysAppointments} 
@@ -162,6 +177,7 @@ const ReceptionistDashboard = () => {
               />
             )}
 
+            {/* 4. Billing & Invoices */}
             {currentView === 'billing' && (
               <Billing 
                 invoices={allInvoices} 
@@ -171,16 +187,22 @@ const ReceptionistDashboard = () => {
               />
             )}
 
+            {/* 5. Patient Registration Form */}
             {currentView === 'register' && <PatientRegistration />}
             
+            {/* 6. Book Appointment Form */}
             {currentView === 'appointments' && (
               <BookAppointment 
                 hosp_id={hospId} 
-                appointmentsList={[...todaysAppointments, ...upcomingAppointments]} 
+                appointmentsList={upcomingAppointments}
                 refresh={fetchData}
               />
             )}
-            {currentView === 'search' && <div style={placeholderCard}>Patient Records Coming Soon</div>}
+
+            {/* 7. Search Placeholder */}
+            {currentView === 'search' && (
+              <div style={placeholderCard}>Patient Records Coming Soon</div>
+            )}
           </motion.div>
         </AnimatePresence>
 
@@ -201,17 +223,23 @@ const ReceptionistDashboard = () => {
 
 /* --- SUB-COMPONENTS --- */
 
-const DashboardOverview = ({ onAction, stats, recentPatients, onShowTodayAppointments, onShowAllPatients, onShowBilling, pendingBills }) => {
+const DashboardOverview = ({onAction, stats, recentPatients, onShowToday, onShowPatients, onShowBilling, pendingBills }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-        <div onClick={onShowAllPatients} style={{ cursor: 'pointer' }}>
+        
+        {/* Total Patients Card - Now Clickable */}
+        <div onClick={onShowPatients} style={{ cursor: 'pointer' }}>
           <StatCard icon={<Users color="#059669" />} label="Total Patients" value={stats.totalPatients} trend="Live" />
         </div>
-        <div onClick={onShowTodayAppointments} style={{ cursor: 'pointer' }}>
+
+        {/* Appointments Today Card - Now Clickable */}
+        <div onClick={onShowToday} style={{ cursor: 'pointer' }}>
           <StatCard icon={<Calendar color="#0891b2" />} label="Appointments Today" value={stats.appointmentsToday} trend="Today" />
         </div>
+
         <StatCard icon={<CheckCircle color="#7c3aed" />} label="Consultations" value={stats.appointmentsToday} trend="Active" />
+        
         <div onClick={onShowBilling} style={{ cursor: 'pointer' }}>
           <StatCard icon={<Clock color="#ea580c" />} label="Pending Bills" value={pendingBills} trend="Attention" />
         </div>
@@ -274,7 +302,7 @@ const PatientDirectoryView = ({ patients, onBack, refresh, onViewProfile }) => {
   const [filterType, setFilterType] = useState("All"); 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState(null);
-
+  
   useEffect(() => {
     const handleClickOutside = () => {
       setIsFilterOpen(false);
@@ -588,7 +616,7 @@ const AppointmentTable = ({ data, type, onCheckIn, onCancel, onReschedule, toggl
     <thead>
       <tr style={{ textAlign: 'left', borderBottom: `1px solid #f1f5f9` }}>
         <th style={thStyle}>Time</th>
-        <th style={thStyle}>Patient ID</th>
+        <th style={thStyle}>Patient Name & PID</th>
         <th style={thStyle}>Doctor</th>
         <th style={thStyle}>Status</th>
         <th style={thStyle}>Action</th>
@@ -598,7 +626,14 @@ const AppointmentTable = ({ data, type, onCheckIn, onCancel, onReschedule, toggl
       {data.length > 0 ? data.map((appt) => (
         <tr key={appt.id} style={{ borderBottom: `1px solid #f8fafc` }}>
           <td style={tdStyle}><span style={timeBadgeStyle}>{appt.appointment_time}</span></td>
-          <td style={tdStyle}>#{appt.patient_id}</td>
+          <td style={tdStyle}>
+  <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <span style={{ fontWeight: '700', color: '#1e293b' }}>
+      {appt.patient_name ? appt.patient_name : `Patient #${appt.patient_id}`}
+    </span>
+    <span style={{ fontSize: '11px', color: '#64748b' }}>PID: #{appt.patient_id}</span>
+  </div>
+</td>
           <td style={tdStyle}>{appt.doctor_name}</td>
           <td style={tdStyle}>
             <span style={type === 'waiting' ? statusBadgeGreen : statusBadgeBlue}>

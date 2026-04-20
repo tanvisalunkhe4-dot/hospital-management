@@ -87,7 +87,7 @@ class Appointment(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"))
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     doctor_id = Column(Integer, ForeignKey("staff.id"))
-
+    doctor_name = Column(String, nullable=True)
     hospital_name = Column(String)
     appointment_date = Column(Date)
     appointment_time = Column(Time)
