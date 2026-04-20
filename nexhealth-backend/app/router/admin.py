@@ -193,6 +193,24 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
                 ward_no=data.ward_no
             )
             db.add(new_nurse)
+        elif data.role == "Receptionist":
+            new_receptionist = models.Receptionist(
+                staff_ref_id=new_staff.id,
+                desk_location=data.desk_location
+            )
+            db.add(new_receptionist)
+        elif data.role in ("Lab Technician", "LabTechnician"):
+            new_lab_technician = models.LabTechnician(
+                staff_ref_id=new_staff.id,
+                lab_section=data.lab_section
+            )
+            db.add(new_lab_technician)
+        elif data.role == "Pharmacist":
+            new_pharmacist = models.Pharmacist(
+                staff_ref_id=new_staff.id,
+                pharmacy_license=data.pharmacy_license
+            )
+            db.add(new_pharmacist)
 
         # 5. FINAL COMMIT (Atomic)
         db.commit()
@@ -248,7 +266,7 @@ def update_staff(staff_id: int, payload: StaffUpdate, hospital_id: int, db: Sess
             setattr(staff, key, value)
 
     # 4. Sync Specialized Tables
-    # This is crucial because Doctor/Nurse info is stored separately
+    # This is crucial because specialized role info is stored separately
     if staff.role == "Doctor":
         doc_record = db.query(models.Doctor).filter(models.Doctor.staff_ref_id == staff.id).first()
         if doc_record:
@@ -261,6 +279,18 @@ def update_staff(staff_id: int, payload: StaffUpdate, hospital_id: int, db: Sess
         if nurse_record:
             nurse_record.shift_type = update_data.get('shift_type', nurse_record.shift_type)
             nurse_record.ward_no = update_data.get('ward_no', nurse_record.ward_no)
+    elif staff.role == "Receptionist":
+        receptionist_record = db.query(models.Receptionist).filter(models.Receptionist.staff_ref_id == staff.id).first()
+        if receptionist_record:
+            receptionist_record.desk_location = update_data.get('desk_location', receptionist_record.desk_location)
+    elif staff.role in ("Lab Technician", "LabTechnician"):
+        lab_technician_record = db.query(models.LabTechnician).filter(models.LabTechnician.staff_ref_id == staff.id).first()
+        if lab_technician_record:
+            lab_technician_record.lab_section = update_data.get('lab_section', lab_technician_record.lab_section)
+    elif staff.role == "Pharmacist":
+        pharmacist_record = db.query(models.Pharmacist).filter(models.Pharmacist.staff_ref_id == staff.id).first()
+        if pharmacist_record:
+            pharmacist_record.pharmacy_license = update_data.get('pharmacy_license', pharmacist_record.pharmacy_license)
 
     try:
         db.commit()
@@ -287,6 +317,28 @@ def remove_staff(staff_id: int, hospital_id: int, db: Session = Depends(get_db))
         # 404 is better for security so they don't know if the ID exists at another hospital
         raise HTTPException(status_code=404, detail="Staff node not found in your facility")
     
+    # Remove specialized profile first to avoid FK constraint issues.
+    if staff_member.role == "Doctor":
+        doc_profile = db.query(models.Doctor).filter(models.Doctor.staff_ref_id == staff_member.id).first()
+        if doc_profile:
+            db.delete(doc_profile)
+    elif staff_member.role == "Nurse":
+        nurse_profile = db.query(models.Nurse).filter(models.Nurse.staff_ref_id == staff_member.id).first()
+        if nurse_profile:
+            db.delete(nurse_profile)
+    elif staff_member.role == "Receptionist":
+        receptionist_profile = db.query(models.Receptionist).filter(models.Receptionist.staff_ref_id == staff_member.id).first()
+        if receptionist_profile:
+            db.delete(receptionist_profile)
+    elif staff_member.role in ("Lab Technician", "LabTechnician"):
+        lab_profile = db.query(models.LabTechnician).filter(models.LabTechnician.staff_ref_id == staff_member.id).first()
+        if lab_profile:
+            db.delete(lab_profile)
+    elif staff_member.role == "Pharmacist":
+        pharmacist_profile = db.query(models.Pharmacist).filter(models.Pharmacist.staff_ref_id == staff_member.id).first()
+        if pharmacist_profile:
+            db.delete(pharmacist_profile)
+
     db.delete(staff_member)
     db.commit()
     return {"message": "Staff node removed safely"}

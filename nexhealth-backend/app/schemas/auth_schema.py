@@ -54,6 +54,9 @@ class StaffCreate(BaseModel):
     shift_type: Optional[str] = "Day"
     ward_no: Optional[str] = None
     is_hod: Optional[bool] = False
+    desk_location: Optional[str] = None
+    lab_section: Optional[str] = None
+    pharmacy_license: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -63,7 +66,15 @@ class StaffUpdate(BaseModel):
     email: Optional[EmailStr] = None
     role: Optional[str] = None
     staff_id: Optional[str] = None 
-    dept_id: Optional[int] = None  
+    dept_id: Optional[int] = None
+    specialization: Optional[str] = None
+    license_no: Optional[str] = None
+    is_hod: Optional[bool] = None
+    shift_type: Optional[str] = None
+    ward_no: Optional[str] = None
+    desk_location: Optional[str] = None
+    lab_section: Optional[str] = None
+    pharmacy_license: Optional[str] = None
 
 # app/schemas/auth_schema.py
 class StaffResponse(BaseModel):

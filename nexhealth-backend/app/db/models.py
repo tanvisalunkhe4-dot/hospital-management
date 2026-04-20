@@ -30,8 +30,7 @@ class Hospital(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     # Relationships
-    staff = relationship("Staff", back_populates="hospital", cascade="all, delete-orphan")
-    users = relationship("User", back_populates="hospital", cascade="all, delete-orphan")    
+    users = relationship("User", back_populates="hospital")
     departments = relationship("Department", back_populates="hospital") # Added this
     patients = relationship("Patient", back_populates="hospital")
     invoices = relationship("Invoice", back_populates="hospital")
@@ -61,6 +60,7 @@ class Patient(Base):
     
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
+    uhid = Column(String, unique=True, index=True, nullable=True)
     phone_number = Column(String, nullable=True)
     address = Column(String, nullable=True)
     visit_type = Column(String, nullable=True) # e.g., OPD, Emergency
@@ -162,26 +162,55 @@ class Staff(Base):
         back_populates="staff_members", 
         foreign_keys=[dept_id] # Use dept_id here
     )
-    hospital = relationship("Hospital", back_populates="staff")
     # ================== SPECIALIZED ROLE TABLES ==================
 
 class Doctor(Base):
     __tablename__ = "doctors"
     id = Column(Integer, primary_key=True)
     staff_ref_id = Column(Integer, ForeignKey("staff.id"), unique=True)
-    specialization = Column(String)
-    license_no = Column(String, unique=True)
-    is_hod = Column(Boolean, default=False)
     
-    medical_records = relationship("MedicalRecord", back_populates="doctor")
+    # --- PROFESSIONAL IDENTITY ---
+    specialization = Column(String) 
+    license_no = Column(String, unique=True)
+    qualification = Column(String) # e.g., MBBS, MD (Medicine)
+    experience_years = Column(Integer)
+    bio = Column(Text, nullable=True) # Short professional summary
+    
+    # --- FACILITY LOGISTICS ---
+    consultation_fee = Column(Float, default=500.0)
+    opd_room_no = Column(String)
+    is_hod = Column(Boolean, default=False)
+    signature_url = Column(String, nullable=True) # Path to digital sign
+    
+    # --- PERSONAL & EMERGENCY (Admin View) ---
+    alternate_mobile = Column(String, nullable=True)
+    emergency_contact_name = Column(String)
+    emergency_contact_phone = Column(String)
+    residential_address = Column(Text, nullable=True)
+    
     staff_info = relationship("Staff", back_populates="doctor_profile")
+    medical_records = relationship("MedicalRecord", back_populates="doctor")
 
 class Nurse(Base):
     __tablename__ = "nurses"
     id = Column(Integer, primary_key=True)
     staff_ref_id = Column(Integer, ForeignKey("staff.id"), unique=True)
-    shift_type = Column(String) # Day, Night, Rotational
+    
+    # --- PROFESSIONAL ---
+    nurse_type = Column(String) # ICU, ER, General
+    certification_id = Column(String, unique=True)
+    primary_skills = Column(String) # e.g., "Ventilator Support, Wound Care"
+    
+    # --- ASSIGNMENT ---
     ward_no = Column(String)
+    floor_assignment = Column(String)
+    shift_preference = Column(String) # Day/Night/Rotational
+    is_head_nurse = Column(Boolean, default=False)
+    
+    # --- PERSONAL (Admin View) ---
+    date_of_joining = Column(Date)
+    blood_group = Column(String)
+    emergency_contact = Column(String)
     
     staff_info = relationship("Staff", back_populates="nurse_profile")
 
@@ -189,15 +218,34 @@ class Receptionist(Base):
     __tablename__ = "receptionists"
     id = Column(Integer, primary_key=True)
     staff_ref_id = Column(Integer, ForeignKey("staff.id"), unique=True)
-    desk_location = Column(String) # e.g. "Front Desk", "ER Entrance"
+    
+    # --- WORKSTATION ---
+    desk_location = Column(String) # "Main Lobby", "Radiology Desk"
+    extension_number = Column(String)
+    assigned_terminal_id = Column(String) # PC hardware ID for security
+    
+    # --- PROFESSIONAL ---
+    languages_known = Column(String) # "English, Hindi, Marathi"
+    billing_access_level = Column(Integer, default=1) # 1: View, 2: Edit, 3: Refund
+    
+    # --- PERSONAL ---
+    official_mobile = Column(String)
+    home_address = Column(Text)
     
     staff_info = relationship("Staff", back_populates="receptionist_profile")
-
+    
 class LabTechnician(Base):
     __tablename__ = "lab_technicians"
     id = Column(Integer, primary_key=True)
     staff_ref_id = Column(Integer, ForeignKey("staff.id"), unique=True)
-    lab_section = Column(String) # Pathology, Hematology, etc.
+    
+    # Diagnostic Scope
+    lab_section = Column(String) # Hematology, Radiology, Microbiology, Pathology
+    equipment_specialization = Column(String) # e.g., MRI Operator, CT Scan Tech
+    
+    # Verification
+    certification_level = Column(String) # Junior, Senior, Chief Tech
+    can_verify_reports = Column(Boolean, default=False) # Only seniors can sign off
     
     staff_info = relationship("Staff", back_populates="lab_tech_profile")
 
@@ -205,10 +253,16 @@ class Pharmacist(Base):
     __tablename__ = "pharmacists"
     id = Column(Integer, primary_key=True)
     staff_ref_id = Column(Integer, ForeignKey("staff.id"), unique=True)
-    pharmacy_license = Column(String)
+    
+    # Credentials
+    pharmacy_license = Column(String, unique=True) # Retail/Wholesale License No.
+    degree = Column(String) # B.Pharm, M.Pharm
+    
+    # Oversight
+    inventory_access_level = Column(Integer, default=1) # High for Narcotic/Schedule X drugs
+    store_assignment = Column(String) # e.g., "Main Pharmacy", "ER Medical Store"
     
     staff_info = relationship("Staff", back_populates="pharmacist_profile")
-
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
