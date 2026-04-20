@@ -15,7 +15,6 @@ router = APIRouter(prefix="/api/v1/receptionist", tags=["receptionist"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = logging.getLogger(__name__)
 
-# --- PATIENT REGISTRATION ---
 
 # --- PATIENT REGISTRATION ---
 
@@ -83,6 +82,7 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
 
 @router.post("/book-appointment", response_model=appointment_schema.AppointmentResponse)
 def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int, db: Session = Depends(get_db)):
+    # 1. Verify Patient exists
     patient = db.query(models.Patient).filter(
         models.Patient.id == appt_in.patient_id,
         models.Patient.hospital_id == hosp_id
@@ -92,6 +92,9 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
         raise HTTPException(status_code=404, detail="Patient record not found.")
 
     try:
+        # 2. Create the appointment 
+        # Note: Ensure 'doctor_name' exists in your models.Appointment. 
+        # If it still fails, check models.py for the correct field name.
         new_appt = models.Appointment(
             patient_id=appt_in.patient_id,
             hospital_id=hosp_id,
@@ -107,8 +110,8 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
         return new_appt
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to book appointment.")
-
+        print(f"DEBUG ERROR: {str(e)}") # This will show in your terminal
+        raise HTTPException(status_code=500, detail="Database Error: Check if doctor_name column exists.")
 # --- DASHBOARD & UTILITIES ---
 
 @router.get("/stats/{hosp_id}")
@@ -154,24 +157,47 @@ def get_recent_patients(hosp_id: int, db: Session = Depends(get_db)):
         models.Patient.hospital_id == hosp_id
     ).order_by(models.Patient.id.desc()).limit(5).all()
 
+# --- DASHBOARD & UTILITIES (Updated Section) ---
+
 @router.get("/appointments/today")
 def get_todays_appointments(hosp_id: int, db: Session = Depends(get_db)):
-    today = datetime.datetime.utcnow().date()
-    return db.query(models.Appointment).filter(
+    today = datetime.date.today()
+    
+    # We join Appointment and Patient to get the name
+    results = db.query(models.Appointment, models.Patient).join(
+        models.Patient, models.Appointment.patient_id == models.Patient.id
+    ).filter(
         models.Appointment.hospital_id == hosp_id,
         models.Appointment.appointment_date == today
     ).order_by(models.Appointment.appointment_time.asc()).all()
+
+    return [
+        {
+            **appt.__dict__, 
+            "patient_name": f"{patient.first_name} {patient.last_name}"
+        } for appt, patient in results
+    ]
 
 @router.get("/appointments/upcoming")
 def get_upcoming_appointments(hosp_id: int, db: Session = Depends(get_db)):
     today = datetime.date.today()
     next_week = today + datetime.timedelta(days=7)
-    return db.query(models.Appointment).filter(
+    
+    results = db.query(models.Appointment, models.Patient).join(
+        models.Patient, models.Appointment.patient_id == models.Patient.id
+    ).filter(
         models.Appointment.hospital_id == hosp_id,
         models.Appointment.appointment_date > today,
         models.Appointment.appointment_date <= next_week
     ).order_by(models.Appointment.appointment_date.asc()).all()
 
+    return [
+        {
+            **appt.__dict__, 
+            "patient_name": f"{patient.first_name} {patient.last_name}"
+        } for appt, patient in results
+    ]
+    
 @router.get("/patients/all", response_model=List[patient_schema.PatientResponse])
 def get_all_patients(hosp_id: int, db: Session = Depends(get_db)):
     return db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).all()
