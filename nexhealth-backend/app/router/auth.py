@@ -197,7 +197,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(user)
 
-    # --- 5. TOKEN GENERATION ---
+ # --- 5. TOKEN GENERATION ---
     token_data = {
         "sub": str(user.id),
         "role": user.role,
@@ -206,13 +206,16 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
 
+    # In your auth.py return statement
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "role": user.role,
-            "hospital_id": user.hospital_id,
-            "email": user.email
-        }
+    "access_token": token,
+    "token_type": "bearer",
+    "user": {
+        "id": user.id,
+        "role": user.role,
+        "hospital_id": user.hospital_id,
+        "email": user.email or "", # If email is None, send an empty string instead
+        "full_name": getattr(user, "full_name", "Staff Member"),
+        "staff_id": user.staff_id
     }
+}

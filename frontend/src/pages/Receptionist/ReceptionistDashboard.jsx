@@ -4,7 +4,7 @@ import {
   LogOut, LayoutDashboard, User, Bell, Settings,
   Users, CheckCircle, Clock, ArrowRight, ArrowLeft,
   MoreVertical, XCircle, LogIn, Phone, Filter, Download,
-  X, CreditCard
+  X, CreditCard, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import theme from '../../theme/theme'; 
@@ -13,21 +13,24 @@ import BookAppointment from './BookAppointment';
 import Billing from './Billing';
 
 const ReceptionistDashboard = () => {
+  // --- DYNAMIC CREDENTIALS LOGIC ---
+  const rawData = localStorage.getItem('user_data');
+  const userData = rawData ? JSON.parse(rawData) : {};
+  
+  const activeName = userData.full_name || 'Unknown Staff'; 
+  const activeStaffId = userData.staff_id || userData.id || 'N/A'; 
+  const hospId = userData.hospital_id || localStorage.getItem('hospital_id') || 1;
+
   const [currentView, setCurrentView] = useState('overview');
-  const [receptionistName, setReceptionistName] = useState('Janavi Patil'); 
   const [stats, setStats] = useState({ totalPatients: 0, appointmentsToday: 0 });
   const [recentPatients, setRecentPatients] = useState([]); 
   const [todaysAppointments, setTodaysAppointments] = useState([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [allPatients, setAllPatients] = useState([]); 
   const [allInvoices, setAllInvoices] = useState([]); 
-  
-  // NEW: State for Profile View
   const [selectedPatient, setSelectedPatient] = useState(null);
-  
+  const [reschedulingAppt, setReschedulingAppt] = useState(null);
   const sidebarWidth = '280px';
-  const hospId = localStorage.getItem('hospital_id') || 1;
-
   const pendingCount = allInvoices.filter(inv => inv.status === 'Pending').length;
 
   const fetchData = async () => {
@@ -64,6 +67,23 @@ const ReceptionistDashboard = () => {
     }
   };
 
+  // Logic to handle patient Check-In
+  const handleCheckIn = async (appointmentId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/receptionist/appointments/${appointmentId}/check-in?hosp_id=${hospId}`, {
+        method: 'PATCH',
+      });
+      if (response.ok) {
+        fetchData(); // Refresh all data to move patient to waiting room
+      } else {
+        const errorData = await response.json();
+        alert(`Check-in failed: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Error during check-in:", error);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [currentView]);
@@ -74,7 +94,6 @@ const ReceptionistDashboard = () => {
     { id: 'appointments', label: 'Book Appointment', icon: <Calendar size={18} /> },
     { id: 'patients_list', label: 'Total Patients', icon: <Users size={18} /> },
     { id: 'billing', label: 'Billing & Invoices', icon: <Receipt size={18} /> },
-    { id: 'search', label: 'Patient Search', icon: <Search size={18} /> },
   ];
 
   return (
@@ -87,7 +106,7 @@ const ReceptionistDashboard = () => {
             Nex<span style={{ color: theme.colors.primary }}>Health</span>
           </h1>
           <div style={{ fontSize: '11px', fontWeight: '800', color: theme.colors.primary, background: '#ecfdf5', padding: '4px 12px', borderRadius: '20px', display: 'inline-block', marginTop: '8px', textTransform: 'uppercase' }}>
-            Receptionist Desk
+            ID: {activeStaffId} | RECEPTIONIST
           </div>
         </div>
 
@@ -98,7 +117,6 @@ const ReceptionistDashboard = () => {
             </div>
           ))}
         </nav>
-
 
         <button onClick={() => { localStorage.clear(); window.location.href='/login'; }} style={logoutBtn}>
           <LogOut size={18} /> Sign Out
@@ -116,7 +134,7 @@ const ReceptionistDashboard = () => {
                currentView === 'billing' ? "Billing & Invoices" :
                menuItems.find(m => m.id === currentView)?.label}
             </h2>
-            <p style={{ color: theme.colors.subtitle, margin: '4px 0 0' }}>Welcome back, {receptionistName}</p>
+            <p style={{ color: theme.colors.subtitle, margin: '4px 0 0' }}>Welcome back, {activeName}</p>
           </div>
           
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -124,8 +142,8 @@ const ReceptionistDashboard = () => {
             <div style={iconCircle}><Settings size={20} color={theme.colors.subtitle} /></div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: '12px', paddingLeft: '12px', borderLeft: `1px solid ${theme.colors.border}` }}>
                <div style={{ textAlign: 'right' }}>
-                 <p style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>{receptionistName}</p>
-                 <p style={{ fontSize: '12px', color: theme.colors.subtitle, margin: 0 }}>Enr: 22306142</p>
+                 <p style={{ fontSize: '14px', fontWeight: '700', margin: 0 }}>{activeName}</p>
+                 <p style={{ fontSize: '12px', color: theme.colors.subtitle, margin: 0 }}>Staff ID: {activeStaffId}</p>
                </div>
                <div style={avatarStyle}><User size={20} color="white" /></div>
             </div>
@@ -140,7 +158,6 @@ const ReceptionistDashboard = () => {
             exit={{ opacity: 0, y: -10 }} 
             transition={{ duration: 0.2 }}
           >
-            {/* 1. Updated Dashboard Overview */}
             {currentView === 'overview' && (
               <DashboardOverview 
                 stats={stats} 
@@ -157,7 +174,6 @@ const ReceptionistDashboard = () => {
               />
             )}
 
-            {/* 2. Patient Directory */}
             {currentView === 'patients_list' && (
               <PatientDirectoryView 
                 patients={allPatients} 
@@ -167,17 +183,17 @@ const ReceptionistDashboard = () => {
               />
             )}
 
-            {/* 3. Today's Appointments Full View */}
-            {currentView === 'today_appointments' && (
-              <TodayAppointmentsView 
-                appointments={todaysAppointments} 
-                onBack={() => setCurrentView('overview')}
-                hosp_id={hospId}
-                refresh={fetchData}
-              />
-            )}
+{currentView === 'today_appointments' && (
+  <TodayAppointmentsView 
+    appointments={todaysAppointments} 
+    onBack={() => setCurrentView('overview')}
+    hosp_id={hospId}
+    refresh={fetchData}
+    onCheckIn={handleCheckIn}
+    onReschedule={(appt) => setReschedulingAppt(appt)} 
+  />
+)}
 
-            {/* 4. Billing & Invoices */}
             {currentView === 'billing' && (
               <Billing 
                 invoices={allInvoices} 
@@ -187,59 +203,108 @@ const ReceptionistDashboard = () => {
               />
             )}
 
-            {/* 5. Patient Registration Form */}
-            {currentView === 'register' && <PatientRegistration />}
-            
-            {/* 6. Book Appointment Form */}
+            {currentView === 'register' && (
+              <PatientRegistration onBack={() => setCurrentView('overview')} />
+            )}
+
             {currentView === 'appointments' && (
               <BookAppointment 
                 hosp_id={hospId} 
                 appointmentsList={upcomingAppointments}
                 refresh={fetchData}
+                onBack={() => setCurrentView('overview')} 
               />
-            )}
-
-            {/* 7. Search Placeholder */}
-            {currentView === 'search' && (
-              <div style={placeholderCard}>Patient Records Coming Soon</div>
             )}
           </motion.div>
         </AnimatePresence>
 
-        {/* Global Side Sheet for Patient Profile */}
         <AnimatePresence>
-          {selectedPatient && (
-            <PatientProfileModal 
-              patient={selectedPatient} 
-              invoices={allInvoices} 
-              onClose={() => setSelectedPatient(null)} 
-            />
-          )}
-        </AnimatePresence>
+  {selectedPatient && (
+    <PatientProfileModal 
+      patient={selectedPatient} 
+      invoices={allInvoices} 
+      onClose={() => setSelectedPatient(null)} 
+      refresh={fetchData} 
+      hosp_id={hospId}
+    />
+  )}
+</AnimatePresence>
       </main>
     </div>
   );
 };
 
+/* --- SHARED STYLES --- */
+const navItem = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  padding: '12px 20px',
+  borderRadius: '12px',
+  cursor: 'pointer',
+  color: '#64748b',
+  fontWeight: '600',
+  marginBottom: '4px',
+  transition: 'all 0.2s'
+};
+
+const navItemActive = {
+  ...navItem,
+  backgroundColor: '#f0fdf4',
+  color: '#059669'
+};
+
+const logoutBtn = {
+  margin: '20px',
+  padding: '12px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '10px',
+  backgroundColor: '#fef2f2',
+  color: '#ef4444',
+  border: 'none',
+  borderRadius: '12px',
+  fontWeight: '700',
+  cursor: 'pointer',
+  marginTop: 'auto'
+};
+
+const iconCircle = {
+  width: '40px',
+  height: '40px',
+  borderRadius: '12px',
+  backgroundColor: 'white',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: '1px solid #e2e8f0',
+  cursor: 'pointer'
+};
+
+const avatarStyle = {
+  width: '40px',
+  height: '40px',
+  borderRadius: '12px',
+  backgroundColor: '#059669',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center'
+};
+
 /* --- SUB-COMPONENTS --- */
 
-const DashboardOverview = ({onAction, stats, recentPatients, onShowToday, onShowPatients, onShowBilling, pendingBills }) => {
+const DashboardOverview = ({onAction, stats, recentPatients, onShowToday, onShowPatients, onShowBilling, pendingBills, onViewPatient }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-        
-        {/* Total Patients Card - Now Clickable */}
         <div onClick={onShowPatients} style={{ cursor: 'pointer' }}>
           <StatCard icon={<Users color="#059669" />} label="Total Patients" value={stats.totalPatients} trend="Live" />
         </div>
-
-        {/* Appointments Today Card - Now Clickable */}
         <div onClick={onShowToday} style={{ cursor: 'pointer' }}>
           <StatCard icon={<Calendar color="#0891b2" />} label="Appointments Today" value={stats.appointmentsToday} trend="Today" />
         </div>
-
         <StatCard icon={<CheckCircle color="#7c3aed" />} label="Consultations" value={stats.appointmentsToday} trend="Active" />
-        
         <div onClick={onShowBilling} style={{ cursor: 'pointer' }}>
           <StatCard icon={<Clock color="#ea580c" />} label="Pending Bills" value={pendingBills} trend="Attention" />
         </div>
@@ -282,6 +347,7 @@ const DashboardOverview = ({onAction, stats, recentPatients, onShowToday, onShow
                     consultant={patient.doctor_name || "TBD"}       
                     regTime={regTime}                               
                     status={patient.status || "Registered"} 
+                    onClick={() => onViewPatient(patient)}
                   />
                 );
               })
@@ -289,6 +355,7 @@ const DashboardOverview = ({onAction, stats, recentPatients, onShowToday, onShow
               <tr>
                 <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No recent registrations found.</td>
               </tr>
+              
             )}
           </tbody>
         </table>
@@ -430,83 +497,129 @@ const PatientActionMenu = ({ onView, onEdit, onArchive }) => (
   </motion.div>
 );
 
-const PatientProfileModal = ({ patient, onClose, invoices }) => {
-  const patientInvoices = invoices.filter(inv => inv.patient_id === patient.id);
+const PatientProfileModal = ({ patient, onClose, invoices, refresh, hosp_id }) => {
+  const patientInvoices = invoices ? invoices.filter(inv => inv.patient_id === patient.id) : [];
+  
+  // Local state for the professional fields
+  const [formData, setFormData] = useState({
+    blood_group: patient.blood_group || '',
+    weight: patient.weight || '',
+    height: patient.height || '',
+    occupation: patient.occupation || '',
+    id_type: patient.id_type || 'Aadhar',
+    id_number: patient.id_number || '',
+    emergency_contact: patient.emergency_contact || '',
+    emergency_relation: patient.emergency_relation || '',
+    insurance_provider: patient.insurance_provider || '',
+    policy_number: patient.policy_number || ''
+  });
+
+  const handleUpdate = async () => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/v1/receptionist/patients/${patient.id}?hosp_id=${hosp_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        if(refresh) refresh(); 
+        onClose();
+      }
+    } catch (e) { console.error("Update failed", e); }
+  };
 
   return (
     <>
-      <motion.div 
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        onClick={onClose}
-        style={modalOverlay}
-      />
-      <motion.div 
-        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        style={sideSheetStyle}
-      >
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} style={modalOverlay} />
+      <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25 }} style={sideSheetStyle}>
+        
         <div style={profileHeader}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={avatarLarge}>{patient.first_name[0]}</div>
+            <div style={avatarLarge}>{patient.first_name ? patient.first_name[0] : 'P'}</div>
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e293b', margin: 0 }}>
-                {patient.first_name} {patient.last_name}
-              </h2>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <span style={idBadge}>Patient ID: #{patient.id}</span>
-                <span style={statusBadgeGreen}>Active</span>
-              </div>
+              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{patient.first_name} {patient.last_name}</h2>
+              <span style={idBadge}>PID: #{patient.id}</span>
             </div>
           </div>
           <button onClick={onClose} style={closeBtnStyle}><X size={20} /></button>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
-          <h3 style={sectionTitle}>Personal Details</h3>
-          <div style={infoGrid}>
-            <InfoBox label="Contact Number" value={patient.phone_number} icon={<Phone size={14}/>} />
-            <InfoBox label="Email Address" value={patient.email || 'Not Provided'} />
-            <InfoBox label="Gender" value={patient.gender} />
-            <InfoBox label="Date of Birth" value={new Date(patient.date_of_birth).toLocaleDateString()} />
+          {/* Section 1: Clinical Essentials */}
+          <h3 style={sectionTitle}>Clinical Essentials</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+            <div>
+              <label style={miniLabel}>Blood Group</label>
+              <select style={modalInput} value={formData.blood_group} onChange={e => setFormData({...formData, blood_group: e.target.value})}>
+                <option value="">Select</option>
+                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={miniLabel}>Weight (kg)</label>
+              <input style={modalInput} type="number" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} />
+            </div>
+            <div>
+              <label style={miniLabel}>Height (cm)</label>
+              <input style={modalInput} type="number" value={formData.height} onChange={e => setFormData({...formData, height: e.target.value})} />
+            </div>
           </div>
 
-          <h3 style={{ ...sectionTitle, marginTop: '40px' }}>Recent Billing Activities</h3>
+          {/* Section 2: Personal & Identity */}
+          <h3 style={sectionTitle}>Identity & Social</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={miniLabel}>Occupation</label>
+              <input style={modalInput} value={formData.occupation} onChange={e => setFormData({...formData, occupation: e.target.value})} />
+            </div>
+            <div>
+              <label style={miniLabel}>ID Type</label>
+              <select style={modalInput} value={formData.id_type} onChange={e => setFormData({...formData, id_type: e.target.value})}>
+                <option value="Aadhar">Aadhar</option>
+                <option value="PAN">PAN</option>
+              </select>
+            </div>
+            <div>
+              <label style={miniLabel}>ID Number</label>
+              <input style={modalInput} value={formData.id_number} onChange={e => setFormData({...formData, id_number: e.target.value})} />
+            </div>
+          </div>
+
+          {/* Section 3: Insurance Box */}
+          <div style={{ backgroundColor: '#f0fdf4', padding: '20px', borderRadius: '16px', border: '1px solid #dcfce7', marginBottom: '24px' }}>
+             <h4 style={{ color: '#059669', fontSize: '12px', margin: '0 0 12px 0' }}>INSURANCE DETAILS</h4>
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <input style={modalInput} placeholder="Provider" value={formData.insurance_provider} onChange={e => setFormData({...formData, insurance_provider: e.target.value})} />
+                <input style={modalInput} placeholder="Policy No" value={formData.policy_number} onChange={e => setFormData({...formData, policy_number: e.target.value})} />
+             </div>
+          </div>
+
+          {/* Section 4: Billing History (Existing Logic) */}
+          <h3 style={sectionTitle}>Billing History</h3>
           {patientInvoices.length > 0 ? (
             <div style={miniTableContainer}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '1px solid #f1f5f9' }}>
-                    <th style={miniTh}>Inv #</th>
-                    <th style={miniTh}>Date</th>
-                    <th style={miniTh}>Amount</th>
-                    <th style={miniTh}>Status</th>
-                  </tr>
-                </thead>
                 <tbody>
                   {patientInvoices.map(inv => (
                     <tr key={inv.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                       <td style={miniTd}>#{inv.id}</td>
-                      <td style={miniTd}>{new Date(inv.created_at).toLocaleDateString()}</td>
                       <td style={miniTd}>₹{inv.total_amount}</td>
-                      <td style={miniTd}><span style={inv.status === 'Paid' ? statusBadgeGreen : statusBadgeBlue}>{inv.status}</span></td>
+                      <td style={miniTd}><span style={statusBadgeGreen}>{inv.status}</span></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div style={emptyHistoryBox}>No billing records found.</div>
-          )}
+          ) : <p style={{ fontSize: '12px', color: '#94a3b8' }}>No records found.</p>}
         </div>
-        
+
         <div style={profileFooter}>
-          <button style={editProfileBtn} onClick={() => alert("Coming soon")}>Edit Patient Data</button>
+          <button style={saveBtnStyle} onClick={handleUpdate}>Update & Sync Profile</button>
         </div>
       </motion.div>
     </>
   );
 };
-
 const InfoBox = ({ label, value, icon }) => (
   <div style={{ marginBottom: '16px' }}>
     <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase' }}>{label}</span>
@@ -516,102 +629,106 @@ const InfoBox = ({ label, value, icon }) => (
   </div>
 );
 
-// TodayAppointmentsView & AppointmentTable remain largely same as your snippet
-
-const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh }) => {
+const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheckIn }) => {
   const [activeMenuId, setActiveMenuId] = useState(null);
-  const [rescheduleData, setRescheduleData] = useState(null);
+  const [rescheduleAppt, setRescheduleAppt] = useState(null);
 
-  const waitingRoom = appointments.filter(a => a.status === 'Checked-In');
-  const upcomingToday = appointments.filter(a => a.status !== 'Checked-In' && a.status !== 'Cancelled');
+  // Filtering logic
+  const waitingRoom = appointments.filter(a => a.status === 'Checked In');
+  const upcomingToday = appointments.filter(a => a.status !== 'Checked In' && a.status !== 'Cancelled');
 
-  const handleToggleMenu = (e, id) => {
-    e.stopPropagation();
-    setActiveMenuId(activeMenuId === id ? null : id);
+  const handleAction = async (type, appt) => {
+    setActiveMenuId(null);
+    const baseUrl = `http://localhost:8000/api/v1/receptionist/appointments/${appt.id}`;
+    const queryParams = `?hosp_id=${hosp_id}`;
+
+    try {
+      switch (type) {
+        case 'CHECK_IN':
+          await onCheckIn(appt.id);
+          break;
+        case 'CANCEL':
+          if (!window.confirm(`Are you sure you want to cancel ${appt.patient_name}'s appointment?`)) return;
+          const response = await fetch(`${baseUrl}${queryParams}`, { method: 'DELETE' });
+          if (response.ok) refresh();
+          break;
+        case 'RESCHEDULE':
+          // Open the local modal instead of switching views
+          setRescheduleAppt(appt);
+          break;
+        default:
+          return;
+      }
+    } catch (error) {
+      console.error(`Error performing ${type}:`, error);
+    }
   };
 
-  const handleUpdateStatus = async (apptId, status) => {
+  const handleRescheduleSubmit = async (newDate, newTime) => {
     try {
-      await fetch(`http://localhost:8000/api/v1/receptionist/appointments/${apptId}/status?hosp_id=${hosp_id}`, {
+      const response = await fetch(`http://localhost:8000/api/v1/receptionist/appointments/${rescheduleAppt.id}/reschedule?hosp_id=${hosp_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ appointment_date: newDate, appointment_time: newTime })
       });
-      refresh();
-      setActiveMenuId(null);
-    } catch (err) { console.error(err); }
-  };
-
-  const handleRescheduleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await fetch(`http://localhost:8000/api/v1/receptionist/appointments/${rescheduleData.id}?hosp_id=${hosp_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          appointment_date: rescheduleData.appointment_date, 
-          appointment_time: rescheduleData.appointment_time,
-          status: 'Rescheduled' 
-        })
-      });
-      setRescheduleData(null);
-      refresh();
-    } catch (err) { console.error(err); }
+      if (response.ok) {
+        setRescheduleAppt(null);
+        refresh();
+      }
+    } catch (error) {
+      console.error("Reschedule failed:", error);
+    }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }} onClick={() => setActiveMenuId(null)}>
-      <button onClick={onBack} style={backBtn}><ArrowLeft size={16} /> Back to Dashboard</button>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '32px', position: 'relative' }} 
+      onClick={() => setActiveMenuId(null)}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button onClick={onBack} style={backBtn}><ArrowLeft size={16} /> Back to Dashboard</button>
+      </div>
       
+      {/* Live Waiting Room */}
       <div style={tableCardStyle}>
-        <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 20px 0', color: '#059669' }}>Live Waiting Room</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669', animation: 'pulse 2s infinite' }}></div>
+          <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#059669' }}>Live Waiting Room (Checked In)</h3>
+        </div>
         <AppointmentTable 
           data={waitingRoom} 
-          type="waiting" 
-          toggleMenu={handleToggleMenu} 
+          onAction={handleAction}
           activeMenuId={activeMenuId}
-          onCancel={(id) => handleUpdateStatus(id, 'Cancelled')}
-          onReschedule={(appt) => setRescheduleData(appt)}
+          setActiveMenuId={setActiveMenuId}
         />
       </div>
 
-      <div style={{ ...tableCardStyle, borderStyle: 'dashed' }}>
+      {/* Remaining Schedule */}
+      <div style={{ ...tableCardStyle, borderStyle: 'dashed', borderColor: '#cbd5e1', overflow: 'visible' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 20px 0', color: '#64748b' }}>Remaining Schedule</h3>
         <AppointmentTable 
           data={upcomingToday} 
-          type="scheduled" 
-          onCheckIn={(id) => handleUpdateStatus(id, 'Checked-In')} 
-          toggleMenu={handleToggleMenu} 
+          onAction={handleAction}
           activeMenuId={activeMenuId}
-          onCancel={(id) => handleUpdateStatus(id, 'Cancelled')}
-          onReschedule={(appt) => setRescheduleData(appt)}
+          setActiveMenuId={setActiveMenuId}
         />
       </div>
 
+      {/* Reschedule Card Overlay */}
       <AnimatePresence>
-        {rescheduleData && (
-          <div style={modalOverlay}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalContent}>
-               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                 <h3 style={{ margin: 0 }}>Reschedule Appointment</h3>
-                 <X cursor="pointer" onClick={() => setRescheduleData(null)} />
-               </div>
-               <form onSubmit={handleRescheduleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>New Date</label>
-                  <input type="date" required value={rescheduleData.appointment_date} onChange={e => setRescheduleData({...rescheduleData, appointment_date: e.target.value})} style={inputStyle} />
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>New Time</label>
-                  <input type="time" required value={rescheduleData.appointment_time} onChange={e => setRescheduleData({...rescheduleData, appointment_time: e.target.value})} style={inputStyle} />
-                  <button type="submit" style={{ ...miniBtn, marginTop: '10px' }}>Confirm New Time</button>
-               </form>
-            </motion.div>
-          </div>
+        {rescheduleAppt && (
+          <RescheduleModal 
+            appt={rescheduleAppt} 
+            onClose={() => setRescheduleAppt(null)} 
+            onConfirm={handleRescheduleSubmit}
+          />
         )}
       </AnimatePresence>
     </div>
   );
 };
 
-const AppointmentTable = ({ data, type, onCheckIn, onCancel, onReschedule, toggleMenu, activeMenuId }) => (
+const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId }) => (
   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
     <thead>
       <tr style={{ textAlign: 'left', borderBottom: `1px solid #f1f5f9` }}>
@@ -627,55 +744,144 @@ const AppointmentTable = ({ data, type, onCheckIn, onCancel, onReschedule, toggl
         <tr key={appt.id} style={{ borderBottom: `1px solid #f8fafc` }}>
           <td style={tdStyle}><span style={timeBadgeStyle}>{appt.appointment_time}</span></td>
           <td style={tdStyle}>
-  <div style={{ display: 'flex', flexDirection: 'column' }}>
-    <span style={{ fontWeight: '700', color: '#1e293b' }}>
-      {appt.patient_name ? appt.patient_name : `Patient #${appt.patient_id}`}
-    </span>
-    <span style={{ fontSize: '11px', color: '#64748b' }}>PID: #{appt.patient_id}</span>
-  </div>
-</td>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontWeight: '700', color: '#1e293b' }}>{appt.patient_name}</span>
+              <span style={{ fontSize: '11px', color: '#64748b' }}>PID: #{appt.patient_id}</span>
+            </div>
+          </td>
           <td style={tdStyle}>{appt.doctor_name}</td>
           <td style={tdStyle}>
-            <span style={type === 'waiting' ? statusBadgeGreen : statusBadgeBlue}>
-              {type === 'waiting' ? 'In Queue' : 'Expected'}
+            <span style={appt.status === 'Checked In' ? statusBadgeGreen : statusBadgeBlue}>
+              {appt.status}
             </span>
           </td>
           <td style={{ ...tdStyle, position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {type === 'scheduled' && (
-                <button onClick={() => onCheckIn(appt.id)} style={checkInBtnMini}>
-                  <LogIn size={14} /> Check-In
-                </button>
-              )}
-              <div onClick={(e) => toggleMenu(e, appt.id)} style={{ cursor: 'pointer', padding: '4px' }}>
-                <MoreVertical size={18} color="#64748b" />
-              </div>
-            </div>
+              {appt.status !== 'Checked In' ? (
+                <>
+                  <button onClick={() => onAction('CHECK_IN', appt)} style={miniBtn}>Check In</button>
+                  <div style={{ position: 'relative' }}>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuId(activeMenuId === appt.id ? null : appt.id);
+                      }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}
+                    >
+                      <MoreVertical size={18} color="#94a3b8" />
+                    </button>
 
-            <AnimatePresence>
-              {activeMenuId === appt.id && (
-                <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} style={dropdownMenuStyle}>
-                  <button onClick={() => onReschedule(appt)} style={menuItemStyle}>
-                    <Calendar size={14} /> Reschedule
-                  </button>
-                  <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '4px 0' }} />
-                  <button onClick={() => onCancel(appt.id)} style={{ ...menuItemStyle, color: '#ef4444' }}>
-                    <XCircle size={14} /> Cancel
-                  </button>
-                </motion.div>
+                    <AnimatePresence>
+                      {activeMenuId === appt.id && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }} 
+                          animate={{ opacity: 1, scale: 1, y: 0 }} 
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          style={dropdownMenuStyle}
+                        >
+                          <button onClick={() => onAction('RESCHEDULE', appt)} style={menuItemStyle}>
+                            <Calendar size={14} /> Reschedule
+                          </button>
+                          <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '4px 0' }} />
+                          <button onClick={() => onAction('CANCEL', appt)} style={{ ...menuItemStyle, color: '#ef4444' }}>
+                            <XCircle size={14} /> Cancel
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669', fontWeight: '600', fontSize: '13px' }}>
+                <CheckCircle size={16} /> In Waiting
+              </div>
               )}
-            </AnimatePresence>
+            </div>
           </td>
         </tr>
       )) : (
-        <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>No patients found.</td></tr>
+        <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>No appointments found.</td></tr>
       )}
     </tbody>
   </table>
 );
 
-/* --- STYLES --- */
+const RescheduleModal = ({ appt, onClose, onConfirm }) => {
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
 
+  return (
+    <>
+      <div style={modalOverlay} onClick={onClose} />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} style={rescheduleCard}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>Reschedule Appointment</h3>
+          <X size={20} onClick={onClose} style={{ cursor: 'pointer', color: '#94a3b8' }} />
+        </div>
+
+        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={avatarMini}>{appt.patient_name[0]}</div>
+            <div>
+              <div style={{ fontWeight: '700', fontSize: '14px' }}>{appt.patient_name}</div>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>Current: {appt.appointment_time}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={labelStyle}>New Date</label>
+            <input type="date" style={modalInput} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>New Time</label>
+            <input type="time" style={modalInput} onChange={(e) => setTime(e.target.value)} />
+          </div>
+          <button 
+            style={confirmBtn} 
+            onClick={() => onConfirm(date, time)}
+            disabled={!date || !time}
+          >
+            Confirm Reschedule
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+};
+
+/* --- STYLES --- */
+const rescheduleCard = {
+  position: 'fixed',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  backgroundColor: 'white',
+  padding: '32px',
+  borderRadius: '24px',
+  width: '400px',
+  zIndex: 10001,
+  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+};
+
+
+
+const labelStyle = { fontSize: '12px', fontWeight: '700', color: '#64748b' };
+
+const confirmBtn = {
+  width: '100%',
+  padding: '14px',
+  backgroundColor: '#059669',
+  color: 'white',
+  border: 'none',
+  borderRadius: '12px',
+  fontWeight: '700',
+  cursor: 'pointer',
+  marginTop: '8px'
+};
+
+/* --- CONSTANTS & HELPERS --- */
 const StatCard = ({ icon, label, value, trend }) => (
   <div style={{ background: 'white', padding: '24px', borderRadius: '20px', border: `1px solid #e2e8f0`, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -687,7 +893,7 @@ const StatCard = ({ icon, label, value, trend }) => (
   </div>
 );
 
-const AppointmentRow = ({ name, info, contact, visitType, consultant, regTime, status }) => (
+const AppointmentRow = ({ name, info, contact, visitType, consultant, regTime, status, onClick }) => (
   <tr style={{ borderBottom: `1px solid #f8fafc` }}>
     <td style={tdStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -701,51 +907,100 @@ const AppointmentRow = ({ name, info, contact, visitType, consultant, regTime, s
     <td style={tdStyle}>{consultant}</td>
     <td style={tdStyle}>{regTime}</td>
     <td style={tdStyle}><span style={statusBadgeGreen}>{status}</span></td>
-    <td style={tdStyle}><ArrowRight size={16} color="#94a3b8" cursor="pointer" /></td>
+    <td style={tdStyle}>
+      <div onClick={onClick} style={{ cursor: 'pointer', padding: '4px' }}>
+        <ArrowRight size={18} color="#059669" />
+      </div>
+    </td>  
   </tr>
 );
 
-// Global UI Constants
-const thStyle = { padding: '16px', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' };
-const tdStyle = { padding: '16px', fontSize: '14px', color: '#475569' };
-const navItem = { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 20px', color: '#64748b', borderRadius: '12px', fontWeight: '600', marginBottom: '8px', cursor: 'pointer' };
-const navItemActive = { ...navItem, backgroundColor: '#ecfdf5', color: '#059669', fontWeight: '700' };
-const logoutBtn = { margin: '20px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: `1px solid #fee2e2`, borderRadius: '12px', color: '#ef4444', fontWeight: '700', cursor: 'pointer', backgroundColor: 'white' };
-const iconCircle = { width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: 'white' };
-const avatarStyle = { width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' };
-const avatarMini = { width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700' };
-const tableCardStyle = { background: 'white', padding: '32px', borderRadius: '24px', border: `1px solid #e2e8f0`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '24px' };
-const miniBtn = { padding: '10px 18px', background: '#059669', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' };
-const backBtn = { display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', color: '#64748b', fontWeight: '700', cursor: 'pointer', marginBottom: '8px' };
-const searchWrapper = { flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '14px' };
-const searchInput = { border: 'none', padding: '14px 0', width: '100%', outline: 'none', fontWeight: '600', fontSize: '14px' };
-const iconBtn = { padding: '12px', border: '1px solid #e2e8f0', borderRadius: '14px', cursor: 'pointer' };
-const downloadBtn = { display: 'flex', alignItems: 'center', gap: '8px', padding: '0 20px', border: '1px solid #e2e8f0', borderRadius: '14px', background: 'white', fontWeight: '700', color: '#475569', fontSize: '14px', cursor: 'pointer' };
-const dropdownMenuStyle = { position: 'absolute', right: 0, top: '40px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', border: '1px solid #f1f5f9', width: '180px', zIndex: 100, overflow: 'hidden' };
-const menuItemStyle = { width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', cursor: 'pointer' };
-const filterDropdownStyle = { position: 'absolute', top: '55px', right: 0, background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px rgba(0,0,0,0.05)', width: '200px', zIndex: 100, padding: '8px' };
-const filterHeader = { padding: '10px 12px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' };
-const filterOptionStyle = (isActive) => ({ width: '100%', padding: '10px 12px', border: 'none', background: isActive ? '#f0fdf4' : 'none', borderRadius: '8px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: isActive ? '#059669' : '#475569', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' });
-const statusBadgeGreen = { padding: '4px 10px', background: '#f0fdf4', color: '#059669', borderRadius: '8px', fontSize: '11px', fontWeight: '700' };
-const statusBadgeBlue = { padding: '4px 10px', background: '#eff6ff', color: '#2563eb', borderRadius: '8px', fontSize: '11px', fontWeight: '700' };
-const timeBadgeStyle = { padding: '6px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '12px', fontWeight: '700', color: '#1e293b' };
-const checkInBtnMini = { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: '#059669', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' };
-const modalOverlay = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', zIndex: 1000 };
-const sideSheetStyle = { position: 'fixed', right: 0, top: 0, bottom: 0, width: '480px', backgroundColor: 'white', boxShadow: '-20px 0 50px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', zIndex: 1100 };
-const avatarLarge = { width: '56px', height: '56px', borderRadius: '14px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', fontWeight: '800' };
-const profileHeader = { padding: '32px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const sectionTitle = { fontSize: '12px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '20px', letterSpacing: '0.05em' };
-const infoGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' };
-const idBadge = { fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '6px', background: '#f1f5f9', color: '#64748b' };
+const thStyle = { padding: '16px', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', textAlign: 'left' };
+const tdStyle = { padding: '16px', fontSize: '14px', color: '#334155' };
+const miniBtn = { padding: '8px 16px', backgroundColor: '#059669', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' };
+const tableCardStyle = { background: 'white', padding: '24px', borderRadius: '20px', border: '1px solid #e2e8f0' };
+const avatarMini = { width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', color: '#059669' };
+const avatarLarge = { width: '64px', height: '64px', borderRadius: '20px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: '800' };
+const statusBadgeGreen = { padding: '4px 8px', backgroundColor: '#f0fdf4', color: '#16a34a', borderRadius: '6px', fontSize: '12px', fontWeight: '700' };
+const statusBadgeBlue = { padding: '4px 8px', backgroundColor: '#eff6ff', color: '#2563eb', borderRadius: '6px', fontSize: '12px', fontWeight: '700' };
+const backBtn = { display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' };
+const searchWrapper = { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'white', padding: '0 16px', borderRadius: '12px', border: '1px solid #e2e8f0' };
+const searchInput = { border: 'none', outline: 'none', width: '100%', padding: '12px 0', fontSize: '14px' };
+const iconBtn = { padding: '10px', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const downloadBtn = { ...iconBtn, gap: '8px', padding: '10px 16px', color: '#64748b', fontWeight: '600', fontSize: '14px' };
+const filterDropdownStyle = { position: 'absolute', top: '100%', right: 0, marginTop: '8px', width: '200px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0', zIndex: 20, padding: '8px' };
+const filterHeader = { padding: '8px 12px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' };
+const filterOptionStyle = (active) => ({ width: '100%', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: 'none', background: active ? '#f0fdf4' : 'transparent', color: active ? '#059669' : '#475569', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', textAlign: 'left' });
+const dropdownMenuStyle = { position: 'absolute', top: '100%', right: 0, width: '180px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', border: '1px solid #f1f5f9', zIndex: 30, padding: '6px', marginTop: '4px' };
+const menuItemStyle = { width: '100%', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '10px', border: 'none', background: 'transparent', color: '#475569', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', textAlign: 'left' };
+const timeBadgeStyle = { padding: '4px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', fontWeight: '700', color: '#334155' };
+const profileHeader = { padding: '32px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' };
+const profileFooter = { padding: '32px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc' };
+const editProfileBtn = { width: '100%', padding: '14px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#475569', fontWeight: '700', cursor: 'pointer' };
+const idBadge = { padding: '4px 10px', background: '#f1f5f9', borderRadius: '6px', fontSize: '11px', fontWeight: '700', color: '#64748b' };
+const sectionTitle = { fontSize: '14px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '20px' };
+const infoGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' };
 const closeBtnStyle = { border: 'none', background: '#f1f5f9', color: '#64748b', padding: '8px', borderRadius: '10px', cursor: 'pointer' };
 const miniTableContainer = { borderRadius: '12px', border: '1px solid #f1f5f9', overflow: 'hidden' };
 const miniTh = { padding: '12px 16px', fontSize: '11px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase' };
 const miniTd = { padding: '12px 16px', fontSize: '13px', color: '#475569' };
-const emptyHistoryBox = { padding: '32px', textAlign: 'center', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #e2e8f0', color: '#94a3b8', fontSize: '13px' };
-const profileFooter = { padding: '24px 32px', borderTop: '1px solid #f1f5f9', backgroundColor: '#f8fafc' };
-const editProfileBtn = { width: '100%', padding: '14px', background: '#059669', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' };
-const placeholderCard = { padding: '100px', textAlign: 'center', background: 'white', borderRadius: '24px', color: '#94a3b8', fontWeight: '600' };
-const modalContent = { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', padding: '32px', borderRadius: '24px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' };
-const inputStyle = { padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' };
+const emptyHistoryBox = { padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px dashed #e2e8f0' };
+
+/* --- MODAL & BUTTON STYLES --- */
+const saveBtnStyle = { 
+  width: '100%', 
+  padding: '16px', 
+  backgroundColor: '#059669', 
+  color: 'white', 
+  border: 'none', 
+  borderRadius: '12px', 
+  fontWeight: '700', 
+  cursor: 'pointer',
+  fontSize: '15px',
+  marginTop: '10px'
+};
+
+const modalInput = { 
+  width: '100%', 
+  padding: '12px', 
+  borderRadius: '10px', 
+  border: '1px solid #e2e8f0', 
+  fontSize: '14px', 
+  outline: 'none',
+  backgroundColor: '#ffffff'
+};
+
+const miniLabel = { 
+  fontSize: '11px', 
+  fontWeight: '800', 
+  color: '#94a3b8', 
+  textTransform: 'uppercase', 
+  marginBottom: '6px', 
+  display: 'block' 
+};
+
+const sideSheetStyle = { 
+  position: 'fixed', 
+  top: 0, 
+  right: 0, 
+  bottom: 0, 
+  width: '480px', 
+  backgroundColor: 'white', 
+  boxShadow: '-10px 0 50px rgba(0,0,0,0.1)', 
+  zIndex: 1000, 
+  display: 'flex', 
+  flexDirection: 'column' 
+};
+
+const modalOverlay = { 
+  position: 'fixed', 
+  top: 0, 
+  left: 0, 
+  right: 0, 
+  bottom: 0, 
+  backgroundColor: 'rgba(15, 23, 42, 0.3)', 
+  backdropFilter: 'blur(4px)', 
+  zIndex: 999 
+};
 
 export default ReceptionistDashboard;

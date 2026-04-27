@@ -7,7 +7,6 @@ import theme from '../theme/theme';
 
 const Login = ({ onForgotPassword, onSignupRedirect }) => {
   const navigate = useNavigate();
-  // Changed default to Patient and corrected SuperAdmin naming
   const [role, setRole] = useState('Patient'); 
   const [formData, setFormData] = useState({ 
     identifier: '', 
@@ -16,26 +15,24 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Helper to check if the role requires a Hospital Registration ID
+  // Note: We check against the current selected 'role' state
+  const isHospitalRole = (r) => ['Admin', 'Staff', 'Receptionist'].includes(r);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const { identifier, password, hospitalId } = formData;
-
-    const loginData = {
-      identifier: identifier.trim(), // Removes the accidental space
-      password: password,
-      hospital_id: hospitalId.trim(),
-      role: role
-    };
     try {
       localStorage.clear();
-      const isStaffOrAdmin = ['Admin', 'Staff', 'Receptionist'].includes(role);
+      
+      // Sending data to the backend
       const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
         role: role,
-        identifier: formData.identifier,
+        identifier: formData.identifier.trim(),
         password: formData.password,
-        hospital_id: (role === 'Admin' || role === 'Staff') ? formData.hospitalId : null
+        // Ensure hospital_id is sent for Receptionists
+        hospital_id: isHospitalRole(role) ? formData.hospitalId.trim() : null
       });
   
       const { access_token, user } = response.data;
@@ -44,14 +41,14 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
       localStorage.setItem('token', access_token);
       localStorage.setItem('user_role', user.role);
       
+      // Save hospital_id so the ReceptionistDashboard can fetch the correct data
       if (user.hospital_id) {
         localStorage.setItem('hospital_id', user.hospital_id);
       }
       
       localStorage.setItem('user_data', JSON.stringify(user));
   
-      // --- ROUTING LOGIC (Fixed to match DB Strings) ---
-      // We use .replace(" ", "") to be safe, but explicitly matching 'SuperAdmin'
+      // --- ROUTING LOGIC ---
       const normalizedRole = user.role.replace(" ", "");
 
       if (normalizedRole === 'SuperAdmin') {
@@ -61,7 +58,8 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
       } else if (normalizedRole === 'Staff') {
         navigate('/staff-portal');
       } else if (normalizedRole === 'Receptionist') {
-        navigate('/reception-desk');
+        // FIX: Changed from /receptionist-desk to /reception-desk to match your App.js
+        navigate('/reception-desk'); 
       } else {
         navigate('/patient-dashboard/overview');
       }
@@ -92,7 +90,6 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
         </div>
 
         <div style={segmentedControlStyle}>
-          {/* Removed space from SuperAdmin to match DB and Logic */}
           {['Patient', 'Staff', 'Admin', 'SuperAdmin'].map((r) => (
             <button
               key={r}
@@ -112,7 +109,8 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
 
         <form onSubmit={handleLogin} style={formStyle}>
           <AnimatePresence mode="wait">
-            {(role === 'Admin' || role === 'Staff') && (
+            {/* Show Hospital ID input for Admin, Staff, and Receptionists */}
+            {isHospitalRole(role) && (
               <motion.div 
                 key="hosp-id"
                 initial={{ opacity: 0, height: 0 }} 
@@ -128,6 +126,7 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
                     required 
                     placeholder="e.g. HFR-PUNE-001" 
                     style={inputStyle}
+                    value={formData.hospitalId}
                     onChange={(e) => setFormData({...formData, hospitalId: e.target.value})}
                   />
                 </div>
@@ -147,6 +146,7 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
                 required 
                 placeholder={role === 'SuperAdmin' ? "admin@nexhealth.com" : "Identifier"} 
                 style={inputStyle} 
+                value={formData.identifier}
                 onChange={(e) => setFormData({...formData, identifier: e.target.value})}
               />
             </div>
@@ -164,15 +164,13 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
                 required 
                 placeholder="••••••••" 
                 style={inputStyle} 
+                value={formData.password}
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
               />
             </div>
           </div>
 
-          <button type="submit" style={{
-            ...primaryButtonStyle,
-            background: role === 'SuperAdmin' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-          }} disabled={isLoading}>
+          <button type="submit" style={primaryButtonStyle} disabled={isLoading}>
             {isLoading ? "Authenticating..." : "Sign In to Portal"}
           </button>
         </form>
@@ -187,7 +185,7 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
   );
 };
 
-// --- Styles (Kept identical to your original design) ---
+// --- Styles (Existing) ---
 const pageWrapperStyle = { height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', background: '#f8fafc' };
 const gridOverlay = { position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(#CBD5E1 0.8px, transparent 0.8px)', backgroundSize: '24px 24px', opacity: 0.3 };
 const loginCardStyle = { width: '90%', maxWidth: '460px', backgroundColor: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', padding: '40px', borderRadius: '32px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', zIndex: 10, border: '1px solid rgba(255, 255, 255, 0.5)' };
@@ -201,7 +199,7 @@ const labelStyle = { fontSize: '12px', fontWeight: '700', color: '#334155', marg
 const inputWrapper = { position: 'relative', display: 'flex', alignItems: 'center' };
 const inputIcon = { position: 'absolute', left: '16px', color: '#94a3b8' };
 const inputStyle = { width: '100%', padding: '14px 14px 14px 48px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none' };
-const primaryButtonStyle = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '15px', cursor: 'pointer', marginTop: '10px' };
+const primaryButtonStyle = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '15px', cursor: 'pointer', marginTop: '10px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' };
 const linkStyle = { color: '#10b981', fontWeight: '600', cursor: 'pointer', fontSize: '12px' };
 const signupLink = { color: '#10b981', fontWeight: '800', cursor: 'pointer' };
 const footerStyle = { marginTop: '24px', textAlign: 'center', fontSize: '13px', color: '#64748b' };

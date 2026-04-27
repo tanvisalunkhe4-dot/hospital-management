@@ -14,6 +14,13 @@ class HospitalCreate(BaseModel):
     state: str
     bedCapacity: int
 
+class UserSession(BaseModel):
+    id: int
+    role: str
+    hospital_id: Optional[int]
+    email: str
+    full_name: Optional[str] = None 
+    staff_id: Optional[str] = None  
 # --- YOUR EXISTING CLASSES ---
 class SignupRequest(BaseModel):
     role: str
@@ -30,7 +37,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
-    user: dict
+    user: UserSession
 
 class StaffBase(BaseModel):
     full_name: str
