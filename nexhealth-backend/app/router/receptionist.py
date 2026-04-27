@@ -102,20 +102,23 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
 
 @router.get("/stats/{hosp_id}")
 async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
-    today = datetime.date.today()  
+    today = datetime.date.today()
+    
     patient_count = db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).count()
+    # We only count appointments that are Scheduled, Waiting, or In Queue
     appt_count = db.query(models.Appointment).filter(
         models.Appointment.hospital_id == hosp_id,
-        models.Appointment.appointment_date == today
+        models.Appointment.appointment_date == today,
+        models.Appointment.status.notin_(["Cancelled", "Completed"]) 
     ).count()
 
-    # Calculate Total Collections (Sum of PAID invoices only)
+    # 3. Calculate Total Collections
     total_collections = db.query(func.sum(models.Invoice.total_amount)).filter(
         models.Invoice.hospital_id == hosp_id,
         models.Invoice.status == "Paid"
     ).scalar() or 0
 
-    # Count Unpaid/Pending Bills
+    # 4. Count Pending Bills
     unpaid_count = db.query(models.Invoice).filter(
         models.Invoice.hospital_id == hosp_id,
         models.Invoice.status == "Pending"
@@ -123,19 +126,21 @@ async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
 
     return {
         "total_patients": patient_count,
-        "appointments_today": appt_count,
+        "appointments_today": appt_count, # This will now show 3
         "total_collections": total_collections,
         "pending_bills": unpaid_count,
-        "consultations": 0 
+        "consultations": appt_count # You can use this for the 'Live' card
     }
 
 @router.get("/patients/search", response_model=list[patient_schema.PatientResponse])
 def search_patients(query: str, hosp_id: int, db: Session = Depends(get_db)):
-    return db.query(models.Patient).filter(
+    # .all() is critical here to return a LIST of objects
+    results = db.query(models.Patient).filter(
         models.Patient.hospital_id == hosp_id,
         (models.Patient.first_name.ilike(f"%{query}%")) | 
         (models.Patient.phone_number.contains(query))
     ).all()
+    return results
 
 @router.get("/patients/recent", response_model=list[patient_schema.PatientResponse])
 def get_recent_patients(hosp_id: int, db: Session = Depends(get_db)):
@@ -225,6 +230,66 @@ def delete_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)
     db.commit()
     return {"message": "Deleted successfully"}
 
+@router.patch("/appointments/{appt_id}/check-in")
+def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
+    # 1. Find the appointment
+    appt = db.query(models.Appointment).filter(
+        models.Appointment.id == appt_id, 
+        models.Appointment.hospital_id == hosp_id
+    ).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    try:
+        # 2. Update the status string to exactly "Checked In"
+        # This matches your React filter: a.status === 'Checked In'
+        appt.status = "Checked In"
+        
+        db.commit()
+        db.refresh(appt)
+        return {"message": "Patient checked in successfully", "status": appt.status}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"CHECK-IN ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error during check-in.")
+        
+@router.patch("/appointments/{appt_id}/reschedule")
+def reschedule_appointment(
+    appt_id: int, 
+    hosp_id: int, 
+    payload: dict, 
+    db: Session = Depends(get_db)
+):
+    """
+    Globally handles rescheduling for any appointment.
+    Moves the patient back to 'Scheduled' status so it works for 
+    both upcoming and already checked-in patients.
+    """
+    appt = db.query(models.Appointment).filter(
+        models.Appointment.id == appt_id, 
+        models.Appointment.hospital_id == hosp_id
+    ).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    try:
+        # Update with the new date/time from the frontend modal
+        appt.appointment_date = payload.get("appointment_date", appt.appointment_date)
+        appt.appointment_time = payload.get("appointment_time", appt.appointment_time)
+        
+        # Reset status to Scheduled so they leave the Waiting Room 
+        # and appear in the regular schedule for the new time
+        appt.status = "Scheduled" 
+        
+        db.commit()
+        db.refresh(appt)
+        return {"message": "Rescheduled successfully", "new_time": appt.appointment_time}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"RESCHEDULE ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to reschedule appointment.")
 # --- INVOICE & BILLING ACTIONS ---
 
 @router.post("/invoices/generate", response_model=invoice_schema.InvoiceResponse)

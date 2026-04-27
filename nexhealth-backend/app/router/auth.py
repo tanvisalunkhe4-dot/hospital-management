@@ -322,8 +322,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
                     last_name="User",
                 )
             )
-            db.commit()
-    # --- 5. TOKEN GENERATION ---
+    db.commit()
+    db.refresh(user)
+
+    # --- 6. TOKEN GENERATION ---
     token_data = {
         "sub": str(user.id),
         "role": user.role,
@@ -339,6 +341,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             "id": user.id,
             "role": user.role,
             "hospital_id": user.hospital_id,
-            "email": user.email
+            "email": user.email or "",
+            "full_name": getattr(user, "full_name", "Staff Member"),
+            "staff_id": user.staff_id
         }
     }

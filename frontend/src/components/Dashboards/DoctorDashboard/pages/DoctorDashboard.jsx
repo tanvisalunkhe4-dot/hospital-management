@@ -3,8 +3,7 @@ import { Bell, User, ArrowLeft, FileText, Activity, Settings } from 'lucide-reac
 import axios from 'axios'; // Ensure axios is installed
 
 // Sub-components 
-import DoctorSidebar from './DoctorSidebar';
-import DoctorOverview from './DoctorOverview';
+import DoctorSidebar from "./DoctorSidebar";import DoctorOverview from './DoctorOverview';
 import PatientQueue from './PatientQueue';
 import ConsultationWorkspace from './ConsultationWorkspace';
 

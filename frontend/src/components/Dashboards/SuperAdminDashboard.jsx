@@ -191,7 +191,6 @@ const AnalyticsView = ({ hospitals }) => {
 
 
 // --- COMPONENT: HOSPITAL QUICK VIEW ---
-// --- COMPONENT: HOSPITAL QUICK VIEW & EDIT ---
 const HospitalDetailsCard = ({ hospital, onClose, onUpdate }) => {
   // 1. Unified State Management
   const [formData, setFormData] = useState({
