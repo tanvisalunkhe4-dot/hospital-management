@@ -17,43 +17,30 @@ logger = logging.getLogger(__name__)
 
 
 # --- PATIENT REGISTRATION ---
-
 @router.post("/register-patient", response_model=patient_schema.PatientResponse, status_code=status.HTTP_201_CREATED)
 def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Depends(get_db)):
     """
-    Registers a new patient and creates a linked User account.
+    Registers a new patient record ONLY. 
+    The User account is created later by the patient during signup.
     """
-    existing_user = db.query(models.User).filter(models.User.email == patient_in.email).first()
-    if existing_user:
-        logger.warning(f"Registration failed: Email {patient_in.email} already exists.")
+    # 1. Check if the patient already exists in the Patient table (by phone)
+    existing_patient = db.query(models.Patient).filter(
+        models.Patient.phone_number == patient_in.phone_number
+    ).first()
+    
+    if existing_patient:
+        logger.warning(f"Registration failed: Phone {patient_in.phone_number} already exists.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists."
+            detail="A patient with this phone number already exists."
         )
 
     try:
         processed_abha_id = patient_in.abha_id if patient_in.abha_id and patient_in.abha_id.strip() != "" else None
 
-        # 1. Provide a default hashed password and full_name to satisfy DB constraints
-        temp_password = f"{patient_in.first_name}@{patient_in.phone_number[-4:] if patient_in.phone_number else '123'}"
-        hashed_pwd = pwd_context.hash(temp_password)
-
-        new_user = models.User(
-            email=patient_in.email,
-            full_name=f"{patient_in.first_name} {patient_in.last_name}",
-            hashed_password=hashed_pwd,
-            role="Patient", 
-            # Receptionist-created patients should be able to access their portal
-            # immediately with the generated credentials.
-            is_active=True,
-            hospital_id=patient_in.hospital_id
-        )
-        db.add(new_user)
-        db.flush() 
-
-        # 2. Create the linked Patient record
+        # 2. Create ONLY the Patient record. user_id stays NULL.
         new_patient = models.Patient(
-            user_id=new_user.id,
+            user_id=None,  # This is the "Bridge" point for later
             hospital_id=patient_in.hospital_id,
             first_name=patient_in.first_name,
             last_name=patient_in.last_name,
@@ -67,11 +54,10 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
             status="Registered"
         )
         db.add(new_patient)
-        
         db.commit()
         db.refresh(new_patient)
         
-        logger.info(f"Successfully registered: {patient_in.first_name}")
+        logger.info(f"Successfully registered medical record for: {patient_in.first_name}")
         return new_patient
 
     except Exception as e:

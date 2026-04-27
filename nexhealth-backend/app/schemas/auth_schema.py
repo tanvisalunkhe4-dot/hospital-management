@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Any
 from datetime import datetime
 # --- ADD THIS CLASS ---
@@ -145,16 +145,31 @@ class PatientBase(BaseModel):
 class PatientProfile(PatientBase):
     id: int
     user_id: int
+    phone_secondary: Optional[str] = None
+    email_professional: Optional[str] = None
+    designation: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
 class PatientUpdate(BaseModel):
+    # Standard medical fields
     abha_id: Optional[str] = None
     date_of_birth: Optional[datetime] = None
     gender: Optional[str] = None
-    blood_group: Optional[str] = None
     
+    # 🟢 ADD THESE PROFESSIONAL FIELDS (Matches React formData)
+    full_name: Optional[str] = None
+    phone_secondary: Optional[str] = None
+    email_professional: Optional[str] = None
+    designation: Optional[str] = None
+    
+    # Optional: Keep for compatibility
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    address: Optional[str] = None
+
 class PatientDashboardSummary(BaseModel):
     next_appointment: Optional[datetime] = None
     blood_group: Optional[str] = "Unknown"
@@ -162,9 +177,11 @@ class PatientDashboardSummary(BaseModel):
     last_visit: Optional[datetime] = None
     abha_linked: bool = False
     uhid: str
-
-# --- 4. CLINICAL DATA & ANALYTICS ---
-
+#patient password update
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
 class AppointmentRead(BaseModel):
     id: int
     doctor_name: Optional[str] = None

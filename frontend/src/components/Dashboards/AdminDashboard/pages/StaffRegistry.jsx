@@ -298,14 +298,17 @@ const StaffRegistry = ({
 
         // Base payload for both Add and Edit
         const payload = {
-            ...cleanData,
-            salary: formData.salary !== "" ? parseInt(formData.salary) : 0,
-            experience: formData.experience !== "" ? parseInt(formData.experience) : 0,
-            dept_id: formData.department ? parseInt(formData.department) : null,
-            is_hod: !!formData.is_hod,
-            status: formData.status || "Active"
-        };
-
+          ...cleanData,
+          salary: formData.salary !== "" ? parseInt(formData.salary) : 0,
+          experience: formData.experience !== "" ? parseInt(formData.experience) : 0,
+          dept_id: formData.department ? parseInt(formData.department) : null,
+          // Only send these if the role is Doctor, otherwise set to null
+          license_no: formData.role === "Doctor" ? (formData.license_no || "") : null,
+          specialization: formData.role === "Doctor" ? (formData.specialization || "") : null,
+          ward_no: formData.role === "Nurse" ? (formData.ward_no || "") : null,
+          is_hod: !!formData.is_hod,
+          status: formData.status || "Active"
+      };
         if (id) {
             // EDIT MODE: Use Query Parameter as requested by your 422 error
             await axios.put(
@@ -319,7 +322,7 @@ const StaffRegistry = ({
             // If POST also gives a 422, move hospital_id to the URL here too.
             const registrationPayload = {
                 ...payload,
-                hospital_id: currentHospitalId, // Keep in body for Registration
+                hospital_id: parseInt(currentHospitalId), // Keep in body for Registration
                 password: "DefaultPassword123!" 
             };
 

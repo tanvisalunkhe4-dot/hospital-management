@@ -2,3 +2,10 @@
   --color-primary: #059669;
   --radius-xl: 20px;
 }
+const styleTag = document.createElement("style");
+styleTag.innerHTML = `
+  aside::-webkit-scrollbar {
+    display: none;
+  }
+`;
+document.head.appendChild(styleTag);

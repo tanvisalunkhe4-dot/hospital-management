@@ -189,7 +189,7 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         elif data.role == "Nurse":
             new_nurse = models.Nurse(
                 staff_ref_id=new_staff.id,
-                shift_type=data.shift_type or "Day",
+                shift_preference=data.shift_type or "Day",
                 ward_no=data.ward_no
             )
             db.add(new_nurse)
@@ -277,7 +277,7 @@ def update_staff(staff_id: int, payload: StaffUpdate, hospital_id: int, db: Sess
     elif staff.role == "Nurse":
         nurse_record = db.query(models.Nurse).filter(models.Nurse.staff_ref_id == staff.id).first()
         if nurse_record:
-            nurse_record.shift_type = update_data.get('shift_type', nurse_record.shift_type)
+            nurse_record.shift_preference = update_data.get('shift_type', nurse_record.shift_preference)
             nurse_record.ward_no = update_data.get('ward_no', nurse_record.ward_no)
     elif staff.role == "Receptionist":
         receptionist_record = db.query(models.Receptionist).filter(models.Receptionist.staff_ref_id == staff.id).first()

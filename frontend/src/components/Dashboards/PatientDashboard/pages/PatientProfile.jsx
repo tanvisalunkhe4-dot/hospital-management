@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Phone, MapPin, Fingerprint, 
   ShieldCheck, Edit3, Loader2, AlertCircle,
-  Droplet, Calendar, ExternalLink, Activity
+  Droplet, Calendar, ExternalLink, Activity,
+  CheckCircle2, ShieldAlert
 } from 'lucide-react';
 import axios from 'axios';
+import { useUser } from "../components/UserContext";
 
 const DataRow = ({ label, value, icon: Icon, isCritical }) => (
   <div style={infoRow}>
@@ -29,6 +31,12 @@ const PatientProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const { profileImage, setProfileImage } = useUser(); // Get setter
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) setProfileImage(URL.createObjectURL(file)); // Updates global state
+  };
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
@@ -68,45 +76,52 @@ const PatientProfile = () => {
 
   return (
     <div style={container}>
-      {/* 1. HERO HEADER */}
-      <div style={heroSection}>
-        <div style={heroContent}>
-          <div style={avatarCircle}>
-            {profile.full_name?.charAt(0)}
+    {/* 1. HERO HEADER - Professional & Clean */}
+    <div style={heroSection}>
+      <div style={heroContent}>
+        <div style={avatarCircle}>
+          {profile.full_name?.split(' ').map(n => n[0]).join('')}
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 style={title}>{profile.full_name}</h1>
+            {/* Conditional Badge based on live active status */}
+            <span style={profile.is_active ? statusBadgeActive : statusBadgeInactive}>
+              {profile.is_active ? 'Verified Account' : 'Pending Verification'}
+            </span>
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <h1 style={title}>{profile.full_name}</h1>
-              <span style={statusBadge}>Active Patient</span>
-            </div>
-            <p style={subtitle}>
-              <Fingerprint size={14} /> UHID: {profile.uhid}
-            </p>
+          <p style={subtitle}>
+            <Fingerprint size={14} /> UHID: <span style={{color: '#0f172a'}}>{profile.uhid}</span>
+          </p>
+        </div>
+      </div>
+      <button style={editBtn}>
+        <Edit3 size={18} /> Update Records
+      </button>
+    </div>
+
+    <div style={mainLayout}>
+      {/* 2. CLINICAL CORE (Left Column) */}
+      <div style={sideCol}>
+        <div style={clinicalCard}>
+          <div style={cardHeader}>
+            <Activity size={18} color="#28a745" />
+            <h3 style={cardTitle}>Medical Baseline</h3>
+          </div>
+          <div style={vitalsGrid}>
+            {/* USE LIVE DATA HERE */}
+            <DataRow label="Blood Group" value={profile.blood_group} icon={Droplet} isCritical />
+            <DataRow label="Gender" value={profile.gender} icon={User} />
+            <DataRow label="Date of Birth" value={profile.dob} icon={Calendar} />
           </div>
         </div>
-        <button style={editBtn}>
-          <Edit3 size={18} /> Edit Profile
-        </button>
-      </div>
-
-      <div style={mainLayout}>
-        {/* 2. LEFT COLUMN: CLINICAL VITALS */}
-        <div style={sideCol}>
-          <div style={clinicalCard}>
-            <div style={cardHeader}>
-              <Activity size={18} color="#10b981" />
-              <h3 style={cardTitle}>Clinical Core</h3>
-            </div>
-            <div style={vitalsGrid}>
-              <DataRow label="Blood Group" value={profile.blood_group} icon={Droplet} isCritical />
-              <DataRow label="Gender" value={profile.gender} icon={User} />
-              <DataRow label="D.O.B" value={profile.dob || '1995-08-12'} icon={Calendar} />
-            </div>
-          </div>
 
           <div style={trustCard}>
-            <p style={trustText}>Verified through ABDM</p>
-            <ShieldCheck size={24} color="#059669" />
+            <div>
+              <p style={trustText}>Identity Verified</p>
+              <p style={{fontSize: '11px', color: '#166534', margin: 0}}>Via ABDM Health Stack</p>
+            </div>
+            <CheckCircle2 size={24} color="#28a745" />
           </div>
         </div>
 
@@ -114,9 +129,8 @@ const PatientProfile = () => {
         <div style={contentCol}>
           <div style={card}>
             <div style={cardHeader}>
-              <Fingerprint size={18} color="#6366f1" />
-              <h3 style={cardTitle}>ABDM National Health Stack</h3>
-              <a href="#" style={linkBtn}>Link New Records <ExternalLink size={14}/></a>
+              <ShieldCheck size={18} color="#28a745" />
+              <h3 style={cardTitle}>Government Digital Health ID</h3>
             </div>
             <div style={doubleGrid}>
               <DataRow label="ABHA Number" value={profile.abha_number} />
@@ -126,15 +140,15 @@ const PatientProfile = () => {
 
           <div style={card}>
             <div style={cardHeader}>
-              <Phone size={18} color="#3b82f6" />
-              <h3 style={cardTitle}>Contact & Residency</h3>
+              <Phone size={18} color="#28a745" />
+              <h3 style={cardTitle}>Contact Details</h3>
             </div>
             <div style={doubleGrid}>
-              <DataRow label="Primary Email" value={profile.email} icon={Mail} />
-              <DataRow label="Phone" value={profile.phone} icon={Phone} />
+              <DataRow label="Email Address" value={profile.email} icon={Mail} />
+              <DataRow label="Phone Number" value={profile.phone_number} icon={Phone} />
             </div>
-            <div style={{ marginTop: '16px' }}>
-              <DataRow label="Registered Address" value={profile.address} icon={MapPin} />
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+              <DataRow label="Permanent Address" value={profile.address} icon={MapPin} />
             </div>
           </div>
         </div>
@@ -142,10 +156,48 @@ const PatientProfile = () => {
     </div>
   );
 };
-
 // --- ENTERPRISE STYLES ---
 const container = { maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' };
+const statusBadgeActive = { 
+  backgroundColor: '#e6f4ea', 
+  color: '#1e7e34', 
+  padding: '6px 14px', 
+  borderRadius: '8px', 
+  fontSize: '11px', 
+  fontWeight: '700',
+  border: '1px solid #c3e6cb'
+};
 
+const statusBadgeInactive = { 
+  backgroundColor: '#fff3cd', 
+  color: '#856404', 
+  padding: '6px 14px', 
+  borderRadius: '8px', 
+  fontSize: '11px', 
+  fontWeight: '700' 
+};
+
+const editBtn = { 
+  display: 'flex', 
+  alignItems: 'center', 
+  gap: '10px', 
+  padding: '12px 24px', 
+  borderRadius: '12px', 
+  border: '1px solid #e2e8f0', 
+  backgroundColor: '#ffffff', 
+  color: '#0f172a', 
+  fontWeight: '700', 
+  cursor: 'pointer',
+  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+};
+
+const clinicalCard = { 
+  backgroundColor: '#fff', 
+  padding: '24px', 
+  borderRadius: '20px', 
+  border: '1px solid #e2e8f0', 
+  borderTop: '4px solid #28a745' // NexHealth Primary Green
+};
 const heroSection = { 
   display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
   marginBottom: '40px', padding: '32px', borderRadius: '24px',
@@ -171,7 +223,6 @@ const card = { backgroundColor: '#fff', padding: '24px', borderRadius: '20px', b
 const cardHeader = { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' };
 const cardTitle = { fontSize: '14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0, flex: 1 };
 
-const clinicalCard = { ...card, borderLeft: '4px solid #10b981' };
 const vitalsGrid = { display: 'flex', flexDirection: 'column', gap: '8px' };
 
 const doubleGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' };
@@ -188,11 +239,7 @@ const trustText = { fontSize: '13px', fontWeight: '700', color: '#166534', margi
 
 const linkBtn = { fontSize: '12px', color: '#6366f1', textDecoration: 'none', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' };
 
-const editBtn = { 
-  display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 24px', 
-  borderRadius: '14px', border: 'none', backgroundColor: '#0f172a', 
-  color: '#fff', fontWeight: '700', cursor: 'pointer', transition: '0.2s'
-};
+
 // Add these three to your existing style constants:
 
 const mainLayout = { 

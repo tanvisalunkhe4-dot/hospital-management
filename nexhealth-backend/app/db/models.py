@@ -45,7 +45,10 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False) # 'Admin', 'Staff', 'Patient', 'SuperAdmin'
     sub_role = Column(String, nullable=True) # 'Doctor', 'Nurse', 'Receptionist'
-    
+    profile_url = Column(String, nullable=True) # To store the link to the image
+    phone_secondary = Column(String, nullable=True)
+    two_factor_secret = Column(String, nullable=True)
+    is_2fa_enabled = Column(Boolean, default=False)
     hospital_id = Column(Integer, ForeignKey("hospitals.id"), nullable=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True) # Added: Link staff to Dept
     is_active = Column(Boolean, default=True)
@@ -55,6 +58,7 @@ class User(Base):
     department = relationship("Department", foreign_keys=[department_id])
     patient_profile = relationship("Patient", back_populates="user", uselist=False)
     staff_profile = relationship("Staff", back_populates="user", uselist=False)
+
 class Patient(Base):
     __tablename__ = "patients"
     
@@ -62,12 +66,13 @@ class Patient(Base):
     last_name = Column(String, nullable=False)
     uhid = Column(String, unique=True, index=True, nullable=True)
     phone_number = Column(String, nullable=True)
+    hashed_password = Column(String, nullable=False)
     address = Column(String, nullable=True)
     visit_type = Column(String, nullable=True) # e.g., OPD, Emergency
     doctor_name = Column(String, nullable=True)
     status = Column(String, default="Registered")
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     abha_id = Column(String, unique=True, index=True, nullable=True)
     date_of_birth = Column(DateTime, nullable=True) # Added for medical records
     gender = Column(String, nullable=True)
@@ -86,6 +91,7 @@ class Appointment(Base):
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+
     doctor_id = Column(Integer, ForeignKey("staff.id"))
     doctor_name = Column(String, nullable=True)
     hospital_name = Column(String)

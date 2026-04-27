@@ -13,7 +13,7 @@ const Sidebar = () => {
     { id: 'records', label: 'Medical Records', icon: FileText, path: '/patient-dashboard/records' },
     { id: 'billing', label: 'Bills & Payments', icon: CreditCard, path: '/patient-dashboard/billing' },
   ];
-
+  const [isHovered, setIsHovered] = React.useState(false);
   return (
     <aside style={sidebarStyle}>
       {/* Brand Identity */}
@@ -46,22 +46,23 @@ const Sidebar = () => {
 
       {/* Footer / Account & Terminate */}
       <div style={footerSection}>
-        <div style={userCard}>
-          <div style={avatar}>JD</div>
-          <div style={userInfo}>
-            <p style={userName}>John Doe</p>
-            <p style={userStatus}>Verified Profile</p>
-          </div>
-        </div>
-        
         {/* ✅ Professional Terminate Button */}
-        <button style={terminateBtn} onClick={() => {
-          localStorage.clear();
-          window.location.href = '/';
-        }}>
-          <Power size={18} /> 
-          <span>Terminate Session</span>
-        </button>
+        
+        <button 
+  style={{
+    ...terminateBtn,
+    ...(isHovered ? { backgroundColor: '#fff1f2', color: '#ef4444', borderColor: '#fee2e2' } : {})
+  }}
+  onMouseEnter={() => setIsHovered(true)}
+  onMouseLeave={() => setIsHovered(false)}
+  onClick={() => {
+    localStorage.clear();
+    window.location.href = '/';
+  }}
+>
+  <Power size={18} /> 
+  <span>Terminate Session</span>
+</button>
       </div>
     </aside>
   );
@@ -75,21 +76,32 @@ const sidebarStyle = {
   borderRight: '1px solid #e2e8f0', 
   display: 'flex', 
   flexDirection: 'column', 
-  padding: '40px 24px', 
+  padding: '40px 24px 20px 24px', 
   height: '100vh',
   position: 'sticky', // This is the secret!
   top: 0,
   left: 0,
   flexShrink: 0, // Prevents the sidebar from getting squished
-  zIndex: 1000
+  zIndex: 1000,
+  overflowY: 'auto', 
+  msOverflowStyle: 'none',  /* IE and Edge */
+  scrollbarWidth: 'none',
 };
+const hideScrollbarGlobal = `
+  aside::-webkit-scrollbar {
+    display: none;
+  }
+`;
 
+const navGroup = { 
+  flex: 1,
+  marginBottom: '20px' // Ensures there's a gap before the footer
+};
 const logoSection = { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '60px', paddingLeft: '8px' };
 const logoIcon = { backgroundColor: '#f0fdf4', padding: '12px', borderRadius: '16px', display: 'flex' };
 const logoText = { fontSize: '26px', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-1px' };
 const badge = { fontSize: '10px', fontWeight: '800', color: '#059669', background: '#d1fae5', padding: '4px 10px', borderRadius: '8px', marginTop: '6px', display: 'inline-block', letterSpacing: '0.5px' };
 
-const navGroup = { flex: 1 };
 const groupLabel = { fontSize: '12px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '24px', paddingLeft: '12px' };
 
 const navLinks = { display: 'flex', flexDirection: 'column', gap: '10px' }; // Increased gap between links
@@ -114,20 +126,13 @@ const activeBtn = {
   fontWeight: '700',
   boxShadow: '0 4px 12px rgba(16, 185, 129, 0.08)'
 };
+// Replace your existing footerSection and terminateBtn styles with these:
 
 const footerSection = { 
-  paddingTop: '30px', 
+  paddingTop: '24px', 
   borderTop: '1px solid #f1f5f9',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '24px'
+  marginTop: 'auto' // This pushes the button to the bottom perfectly
 };
-
-const userCard = { display: 'flex', alignItems: 'center', gap: '14px', padding: '0 8px' };
-const avatar = { width: '44px', height: '44px', borderRadius: '14px', backgroundColor: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '16px' };
-const userName = { fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 };
-const userStatus = { fontSize: '13px', color: '#94a3b8', margin: 0 };
-const userInfo = { lineHeight: '1.2' };
 
 const terminateBtn = { 
   width: '100%',
@@ -135,16 +140,25 @@ const terminateBtn = {
   alignItems: 'center', 
   justifyContent: 'center',
   gap: '12px', 
-  color: '#ef4444', 
-  backgroundColor: '#fff1f2', 
-  border: '1px solid #fee2e2', 
-  padding: '16px', 
+  color: '#64748b', // Subtle grey by default
+  backgroundColor: '#f8fafc', 
+  border: '1px solid #e2e8f0', 
+  padding: '14px', 
   cursor: 'pointer', 
-  fontSize: '15px', 
-  fontWeight: '700',
-  borderRadius: '14px',
-  transition: 'all 0.2s ease',
-  boxShadow: '0 2px 4px rgba(239, 68, 68, 0.05)'
+  fontSize: '14px', 
+  fontWeight: '600',
+  borderRadius: '12px',
+  transition: 'all 0.3s ease',
 };
+
+
+
+const userCard = { display: 'flex', alignItems: 'center', gap: '14px', padding: '0 8px' };
+const avatar = { width: '44px', height: '44px', borderRadius: '14px', backgroundColor: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '16px' };
+const userName = { fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 };
+const userStatus = { fontSize: '13px', color: '#94a3b8', margin: 0 };
+const userInfo = { lineHeight: '1.2' };
+
+
 
 export default Sidebar;

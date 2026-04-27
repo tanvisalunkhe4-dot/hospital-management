@@ -6,22 +6,24 @@ import AboutPage from './pages/AboutPage';
 import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
-
+import { UserProvider } from './components/Dashboards/PatientDashboard/components/UserContext';
 // Portals you've been working on
-import ReceptionistDashboard from './pages/Receptionist/ReceptionistDashboard';
+import ReceptionistDashboard from './components/Dashboards/Receptionist/ReceptionistDashboard';
 import DoctorDashboard from "./components/Dashboards/Doctor/DoctorDashboard";
+
+import NurseDashboard from './components/Dashboards/NurseDashboard/pages/NurseDashboard';
+import NurseOverview from './components/Dashboards/NurseDashboard/pages/NurseOverview';
+import PatientMonitoring from './components/Dashboards/NurseDashboard/pages/PatientMonitoring';
 
 // New Dashboards from the merge
 import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
 import PatientDashboard from './components/Dashboards/PatientDashboard/pages/PatientDashboard';
 
-// ABDM Components (Make sure these are imported at the top!)
-// import { CreateAbha, VerifyAbha, LinkRecords, FetchRecords, UploadRecords, ConsentManager, DownloadAbha } from './pages/ABDM'; 
-
 import './App.css'
 
 function App() {
   return (
+    <UserProvider>
     <Router>
       <Routes>
         {/* Main Landing & Auth */}
@@ -34,6 +36,11 @@ function App() {
         <Route path="/reception-desk" element={<ReceptionistDashboardWrapper />} />
         <Route path="/doctor-portal" element={<DoctorDashboardWrapper />} />
         <Route path="/admin-dashboard" element={<AdminDashboard key={localStorage.getItem('hospital_id')} />} />
+        <Route path="/nurse-dashboard" element={<NurseDashboardWrapper />}>
+          <Route index element={<NurseOverview />} />
+          <Route path="overview" element={<NurseOverview />} />
+          <Route path="monitoring" element={<PatientMonitoring />} />
+        </Route>
         
         {/* Patient Portal with Nested Routing */}
         <Route path="/patient-dashboard/*" element={<PatientDashboard />} />
@@ -54,6 +61,7 @@ function App() {
         <Route path="/download-abha" element={<DownloadAbhaWrapper />} />
       </Routes>
     </Router>
+    </UserProvider>
   );
 }
 
@@ -82,6 +90,11 @@ const ReceptionistDashboardWrapper = () => {
 const DoctorDashboardWrapper = () => {
   const navigate = useNavigate();
   return <DoctorDashboard onLogout={() => navigate('/login')} />;
+};
+
+const NurseDashboardWrapper = () => {
+  const navigate = useNavigate();
+  return <NurseDashboard onLogout={() => navigate('/login')} />;
 };
 
 const AboutPageWrapper = () => { const n = useNavigate(); return <AboutPage onBack={() => n('/')} />; };

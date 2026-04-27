@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-
-// Feature Page Imports - Keeping everything in /pages for consistency
+import Header from '../components/Header';
+// Feature Page Imports
 import Overview from "./Overview";
 import PatientProfile from "./PatientProfile";
 import AppointmentManagement from "./AppointmentManagement";
@@ -11,20 +12,104 @@ import MedicalRecords from "./MedicalRecords";
 import Notifications from "./Notifications";
 
 const PatientDashboard = () => {
+  const deriveDisplayName = (data = {}) => {
+    const fromFullName = data.full_name?.trim();
+    if (fromFullName) return fromFullName;
+
+    const fromFirstLast = `${data.first_name || ''} ${data.last_name || ''}`.trim();
+    if (fromFirstLast) return fromFirstLast;
+
+    const fromEmail = data.email?.split('@')?.[0]?.trim();
+    if (fromEmail) return fromEmail;
+
+    const fromIdentifier = data.identifier?.trim();
+    if (fromIdentifier) return fromIdentifier;
+
+    return null;
+  };
+
+  const getInitialPatientInfo = () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user_data') || '{}');
+      return {
+        full_name: deriveDisplayName(storedUser) || 'Patient Name',
+        id: storedUser.id || '---',
+        uhid: storedUser.uhid || null,
+        is_2fa_enabled: Boolean(storedUser.is_2fa_enabled),
+      };
+    } catch {
+      return { full_name: 'Patient Name', id: '---', uhid: null, is_2fa_enabled: false };
+    }
+  };
+
+  const [patientInfo, setPatientInfo] = useState(getInitialPatientInfo);
+
+  const handleProfileUpdated = (updates) => {
+    setPatientInfo((prev) => ({
+      ...prev,
+      ...updates,
+    }));
+  };
+
+  useEffect(() => {
+    const fetchPatientHeaderData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        
+        // Safety check: if no token, don't even try the request
+        if (!token) {
+          console.warn("No token found, redirecting...");
+          window.location.href = '/login';
+          return;
+        }
+
+        const response = await axios.get('http://localhost:8000/api/v1/patient/profile', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setPatientInfo((prev) => ({
+          ...prev,
+          ...response.data,
+          full_name: deriveDisplayName(response.data) || prev.full_name || 'Patient Name',
+          id: response.data.id || prev.id,
+          uhid: response.data.uhid || prev.uhid,
+          is_2fa_enabled: response.data.is_2fa_enabled ?? prev.is_2fa_enabled,
+        }));
+
+      } catch (err) {
+        console.error("Failed to load header data", err);
+        // Handle 401 Unauthorized specifically
+        if (err.response?.status === 401) {
+          localStorage.removeItem('token'); // Clear invalid token
+          window.location.href = '/login';
+        }
+      }
+    };
+
+    fetchPatientHeaderData();
+  }, []);
+
   return (
     <div style={dashboardLayout}>
-      {/* Sidebar handles navigation via NavLinks */}
-      <div style={{ width: '260px', flexShrink: 0 }}>
-    <Sidebar />
-  </div>
+      {/* Sidebar remains fixed on the left */}
+      <div style={{ width: '280px', flexShrink: 0 }}>
+        <Sidebar userData={{ full_name: patientInfo.full_name }} />
+      </div>
       
       <div style={mainContent}>
+        {/* 🟢 FIXED: Adding the Header at the top of the content area */}
+        <Header
+          userData={{
+            full_name: patientInfo.full_name,
+            id: patientInfo.uhid || patientInfo.id,
+            is_2fa_enabled: patientInfo.is_2fa_enabled,
+          }}
+          onProfileUpdated={handleProfileUpdated}
+        />
         
         <div style={pageWrapper}>
           <Routes>
-            {/* Default to Overview when landing on /patient-dashboard */}
             <Route path="/" element={<Navigate to="overview" replace />} />
-            
             <Route path="overview" element={<Overview />} />
             <Route path="profile" element={<PatientProfile />} />
             <Route path="appointments" element={<AppointmentManagement />} />
@@ -38,10 +123,13 @@ const PatientDashboard = () => {
   );
 };
 
-// Layout Styles (Matching Admin Aesthetic)
+// ================== LAYOUT STYLES ==================
+
 const dashboardLayout = { 
   display: 'flex', 
-  minHeight: '100vh', 
+  height: '100vh',         
+  width: '100vw',
+  overflow: 'hidden',      
   backgroundColor: '#f8fafc',
   fontFamily: "'Inter', sans-serif" 
 };
@@ -50,14 +138,17 @@ const mainContent = {
   flex: 1, 
   display: 'flex', 
   flexDirection: 'column',
-  minWidth: 0,
-  borderLeft: '1px solid #e2e8f0' // 🔥 clean professional divider
+  height: '100vh',
+  overflowY: 'auto',       
+  msOverflowStyle: 'none', 
+  scrollbarWidth: 'none',  
 };
 
 const pageWrapper = { 
-  padding: '40px',              // keep spacing
+  padding: '40px',              
   backgroundColor: '#f8fafc',
-  width: '100%',                // full width
-  margin: 0                     // remove centering
+  width: '100%',                
+  margin: 0                     
 };
+
 export default PatientDashboard;

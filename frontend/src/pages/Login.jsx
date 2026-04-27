@@ -23,21 +23,20 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
     const { identifier, password, hospitalId } = formData;
 
     const loginData = {
-      identifier: identifier.trim(), // Removes the accidental space
+      identifier: identifier.trim(),
       password: password,
       hospital_id: hospitalId.trim(),
       role: role
     };
     try {
       localStorage.clear();
-      const isStaffOrAdmin = ['Admin', 'Staff', 'Receptionist'].includes(role);
+      const isStaffOrAdmin = ['Admin', 'Staff'].includes(role);
       const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
-        role: role,
-        identifier: formData.identifier,
-        password: formData.password,
-        hospital_id: (role === 'Admin' || role === 'Staff') ? formData.hospitalId : null
+        role: loginData.role,
+        identifier: loginData.identifier,
+        password: loginData.password,
+        hospital_id: isStaffOrAdmin ? loginData.hospital_id : null
       });
-  
       const { access_token, user } = response.data;
       
       // Store Session Data
@@ -58,10 +57,19 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
         navigate('/nex-master-control'); 
       } else if (normalizedRole === 'Admin') {
         navigate('/admin-dashboard');
-      } else if (normalizedRole === 'Staff') {
-        navigate('/staff-portal');
+      } else if (normalizedRole === 'Doctor') {
+        navigate('/doctor-portal');
+      } else if (normalizedRole === 'Nurse') {
+        navigate('/nurse-dashboard/overview');
       } else if (normalizedRole === 'Receptionist') {
         navigate('/reception-desk');
+      } else if (
+        normalizedRole === 'Staff' ||
+        normalizedRole === 'LabTechnician' ||
+        normalizedRole === 'Lab Technician' ||
+        normalizedRole === 'Pharmacist'
+      ) {
+        navigate('/doctor-portal');
       } else {
         navigate('/patient-dashboard/overview');
       }
@@ -112,7 +120,7 @@ const Login = ({ onForgotPassword, onSignupRedirect }) => {
 
         <form onSubmit={handleLogin} style={formStyle}>
           <AnimatePresence mode="wait">
-            {(role === 'Admin' || role === 'Staff') && (
+            {['Admin', 'Staff'].includes(role) && (
               <motion.div 
                 key="hosp-id"
                 initial={{ opacity: 0, height: 0 }} 
