@@ -8,40 +8,39 @@ export const UserProvider = ({ children }) => {
   const [profileImage, setProfileImage] = useState(() => 
     localStorage.getItem('patient_profile_image') || null
   );
-
-  // 2. Wrap the fetch in useCallback to keep the identity stable
+  const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'patient');
   const fetchPersistentImage = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
+   
+    // Logic: Select endpoint based on role
+    const endpoint = userRole === 'admin' 
+      ? 'http://localhost:8000/api/v1/staff/profile' 
+      : 'http://localhost:8000/api/v1/patient/profile';
 
     try {
       const res = await axios.get('http://localhost:8000/api/v1/patient/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (res.data.image_url) {
-        setProfileImage(res.data.image_url);
-        localStorage.setItem('patient_profile_image', res.data.image_url);
+      // 🟢 CHANGE THIS LINE: Match your backend key 'profile_url'
+      const imageUrl = res.data.profile_url || res.data.profile_url; 
+      
+      if (imageUrl) {
+        setProfileImage(imageUrl);
+        localStorage.setItem(`${userRole}_profile_image`, imageUrl);
       }
     } catch (err) {
-      // Silently fail or handle error - prevents console noise during dev
-      console.warn("NexHealth Vault: Profile sync deferred.");
+      console.warn("NexHealth: Profile sync deferred for", userRole);
     }
-  }, []);
-
+  }, [userRole])
   // 3. Sync on Mount
   useEffect(() => {
     fetchPersistentImage();
   }, [fetchPersistentImage]);
 
   // 4. Update localStorage only when profileImage actually changes
-  useEffect(() => {
-    if (profileImage) {
-      localStorage.setItem('patient_profile_image', profileImage);
-    } else {
-      localStorage.removeItem('patient_profile_image');
-    }
-  }, [profileImage]);
+ 
 
   return (
     <UserContext.Provider value={{ profileImage, setProfileImage }}>

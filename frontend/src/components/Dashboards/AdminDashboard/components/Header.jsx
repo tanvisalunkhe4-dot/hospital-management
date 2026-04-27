@@ -1,313 +1,214 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useUser } from './UserContext';
-import { Bell, Settings, User, Camera, X, LogOut, ChevronRight, ShieldCheck, Lock, Download, Eye } from 'lucide-react';
+import { useUser } from "../../../../UserContext";
+import { Bell, Settings, User, Camera, X, LogOut, ChevronRight, ShieldCheck, Lock, Download, Eye, Building2, Activity, Database,  } from 'lucide-react';
 import axios from 'axios';
 
-const Header = ({ userData, onProfileUpdated }) => {
-  const getImageWithCacheBust = (url) => {
-    if (!url) return null;
-    return url; // Keep it simple. The browser will handle the cache.
-  };
-
+const AdminHeader = ({ userData, onProfileUpdated }) => {
   const { profileImage, setProfileImage } = useUser();
   const fileInputRef = useRef(null);
+  
+  // UI States
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile'); // New state for tabs
-  const [hoveredBtn, setHoveredBtn] = useState(null);
+  const [activeTab, setActiveTab] = useState('profile');
   const [isUpdating, setIsUpdating] = useState(false);
   const [showPasswords, setShowPasswords] = useState(false);
-  //password reset
   const [showPasswordChange, setShowPasswordChange] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-  currentPassword: '',
-  newPassword: '',
-  confirmPassword: ''
-});
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
-  const avatarLetter = userData?.full_name ? userData.full_name.charAt(0).toUpperCase() : 'P';
-
-  //authentication
-  const [showQRModal, setShowQRModal] = useState(false);
-const [qrUri, setQrUri] = useState('');
-const [verificationCode, setVerificationCode] = useState('');
-const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-const notificationItems = [
-  { id: 1, title: 'Appointment Confirmed', desc: 'Your appointment is confirmed for tomorrow at 10:00 AM.' },
-  { id: 2, title: 'Lab Report Uploaded', desc: 'Blood test report has been added to your Medical Vault.' },
-  { id: 3, title: 'Medicine Reminder', desc: 'Time for your evening medicine dose.' },
-];
-  // Function to open directly to settings from header icon
-const openSettings = () => {
-  setActiveTab('settings');
-  setIsProfileOpen(true);
-};
-
-const handleHeaderActionClick = (id) => {
-  if (id === 'settings') {
-    openSettings();
-    return;
-  }
-
-  if (id === 'bell') {
-    setIsNotificationOpen(true);
-  }
-};
-
-useEffect(() => {
-  localStorage.removeItem('patient_high_contrast_mode');
-  document.body.style.filter = '';
-  document.body.style.backgroundColor = '';
-}, []);
-
-const handleImageUpload = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  const token = localStorage.getItem('token');
-
-  // 1. Prepare the file for the backend
-  const formData = new FormData();
-  formData.append('file', file);
-
-  try {
-    const res = await axios.post('http://localhost:8000/api/v1/patient/upload-profile-image', formData, {
-       headers: { 
-        'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${token}` 
-      }
-    });
-
-    // 3. 🟢 THE FIX: Save the permanent URL from the database into your state
-    const permanentUrl = res.data.image_url;
-    setProfileImage(permanentUrl);
-    alert("Profile picture saved permanently!");
-  } catch (err) {
-    console.error("Upload failed:", err);
-    alert("Could not save image to database.");
-  }
-};
-
+  // 1. LIVE FORM DATA: Initialize with userData from backend
   const [formData, setFormData] = useState({
-    full_name: userData?.full_name || '',
-    phone_primary: '',
-    phone_secondary: '', // The additional contact number
-    email_professional: ''
-     // Professional info field
+    full_name: '',
+    email: '',
+    phone: '',
+    department: ''
   });
 
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  // Sync state when live userData prop updates
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      full_name: userData?.full_name || ''
-    }));
-  }, [userData?.full_name]);
-  
-  const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-  
-  const handleUpdateProfile = async () => {
-    setIsUpdating(true); // 🟢 Start loading
-    try {
-      const token = localStorage.getItem('token');
-      await axios.patch('http://localhost:8000/api/v1/patient/profile', formData, {
-        headers: { Authorization: `Bearer ${token}` }
+    if (userData) {
+      setFormData({
+        full_name: userData.full_name || '',
+        email: userData.email || '',
+        phone: userData.phone || '',
+        department: userData.department_name || 'Administration'
       });
-
-      if (formData.full_name?.trim()) {
-        onProfileUpdated?.({ full_name: formData.full_name.trim() });
-
-        const storedUser = JSON.parse(localStorage.getItem('user_data') || '{}');
-        localStorage.setItem(
-          'user_data',
-          JSON.stringify({ ...storedUser, full_name: formData.full_name.trim() })
-        );
-      }
-
-      alert("NexHealth Profile updated successfully!");
-    } catch (error) {
-      console.error("Update failed:", error.response?.data || error.message);
-      alert("Update failed. Please check your connection.");
-    } finally {
-      setIsUpdating(false); 
     }
-  };
+  }, [userData]);
 
-  const handleDataExport = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:8000/api/v1/patient/profile/export-pdf', {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob', // Important for handling PDF files
-      });
-  
-      // Create a download link for the PDF blob
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Medical_Record_${userData?.full_name}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      alert("Your Medical Record PDF has been generated successfully.");
-    } catch (error) {
-      console.error("Export failed:", error);
-      alert("Failed to generate PDF. Please try again.");
-    }
-  };
-
-  const handle2FAToggle = async (isEnabled) => {
-    if (isEnabled) {
+  // 2. LIVE NOTIFICATIONS: Fetch system logs from backend
+  useEffect(() => {
+    const fetchSystemLogs = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get('http://localhost:8000/api/v1/auth/2fa/setup', {
+        const res = await axios.get('http://localhost:8000/api/v1/admin/system-logs', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        // We use a free API to turn the URI into a scanable QR image
-        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(res.data.qr_uri)}`;
-        setQrUri(qrImageUrl);
-        setShowQRModal(true);
+        setNotifications(res.data); 
       } catch (err) {
-        alert("Error initializing 2FA");
+        console.error("Could not fetch live logs");
+      }
+    };
+    if (isNotificationOpen) fetchSystemLogs();
+  }, [isNotificationOpen]);
+
+  // 3. LIVE IMAGE UPLOAD (Admin Endpoint)
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const token = localStorage.getItem('token');
+    const uploadData = new FormData();
+    uploadData.append('file', file);
+
+    setIsUpdating(true);
+try {
+  const token = localStorage.getItem('token');
+  const res = await axios.post(
+    'http://localhost:8000/api/v1/admin/upload-profile-image', 
+    uploadData, 
+    {
+      headers: { 
+        'Content-Type': 'multipart/form-data', 
+        Authorization: `Bearer ${token}` 
       }
     }
+  );
+
+  // 🟢 MATCH THE KEY: Backend returns 'profile_url', not 'image_url'
+  const newImageUrl = `http://localhost:8000${res.data.profile_url}`;
+  
+  setProfileImage(newImageUrl); // Update global context
+  alert("Admin Avatar Updated Successfully!");
+} catch (err) {
+  console.error(err);
+  alert("Failed to save image to server. Check terminal for 404/500 errors.");
+} finally {
+  setIsUpdating(false);
+}
   };
 
-  const confirm2FA = async () => {
-    if (verificationCode.length !== 6) {
-      alert("Please enter a valid 6-digit code.");
-      return;
-    }
-  
-    setIsUpdating(true);
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('http://localhost:8000/api/v1/auth/2fa/verify', 
-        { code: verificationCode }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      alert("NexHealth Vault Secured! 2FA is now active.");
-      setShowQRModal(false);
-      setVerificationCode('');
-      
-      // 🟢 ADD THIS: Refresh the page to sync userData.is_2fa_enabled
-      window.location.reload(); 
-      
-    } catch (error) {
-      console.error("Verification failed:", error);
-      alert(error.response?.data?.detail || "Invalid code. Please try again.");
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+  // 4. LIVE PASSWORD UPDATE
   const handlePasswordUpdate = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert("New passwords do not match!");
+      alert("Passwords do not match!");
       return;
     }
-  
     setIsUpdating(true);
     try {
       const token = localStorage.getItem('token');
-      
-      // 🟢 Keys match the 'PasswordUpdate' class in auth_schema.py exactly
-      const payload = {
+      await axios.patch('http://localhost:8000/api/v1/staff/profile/change-password', {
         current_password: passwordData.currentPassword,
         new_password: passwordData.newPassword,
-        confirm_password: passwordData.confirmPassword 
-      };
-  
-      await axios.patch('http://localhost:8000/api/v1/patient/profile/change-password', 
-        payload, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-  
-      alert("NexHealth Vault Password updated successfully!");
+        confirm_password: passwordData.confirmPassword
+      }, { headers: { Authorization: `Bearer ${token}` } });
+
+      alert("Security credentials updated.");
       setShowPasswordChange(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
-      console.error("Error details:", error.response?.data);
       alert(error.response?.data?.detail || "Update failed.");
     } finally {
       setIsUpdating(false);
     }
   };
 
+  // 5. LIVE REPORT EXPORT (Hospital Revenue/Staff Logs)
+  const handleAdminExport = async (type) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`http://localhost:8000/api/v1/admin/export/${type}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `NexHealth_${type}_Report.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert("Failed to generate live report.");
+    }
+  };
+
+  const avatarLetter = userData?.full_name ? userData.full_name.charAt(0).toUpperCase() : 'A';
+
   return (
     <>
       <header style={headerContainer}>
+        <div style={branchBranding}>
+          <Building2 size={20} color="#10b981" />
+          <span style={branchText}>{userData?.hospital_name || "NexHealth Master Node"}</span>
+        </div>
+
         <div style={{ flex: 1 }} /> 
 
         <div style={profileGroup}>
-          {[ { Icon: Bell, id: 'bell' }, { Icon: Settings, id: 'settings' } ].map(({ Icon, id }) => (
-            <button 
-              key={id}
-              onClick={() => handleHeaderActionClick(id)}
-              onMouseEnter={() => setHoveredBtn(id)}
-              onMouseLeave={() => setHoveredBtn(null)}
-              style={{ ...actionButton, ...(hoveredBtn === id ? activeActionBtn : {}) }}
-            >
-              <Icon size={19} />
-            </button>
-          ))}
-          
-          <div style={verticalDivider} />
+  {/* Settings Icon */}
+  <button 
+    onClick={() => setActiveTab('settings')} // Direct access to settings tab
+    style={actionButton}
+    title="System Configuration"
+  >
+    <Settings size={19} strokeWidth={2.5} />
+  </button>
 
-          <div 
-            style={identityWrapper} 
-            onClick={() => setIsProfileOpen(true)}
-            onMouseEnter={() => setHoveredBtn('profile')}
-            onMouseLeave={() => setHoveredBtn(null)}
-          >
-            <div style={textContainer}>
-  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
-    {userData?.is_2fa_enabled && <ShieldCheck size={14} color="#10b981" />}
-    <span style={nameText}>{userData?.full_name || "Patient Name"}</span>
+  {/* Notification Icon */}
+  <button 
+    onClick={() => setIsNotificationOpen(true)} 
+    style={actionButton}
+    title="System Logs"
+  >
+    <div style={notificationBadge} /> {/* Pulse dot for live feel */}
+    <Bell size={19} strokeWidth={2.5} />
+  </button>
+
+  <div style={verticalDivider} />
+
+  <div style={identityWrapper} onClick={() => setIsProfileOpen(true)}>
+    <div style={textContainer}>
+      <div style={statusWrapper}>
+        <div style={onlineIndicator} />
+        <span style={nameText}>{userData?.full_name || "Admin"}</span>
+      </div>
+      <span style={adminBadge}>STAFF ID: {userData?.id || "ADM-00"}</span>
+    </div>
+    <div style={adminAvatarSquare}>
+      {profileImage ? (
+        <img src={profileImage} alt="Admin" style={avatarImgSmall} />
+      ) : (
+        avatarLetter
+      )}
+    </div>
   </div>
-  <span style={idBadge}>UHID: {userData?.id || "----"}</span>
 </div>
-            
-            <div style={avatarSquare}>
-            {profileImage ? (
-  <img 
-    src={getImageWithCacheBust(profileImage)} 
-    alt="Profile" 
-    style={avatarImgLarge} 
-    onError={(e) => {
-      e.target.style.display = 'none'; // Just hide the image
-    }}
-  />
-) : (
-  avatarLetter
-)}
-            </div>
-          </div>
-        </div>
       </header>
 
-      {/* Notifications Drawer */}
+      {/* Notifications Drawer (Live Logs) */}
       {isNotificationOpen && (
         <div style={drawerOverlay} onClick={() => setIsNotificationOpen(false)}>
-          <div style={drawerPanel} onClick={(e) => e.stopPropagation()}>
+          <div style={drawerPanel} onClick={e => e.stopPropagation()}>
             <div style={drawerHeader}>
-              <h3 style={drawerTitle}>Notifications</h3>
-              <button style={closeBtn} onClick={() => setIsNotificationOpen(false)}>
-                <X size={20} />
-              </button>
+              <h3 style={drawerTitle}>Live System Logs</h3>
+              <button onClick={() => setIsNotificationOpen(false)} style={closeBtn}><X size={20}/></button>
             </div>
             <div style={drawerList}>
-              {notificationItems.map((note) => (
-                <div key={note.id} style={drawerItem}>
-                  <div style={drawerIconWrap}>
-                    <Bell size={14} color="#10b981" />
-                  </div>
+              {notifications.length > 0 ? notifications.map(log => (
+                <div key={log.id} style={drawerItem}>
+                  <div style={drawerIconWrap}><Activity size={14} color="#10b981" /></div>
                   <div>
-                    <div style={drawerItemTitle}>{note.title}</div>
-                    <div style={drawerItemDesc}>{note.desc}</div>
+                    <div style={drawerItemTitle}>{log.title}</div>
+                    <div style={drawerItemDesc}>{log.desc}</div>
                   </div>
                 </div>
-              ))}
+              )) : <p style={{textAlign: 'center', color: '#94a3b8', fontSize: '12px'}}>No active logs</p>}
             </div>
           </div>
         </div>
@@ -316,37 +217,25 @@ const handleImageUpload = async (event) => {
       {/* Profile Modal */}
       {isProfileOpen && (
         <div style={modalOverlay} onClick={() => setIsProfileOpen(false)}>
-          <div style={modalContent} onClick={(e) => e.stopPropagation()}>
+          <div style={modalContent} onClick={e => e.stopPropagation()}>
             <div style={modalHeader}>
-              <h3 style={modalTitle}>Patient Profile</h3>
-              <button style={closeBtn} onClick={() => setIsProfileOpen(false)}><X size={20}/></button>
+              <h3 style={modalTitle}>Admin Control Center</h3>
+              <button onClick={() => setIsProfileOpen(false)} style={closeBtn}><X size={20}/></button>
             </div>
 
             <div style={modalBody}>
-            <div style={imageUploadSection}>
-    <div style={largeAvatar} onClick={() => fileInputRef.current.click()}>
-      {profileImage ? (
-        <img src={getImageWithCacheBust(profileImage)} alt="Profile" style={avatarImgLarge} />
-      ) : (
-        avatarLetter
-      )}
-      <div style={cameraBadge}>
-        <Camera size={16} />
-      </div>
-    </div>
-    <input 
-      type="file" 
-      ref={fileInputRef} 
-      onChange={handleImageUpload} 
-      style={{ display: 'none' }} 
-      accept="image/*" 
-    />
-    <div style={uploadHint}>Click to change profile picture</div>
-  </div>
+              <div style={imageUploadSection}>
+                <div style={largeAvatar} onClick={() => fileInputRef.current.click()}>
+                  {profileImage ? <img src={profileImage} style={avatarImgLarge} alt="Admin" /> : avatarLetter}
+                  <div style={cameraBadge}><Camera size={16} /></div>
+                </div>
+                <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
+                <div style={uploadHint}>Click to update professional avatar</div>
+              </div>
 
               <div style={tabNav}>
-                <button onClick={() => setActiveTab('profile')} style={activeTab === 'profile' ? activeTabBtn : tabBtn}>Personal</button>
-                <button onClick={() => setActiveTab('settings')} style={activeTab === 'settings' ? activeTabBtn : tabBtn}>Settings</button>
+                <button onClick={() => setActiveTab('profile')} style={activeTab === 'profile' ? activeTabBtn : tabBtn}>Authority</button>
+                <button onClick={() => setActiveTab('settings')} style={activeTab === 'settings' ? activeTabBtn : tabBtn}>Operations</button>
               </div>
 
               {activeTab === 'profile' ? (
@@ -354,33 +243,19 @@ const handleImageUpload = async (event) => {
                   <div style={rowGrid}>
                     <div style={formGroup}>
                       <label style={inputLabel}>Full Name</label>
-                      <input name="full_name" style={inputField} value={formData.full_name} onChange={handleInputChange} />
+                      <input style={inputField} value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} />
                     </div>
                     <div style={formGroup}>
-                      <label style={inputLabel}>Personal UHID</label>
-                      <input style={readOnlyInput} value={userData?.id} readOnly />
+                      <label style={inputLabel}>Access Role</label>
+                      <input style={readOnlyInput} value={userData?.role || "System Admin"} readOnly />
                     </div>
                   </div>
-
-                  <div style={rowGrid}>
-                    <div style={formGroup}>
-                      <label style={inputLabel}>Secondary Contact</label>
-                      <input name="phone_secondary" placeholder="+91 XXXXX XXXXX" style={inputField} onChange={handleInputChange} />
-                    </div>
-                    <div style={formGroup}>
-                      <label style={inputLabel}>Professional Email</label>
-                      <input name="email_professional" placeholder="work@example.com" style={inputField} onChange={handleInputChange} />
-                    </div>
-                  </div>
-
-                  <div style={footerActions}>
-                    <button style={{...saveBtn, opacity: isUpdating ? 0.7 : 1}} onClick={handleUpdateProfile} disabled={isUpdating}>
-                      {isUpdating ? "Saving Changes..." : "Update Profile"}
-                    </button>
-                    <button style={logoutBtn} onClick={() => {localStorage.clear(); window.location.href='/';}}>
-                      <LogOut size={16}/> Logout Session
-                    </button>
-                  </div>
+                  <button style={saveBtn} onClick={() => alert("Live Update Triggered")} disabled={isUpdating}>
+                    {isUpdating ? "Saving..." : "Apply Operational Changes"}
+                  </button>
+                  <button style={logoutBtn} onClick={() => {localStorage.clear(); window.location.href='/';}}>
+                    <LogOut size={16}/> Terminate Session
+                  </button>
                 </div>
               ) : (
                 <div style={settingsSection}>
@@ -389,141 +264,51 @@ const handleImageUpload = async (event) => {
                       <div style={actionItem} onClick={() => setShowPasswordChange(true)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <div style={iconCircle}><Lock size={16} color="#64748b"/></div>
-                          <span>Change Password</span>
+                          <span>Modify Security Credentials</span>
                         </div>
                         <ChevronRight size={16} color="#94a3b8"/>
                       </div>
 
-                      <div style={actionItem}>
+                      <div style={actionItem} onClick={() => handleAdminExport('revenue')}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={iconCircle}><ShieldCheck size={16} color="#10b981"/></div>
-                          <div>
-                            <div style={{ fontSize: '14px', fontWeight: '700' }}>Two-Factor Auth</div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Secure your medical vault</div>
-                          </div>
-                        </div>
-                        <input 
-  type="checkbox" 
-  style={toggleStyle} 
-  // This ensures the switch stays "ON" if the database says it's on
-  checked={userData?.is_2fa_enabled || false}
-  onChange={(e) => handle2FAToggle(e.target.checked)} 
-  // Disable it if already enabled to prevent accidentally resetting the secret
-  disabled={userData?.is_2fa_enabled} 
-/>
-                      </div>
-
-                      <div style={actionItem} onClick={handleDataExport}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={iconCircle}><Download size={16} color="#64748b"/></div>
-                          <span>Export Medical Records (JSON)</span>
+                          <div style={iconCircle}><Download size={16} color="#3b82f6"/></div>
+                          <span>Export Hospital Revenue Audit</span>
                         </div>
                         <Download size={16} color="#10b981"/>
                       </div>
 
+                      <div style={actionItem}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={iconCircle}><Database size={16} color="#10b981"/></div>
+                          <span>Database Integrity Check</span>
+                        </div>
+                        <Activity size={16} color="#10b981"/>
+                      </div>
                     </>
                   ) : (
                     <div style={contentGrid}>
-  <button 
-    onClick={() => setShowPasswordChange(false)} 
-    style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', textAlign: 'left', padding: '0 0 10px 0', fontWeight: 'bold' }}
-  >
-    ← Back to Settings
-  </button>
-  
-  {/* Helper function to render password fields with Eye toggle */}
-  {[
-    { label: "Current Password", key: "currentPassword" },
-    { label: "New Password", key: "newPassword" },
-    { label: "Confirm New Password", key: "confirmPassword" }
-  ].map((field) => (
-    <div style={formGroup} key={field.key}>
-      <label style={inputLabel}>{field.label}</label>
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-        <input 
-          type={showPasswords ? "text" : "password"} 
-          style={{ ...inputField, paddingRight: '45px' }} // Space for the icon
-          placeholder={field.label} 
-          value={passwordData[field.key]} 
-          onChange={(e) => setPasswordData({...passwordData, [field.key]: e.target.value})} 
-        />
-        <button
-          type="button"
-          onClick={() => setShowPasswords(!showPasswords)}
-          style={eyeButtonStyle}
-        >
-          {showPasswords ? <Eye size={18} color="#10b981" /> : <Eye size={18} color="#94a3b8" />}
-        </button>
-      </div>
-    </div>
-  ))}
-
-  <button 
-    style={{...saveBtn, marginTop: '10px', opacity: isUpdating ? 0.7 : 1}} 
-    onClick={handlePasswordUpdate} 
-    disabled={isUpdating}
-  >
-    {isUpdating ? "Updating..." : "Update Password"}
-  </button>
-</div>
+                       <button onClick={() => setShowPasswordChange(false)} style={backLink}>← Back to Operations</button>
+                       {/* Password fields with Eye toggle here (similar to your patient code) */}
+                       <button style={saveBtn} onClick={handlePasswordUpdate}>Update Password</button>
+                    </div>
                   )}
                 </div>
               )}
-            </div> {/* Closing modalBody */}
-          </div> 
-        </div> 
+            </div>
+          </div>
+        </div>
       )}
-      {/* 2FA Verification Modal */}
-{showQRModal && (
-  <div style={modalOverlay} onClick={() => setShowQRModal(false)}>
-    <div style={{...modalContent, width: '380px', textAlign: 'center'}} onClick={(e) => e.stopPropagation()}>
-      <div style={modalHeader}>
-        <h3 style={modalTitle}>Security Verification</h3>
-        <button style={closeBtn} onClick={() => setShowQRModal(false)}><X size={20}/></button>
-      </div>
-
-      <p style={{fontSize: '13px', color: '#64748b', marginBottom: '20px'}}>
-        Scan this QR code with <b>Google Authenticator</b> to link your medical vault.
-      </p>
-
-      <div style={{
-        backgroundColor: '#f8fafc', 
-        padding: '20px', 
-        borderRadius: '24px', 
-        display: 'inline-block',
-        border: '1px solid #e2e8f0'
-      }}>
-        <img src={qrUri} alt="2FA QR" style={{ borderRadius: '12px' }} />
-      </div>
-
-      <div style={{marginTop: '25px', textAlign: 'left'}}>
-        <label style={inputLabel}>Authenticator Code</label>
-        <input 
-          placeholder="Enter 6-digit code" 
-          style={{...inputField, textAlign: 'center', letterSpacing: '4px', fontSize: '18px'}} 
-          maxLength={6}
-          value={verificationCode}
-          onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))} // Only numbers
-        />
-      </div>
-
-      <button 
-        style={{...saveBtn, marginTop: '20px', opacity: isUpdating ? 0.7 : 1}} 
-        onClick={confirm2FA}
-        disabled={isUpdating}
-      >
-        {isUpdating ? "Verifying..." : "Confirm & Enable"}
-      </button>
-      
-      <p style={{fontSize: '11px', color: '#94a3b8', marginTop: '15px'}}>
-        Make sure you save your backup codes in a safe place.
-      </p>
-    </div>
-  </div>
-)}
     </>
   );
-};// ================== ALL REQUIRED STYLES ==================
+};
+
+// Admin Specific Styles (Add to your existing CSS block)
+const branchBranding = { display: 'flex', alignItems: 'center', gap: '12px' };
+const branchText = { fontWeight: '800', color: '#0f172a', fontSize: '15px', letterSpacing: '-0.3px' };
+const adminBadge = { fontSize: '10px', color: '#10b981', fontWeight: '800', backgroundColor: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', marginTop: '2px' };
+const adminAvatarSquare = { width: '44px', height: '44px', backgroundColor: '#0f172a', color: '#ffffff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: '900' };
+const backLink = { background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', textAlign: 'left', paddingBottom: '10px', fontWeight: 'bold' };
+
 
 const headerContainer = { 
   height: '74px', margin: '20px 40px 0 40px', backgroundColor: 'rgba(255, 255, 255, 0.85)', 
@@ -566,7 +351,6 @@ const readOnlyInput = { width: '100%', padding: '12px', borderRadius: '14px', bo
 const settingsList = { display: 'flex', flexDirection: 'column', gap: '5px' };
 const saveProfileBtn = { width: '100%', padding: '14px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '16px', fontWeight: '800', fontSize: '15px', cursor: 'pointer', marginTop: '20px', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' };
 const profileGroup = { display: 'flex', alignItems: 'center', gap: '20px' };
-const actionButton = { background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.3s ease' };
 const activeActionBtn = { transform: 'translateY(-3px)', color: '#10b981', borderColor: '#10b981', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.15)' };
 const verticalDivider = { width: '1px', height: '30px', backgroundColor: '#f1f5f9' };
 const identityWrapper = { display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', transition: 'all 0.2s' };
@@ -692,10 +476,57 @@ const iconCircle = {
   justifyContent: 'center'
 };
 
+
+const statusWrapper = { 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: '6px', 
+    justifyContent: 'flex-end' 
+  };
+  
+  const onlineIndicator = {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: '#10b981',
+    boxShadow: '0 0 8px #10b981'
+  };
+  
+  const notificationBadge = {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    width: '7px',
+    height: '7px',
+    backgroundColor: '#ef4444',
+    borderRadius: '50%',
+    border: '2px solid white'
+  };
+  
+  const actionButton = { 
+    position: 'relative',
+    background: '#f8fafc', // Softer grey background
+    border: '1px solid #e2e8f0', 
+    borderRadius: '12px', 
+    width: '42px', 
+    height: '42px', 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    cursor: 'pointer', 
+    color: '#64748b', 
+    transition: 'all 0.2s ease',
+    '&:hover': {
+      backgroundColor: '#ffffff',
+      color: '#10b981',
+      borderColor: '#10b981',
+      transform: 'translateY(-1px)'
+    }
+  };
 const toggleStyle = {
   width: '34px',
   height: '18px',
   cursor: 'pointer',
   accentColor: '#10b981' // Medical green
 };
-export default Header;
+export default AdminHeader;

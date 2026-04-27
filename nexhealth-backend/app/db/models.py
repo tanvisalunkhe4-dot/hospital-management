@@ -69,6 +69,7 @@ class Patient(Base):
     hashed_password = Column(String, nullable=False)
     address = Column(String, nullable=True)
     visit_type = Column(String, nullable=True) # e.g., OPD, Emergency
+    profile_url = Column(String, nullable=True, default="/static/default-patient.png")
     doctor_name = Column(String, nullable=True)
     status = Column(String, default="Registered")
     id = Column(Integer, primary_key=True, index=True)
@@ -147,6 +148,7 @@ class Staff(Base):
     staff_id = Column(String, unique=True, index=True) # e.g. DOC-001
     full_name = Column(String)
     email = Column(String, unique=True, index=True)
+    profile_url = Column(String, nullable=True, default="/static/default-avatar.png")
     hashed_password = Column(String)
     role = Column(String) # 'Doctor', 'Nurse', 'Pharmacist', etc.
     dept_id = Column(Integer, ForeignKey("departments.id"))   

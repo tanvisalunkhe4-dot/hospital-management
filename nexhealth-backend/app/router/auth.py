@@ -15,13 +15,20 @@ from app.schemas.auth_schema import PasswordChange
 from app.dependancy import get_current_active_user
 import os
 import pyotp
+from app.dependancy import get_current_active_user
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
-
+async def get_current_admin(current_user: User = Depends(get_current_active_user)):
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="The user does not have administrative privileges"
+        )
+    return current_user
 
 def get_password_hash(password: str):
     return PWD_CONTEXT.hash(password)
@@ -215,7 +222,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     # --- 1. HOSPITAL VALIDATION ---
     # Triggered for hospital-linked workforce roles
-    if payload.role in ['Admin', 'Staff']:
+    if payload.role in ['Admin', 'Staff', 'Receptionist', 'Nurse']:
         if not payload.hospital_id:
             raise HTTPException(status_code=400, detail="Hospital ID required")
 
@@ -290,16 +297,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     
     # --- 4. ROLE PERMISSIONS GUARD ---
     # Ensure the user is logging in with the correct role selected in the UI
-    if payload.role == "Staff":
-        if user.role not in [
-            "Staff",
-            "Doctor",
-            "Nurse",
-            "Receptionist",
-            "Lab Technician",
-            "LabTechnician",
-            "Pharmacist",
-        ]:
+    if payload.role in ["Staff", "Receptionist", "Nurse"]:
+        if user.role not in ["Staff", "Receptionist", "Nurse"]:
             raise HTTPException(status_code=403, detail="Access denied: Invalid staff role")
     
     elif user.role != payload.role:

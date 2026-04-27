@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
 from app.schemas import DepartmentOut, DepartmentCreate
 from ..db.session import get_db
 from ..db import models
+from app.router.auth import get_current_admin
 from ..schemas.auth_schema import StaffCreate, StaffResponse, StaffUpdate
 from ..utils import pwd_context 
 from app import schemas
@@ -20,6 +21,7 @@ class SecurityUpdateSchema(BaseModel):
     mfa_enabled: Optional[bool] = None
     ip_whitelist_enabled: Optional[bool] = None
     session_timeout: Optional[int] = None
+
 
 
 # --- DEPARTMENT ENDPOINTS ---
@@ -476,3 +478,44 @@ def update_system_config(hospital_id: int, updates: dict, db: Session = Depends(
             
     db.commit()
     return {"message": "Infrastructure Synchronized"}
+
+
+# --- app/router/admin.py (Bottom of the file) ---
+
+@router.get("/profile")
+async def get_staff_profile(current_user: models.User = Depends(get_current_admin)):
+    """Fetches live Admin/Staff data from the database."""
+    return {
+        "id": current_user.id,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+        # Ensure 'profile_image_url' exists in your User model
+        "profile_url": current_user.profile_image_url, 
+        "role": "Super Admin"
+    }
+
+@router.post("/upload-profile-image")
+async def upload_staff_image(
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """Handles live image uploading to your static/profiles directory."""
+    # 1. Create the directory if it doesn't exist
+    upload_dir = "static/profiles"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # 2. Generate a unique filename
+    file_extension = file.filename.split(".")[-1]
+    file_name = f"user_{current_user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.{file_extension}"
+    file_path = os.path.join(upload_dir, file_name)
+
+    # 3. Save the file to disk
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    # 4. Update the user's profile URL in the database
+    current_user.profile_image_url = f"/{file_path}"
+    db.commit()
+
+    return {"status": "success", "profile_url": current_user.profile_image_url}

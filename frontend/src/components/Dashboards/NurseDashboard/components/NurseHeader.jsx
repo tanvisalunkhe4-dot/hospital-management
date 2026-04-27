@@ -1,12 +1,11 @@
-import React from 'react';
-import DashboardHeader from '../../../common/DashboardHeader';
-
-const NurseHeader = () => (
-  <DashboardHeader
-    title="Nurse Dashboard"
-    subtitle="Patient monitoring, ward coverage and shift updates"
-    fallbackRole="Nurse"
-  />
-);
+import React from "react";
+// 1. Change this line to import the new file
+import AdminHeader from "../../AdminDashboard/components/Header";
+const NurseHeader = ({ userData, onProfileUpdated }) => {
+  return (
+    // 2. Change the component name here as well
+    <AdminHeader userData={userData} onProfileUpdated={onProfileUpdated} />
+  );
+};
 
 export default NurseHeader;

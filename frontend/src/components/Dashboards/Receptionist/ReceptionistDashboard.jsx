@@ -11,7 +11,6 @@ import theme from '../../../theme/theme';
 import PatientRegistration from './PatientRegistration';
 import BookAppointment from './BookAppointment';
 import Billing from './Billing';
-import DashboardHeader from '../../common/DashboardHeader';
 
 const ReceptionistDashboard = () => {
   const [currentView, setCurrentView] = useState('overview');

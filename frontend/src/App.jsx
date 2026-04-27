@@ -6,7 +6,7 @@ import AboutPage from './pages/AboutPage';
 import FeaturesPage from './pages/FeaturesPage';
 import SolutionsPage from './pages/SolutionsPage';
 import SuperAdminDashboard from './components/Dashboards/SuperAdminDashboard';
-import { UserProvider } from './components/Dashboards/PatientDashboard/components/UserContext';
+import { UserProvider } from './UserContext';
 // Portals you've been working on
 import ReceptionistDashboard from './components/Dashboards/Receptionist/ReceptionistDashboard';
 import DoctorDashboard from "./components/Dashboards/Doctor/DoctorDashboard";
@@ -17,6 +17,8 @@ import PatientMonitoring from './components/Dashboards/NurseDashboard/pages/Pati
 
 // New Dashboards from the merge
 import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
+// ✅ Correct import path based on the structure provided
+import AdminHeader from "./components/Dashboards/AdminDashboard/components/Header";
 import PatientDashboard from './components/Dashboards/PatientDashboard/pages/PatientDashboard';
 
 import './App.css'

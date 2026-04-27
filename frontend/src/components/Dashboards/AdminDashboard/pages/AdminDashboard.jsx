@@ -15,7 +15,7 @@ import StaffRegistry from "./StaffRegistry";
 import DeptNodes from "./DeptNodes";
 import SystemConfig from "./SystemConfig";
 import SecurityManagement from "./SecurityManagement";
-import DashboardHeader from "../../../common/DashboardHeader";
+import AdminHeader from "../components/Header";
 const AdminDashboard = () => {
 
   const [hospitalId, setHospitalId] = useState(localStorage.getItem("hospital_id"));
@@ -194,11 +194,11 @@ const AdminDashboard = () => {
 
       {/* MAIN */}
       <main style={mainContentStyle}>
-        <DashboardHeader
-          title={activeTab === "Dashboard" ? "Admin Dashboard" : activeTab}
-          subtitle={`Hospital ID: ${localStorage.getItem("hospital_id") || "N/A"}`}
-          fallbackRole="Admin"
-        />
+      <AdminHeader
+  title={activeTab === "Dashboard" ? "Admin Dashboard" : activeTab}
+  subtitle={`Hospital ID: ${localStorage.getItem("hospital_id") || "N/A"}`}
+  fallbackRole="Admin"
+/>
 
         {/* ================= VIEWS ================= */}
 

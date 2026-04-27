@@ -6,7 +6,7 @@ import {
   CheckCircle2, ShieldAlert
 } from 'lucide-react';
 import axios from 'axios';
-import { useUser } from "../components/UserContext";
+import { useUser } from "../../../../UserContext";
 
 const DataRow = ({ label, value, icon: Icon, isCritical }) => (
   <div style={infoRow}>
