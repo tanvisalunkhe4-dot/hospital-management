@@ -1,24 +1,38 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import date # Added for today's filtering
+from datetime import date
 
-# Absolute imports matching the project structure
+# Absolute imports matching project structure
 from app.db import models
 from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
+# --- HELPER: STAFF ID LOOKUP ---
+def resolve_staff_to_user_id(staff_id: str, db: Session):
+    """
+    Production-level helper to find the internal User ID 
+    based on the professional Staff ID provided by the UI.
+    """
+    user = db.query(models.User).filter(models.User.staff_id == staff_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"Professional profile for {staff_id} not found."
+        )
+    return user.id
+
 # --- 1. THE WAITING ROOM (Today's Queue) ---
-@router.get("/queue/{doctor_id}")
-def get_doctor_queue(doctor_id: int, db: Session = Depends(get_db)):
+@router.get("/queue/{staff_id}")
+def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)):
     """
-    Fetches all patients currently 'Checked In' for a specific doctor
-    ONLY for the current date. Resolves conflicts with past test data.
+    Fetches patients 'Checked In' for a specific staff member TODAY.
+    Resolves the Staff ID to an Internal ID to filter appointments.
     """
+    internal_id = resolve_staff_to_user_id(staff_id, db)
     today = date.today()
     
-    # Joining with Patient to get names directly for the queue UI
     queue = db.query(
         models.Appointment.id,
         models.Appointment.appointment_time,
@@ -28,9 +42,9 @@ def get_doctor_queue(doctor_id: int, db: Session = Depends(get_db)):
         models.Patient.phone_number
     ).join(models.Patient, models.Appointment.patient_id == models.Patient.id)\
      .filter(
-        models.Appointment.doctor_id == doctor_id,
+        models.Appointment.doctor_id == internal_id,
         models.Appointment.status == "Checked In",
-        models.Appointment.appointment_date == today # Strict Today Filter
+        models.Appointment.appointment_date == today
     ).all()
     
     return [
@@ -43,13 +57,13 @@ def get_doctor_queue(doctor_id: int, db: Session = Depends(get_db)):
         } for r in queue
     ]
 
-# --- 2. MY SCHEDULE (Today's Full Agenda) ---
-@router.get("/schedule/{doctor_id}")
-def get_doctor_schedule(doctor_id: int, db: Session = Depends(get_db)):
+# --- 2. MY SCHEDULE (Full Agenda) ---
+@router.get("/schedule/{staff_id}")
+def get_doctor_schedule(staff_id: str, db: Session = Depends(get_db)):
     """
-    Shows all appointments scheduled for the doctor today, 
-    regardless of whether they have checked in yet.
+    Shows all appointments for this professional Staff ID for today.
     """
+    internal_id = resolve_staff_to_user_id(staff_id, db)
     today = date.today()
     
     schedule = db.query(
@@ -60,7 +74,7 @@ def get_doctor_schedule(doctor_id: int, db: Session = Depends(get_db)):
         models.Patient.last_name
     ).join(models.Patient, models.Appointment.patient_id == models.Patient.id)\
      .filter(
-        models.Appointment.doctor_id == doctor_id,
+        models.Appointment.doctor_id == internal_id,
         models.Appointment.appointment_date == today
     ).order_by(models.Appointment.appointment_time.asc()).all()
     
@@ -77,7 +91,7 @@ def get_doctor_schedule(doctor_id: int, db: Session = Depends(get_db)):
 @router.post("/consultation/start/{appointment_id}")
 def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     """
-    Moves a patient from 'Checked In' to 'In Consultation'.
+    Transitions appointment to 'In Consultation' status.
     """
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     
@@ -89,12 +103,11 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     
     return {"status": "success", "message": f"Started visit for appointment {appointment_id}"}
 
-# --- 4. MEDICAL RECORDS (Historical Archive) ---
+# --- 4. MEDICAL RECORDS (Archive) ---
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
     """
-    Fetches all historical records. No date filter here because 
-    doctors need to see the full patient history.
+    Fetches all historical records with patient details joined.
     """
     results = db.query(
         models.MedicalRecord.id,
