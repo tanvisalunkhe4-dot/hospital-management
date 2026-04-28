@@ -33,7 +33,7 @@ const Login = ({ onSignupRedirect, onForgotPassword }) => {
     try {
       localStorage.clear();
 
-      const isStaffOrAdmin = ['Admin', 'Staff'].includes(role);
+      const isStaffOrAdmin = ['Admin', 'Staff', 'Doctor'].includes(role);
 
       const response = await axios.post(
         'http://localhost:8000/api/v1/auth/login',
@@ -136,7 +136,7 @@ const Login = ({ onSignupRedirect, onForgotPassword }) => {
 
         <form onSubmit={handleLogin} style={formStyle}>
           <AnimatePresence mode="wait">
-            {['Admin', 'Staff'].includes(role) && (
+            {['Admin', 'Staff', 'Doctor'].includes(role) && (
               <motion.div
                 key="hosp-id"
                 initial={{ opacity: 0, height: 0 }}

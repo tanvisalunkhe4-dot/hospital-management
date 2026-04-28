@@ -232,28 +232,55 @@ def delete_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)
 
 @router.patch("/appointments/{appt_id}/check-in")
 def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
-    # 1. Find the appointment
+    """
+    Updates appointment status to 'Checked In'.
+    This moves the patient from the Receptionist's 'Pending' list 
+    directly into the Doctor's 'Waiting Room' queue.
+    """
+    # 1. Find the appointment ensuring it belongs to the correct hospital
     appt = db.query(models.Appointment).filter(
         models.Appointment.id == appt_id, 
         models.Appointment.hospital_id == hosp_id
     ).first()
 
     if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        logger.warning(f"Check-in failed: Appointment {appt_id} not found for Hospital {hosp_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Appointment record not found."
+        )
+
+    # Prevent double check-in if already in consultation or completed
+    if appt.status in ["In Consultation", "Completed"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot check-in. Patient is already {appt.status}."
+        )
 
     try:
         # 2. Update the status string to exactly "Checked In"
-        # This matches your React filter: a.status === 'Checked In'
+        # The Doctor's portal listens for this specific string
         appt.status = "Checked In"
         
+        # 3. Save to database
         db.commit()
         db.refresh(appt)
-        return {"message": "Patient checked in successfully", "status": appt.status}
+        
+        logger.info(f"SUCCESS: Patient {appt.patient_id} checked in for Doctor {appt.doctor_id}")
+        
+        return {
+            "message": "Patient checked in successfully", 
+            "status": appt.status,
+            "appointment_id": appt.id
+        }
+        
     except Exception as e:
         db.rollback()
-        logger.error(f"CHECK-IN ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error during check-in.")
-        
+        logger.error(f"DATABASE ERROR during check-in: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Failed to update check-in status due to a database error."
+        )
 @router.patch("/appointments/{appt_id}/reschedule")
 def reschedule_appointment(
     appt_id: int, 
