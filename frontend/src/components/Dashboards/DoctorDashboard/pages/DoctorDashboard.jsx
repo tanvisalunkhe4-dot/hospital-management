@@ -51,13 +51,13 @@ const DoctorDashboard = ({ onLogout }) => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [records, setRecords] = useState([]);
 
-  // --- DYNAMIC USER DATA ---
-  // Pulling the login info set up by the Login.jsx component
+// --- DYNAMIC USER DATA ---
+ // --- DYNAMIC USER DATA ---
   const userData = JSON.parse(localStorage.getItem('user_data'));
-  const doctorName = userData?.last_name || "Doctor"; 
-  const doctorId = userData?.id || 1;
-
-  // --- FETCH MEDICAL RECORDS ---
+  
+  // Use staff_id (the string identifier) for the API call
+  const activeStaffId = userData?.staff_id; 
+  const doctorName = userData?.full_name || "Doctor";
   useEffect(() => {
     if (activeTab === 'records') {
       fetch('http://localhost:8000/api/v1/doctor/medical-records/all')

@@ -24,39 +24,32 @@ def resolve_staff_to_user_id(staff_id: str, db: Session):
     return user.id
 
 # --- 1. THE WAITING ROOM (Today's Queue) ---
+# app/api/v1/doctor.py
+
 @router.get("/queue/{staff_id}")
 def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)):
-    """
-    Fetches patients 'Checked In' for a specific staff member TODAY.
-    Resolves the Staff ID to an Internal ID to filter appointments.
-    """
-    internal_id = resolve_staff_to_user_id(staff_id, db)
-    today = date.today()
+    # 1. Get the doctor's name directly from the Staff table
+    doctor_profile = db.query(models.Staff).filter(models.Staff.staff_id == staff_id).first()
     
+    if not doctor_profile:
+        raise HTTPException(status_code=404, detail="Doctor profile not found")
+
+    # 2. Filter appointments by this doctor's name and 'Checked-in' status
+    # This connects the Receptionist's action to the Doctor's view
     queue = db.query(
         models.Appointment.id,
         models.Appointment.appointment_time,
         models.Appointment.reason,
-        models.Patient.first_name,
-        models.Patient.last_name,
-        models.Patient.phone_number
+        (models.Patient.first_name + " " + models.Patient.last_name).label("patient_name"),
+        models.Patient.id.label("patient_id")
     ).join(models.Patient, models.Appointment.patient_id == models.Patient.id)\
      .filter(
-        models.Appointment.doctor_id == internal_id,
-        models.Appointment.status == "Checked In",
-        models.Appointment.appointment_date == today
-    ).all()
-    
-    return [
-        {
-            "id": r.id,
-            "patient_name": f"{r.first_name} {r.last_name}",
-            "time": r.appointment_time.strftime("%H:%M") if r.appointment_time else "N/A",
-            "reason": r.reason,
-            "phone": r.phone_number
-        } for r in queue
-    ]
+         models.Appointment.doctor_name == doctor_profile.full_name,
+         models.Appointment.status == "Checked-in",
+         models.Appointment.appointment_date == date.today()
+     ).all()
 
+    return queue
 # --- 2. MY SCHEDULE (Full Agenda) ---
 @router.get("/schedule/{staff_id}")
 def get_doctor_schedule(staff_id: str, db: Session = Depends(get_db)):

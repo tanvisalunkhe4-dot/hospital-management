@@ -469,3 +469,26 @@ def update_patient_profile(
         db.rollback()
         logger.error(f"UPDATE ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Database update failed: {str(e)}")
+
+    # --- DOCTOR LOOKUP FOR APPOINTMENTS ---
+@router.get("/doctors/{hosp_id}")
+def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches all staff members with the role 'Doctor' for a specific hospital.
+    """
+    doctors = db.query(models.Staff).filter(
+        models.Staff.hospital_id == hosp_id,
+        models.Staff.role.ilike("Doctor")
+    ).all()
+    
+    if not doctors:
+        return []
+        
+    return [
+        {
+            "staff_id": doc.staff_id,
+            "full_name": doc.full_name,
+            # If specialization doesn't exist, we use a fallback or remove it
+            "specialization": getattr(doc, 'specialization', 'General Physician') 
+        } for doc in doctors
+    ]
