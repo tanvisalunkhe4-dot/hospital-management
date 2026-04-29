@@ -27,7 +27,8 @@ class PatientBase(BaseModel):
     emergency_relation: Optional[str] = None
     insurance_provider: Optional[str] = None
     policy_number: Optional[str] = None
-   
+    email: Optional[EmailStr] = None
+
 
     # Legacy fields
     first_name: Optional[str] = None
