@@ -492,3 +492,28 @@ def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
             "specialization": getattr(doc, 'specialization', 'General Physician') 
         } for doc in doctors
     ]
+
+# In app/router/receptionist.py
+
+@router.patch("/appointments/{appt_id}/approve")
+def approve_appointment_request(
+    appt_id: int, 
+    hosp_id: int, 
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch the appointment
+    appt = db.query(models.Appointment).filter(
+        models.Appointment.id == appt_id,
+        models.Appointment.hospital_id == hosp_id
+    ).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment request not found")
+
+    # 2. Update status to Scheduled
+    appt.status = "Scheduled"
+    
+    db.commit()
+    db.refresh(appt)
+    
+    return {"message": "Appointment approved successfully", "status": appt.status}

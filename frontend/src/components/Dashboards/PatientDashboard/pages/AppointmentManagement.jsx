@@ -11,10 +11,10 @@ import axios from 'axios';
 
 const StatusBadge = ({ status }) => {
   const styles = {
-    PENDING: { bg: '#fff7ed', color: '#c2410c', icon: Clock, label: 'Awaiting Approval' },
-    CONFIRMED: { bg: '#f0fdf4', color: '#166534', icon: CheckCircle2, label: 'Confirmed' },
-    CANCELLED: { bg: '#fef2f2', color: '#991b1b', icon: XCircle, label: 'Cancelled' },
-    RESCHEDULED: { bg: '#eff6ff', color: '#1e40af', icon: Clock, label: 'Rescheduled' }
+    'Pending': { bg: '#fff7ed', color: '#c2410c', icon: Clock, label: 'Awaiting Approval' },
+    'Scheduled': { bg: '#f0fdf4', color: '#166534', icon: CheckCircle2, label: 'Confirmed' }, // "Confirmed" UI for "Scheduled" DB status
+    'Cancelled': { bg: '#fef2f2', color: '#991b1b', icon: XCircle, label: 'Cancelled' },
+    'Rescheduled': { bg: '#eff6ff', color: '#1e40af', icon: Clock, label: 'Rescheduled' }
   };
 
   const config = styles[status] || styles.PENDING;
@@ -56,8 +56,7 @@ useEffect(() => {
       const token = localStorage.getItem('token');
       // Replace with your actual hospital ID logic 
       // (e.g., from your auth context or localStorage)
-      const hospId = 1; 
-
+      const hospId = localStorage.getItem('hospital_id') || 1;
       if (!token) return;
 
       const [doctorRes, apptRes] = await Promise.all([
@@ -81,25 +80,54 @@ useEffect(() => {
 
   loadData();
 }, []);
-  const handleBooking = async (e) => {
-    e.preventDefault();
+const handleBooking = async (e) => {
+  e.preventDefault();
+  try {
+    const token = localStorage.getItem('token');
+    
+    // 🟢 FIX 1: Map your form data to match the backend Schema keys
+    const payload = {
+      hospital_id: 1, // Ensure this is dynamic if needed
+      doctor_name: doctors.find(d => d.staff_id == formData.doctor_id)?.full_name || "",
+      appointment_date: formData.preferred_date,
+      appointment_time: formData.preferred_time,
+      reason: formData.reason
+    };
+
+    // 🟢 FIX 2: Change URL to match your backend router path
+    await axios.post('http://localhost:8000/api/v1/patient/request-appointment', payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    alert("Request sent to Receptionist!");
+    setView('list');
+
+    // 🟢 FIX 3: Correct refresh URL
+    const apptRes = await axios.get('http://localhost:8000/api/v1/patient/appointments', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setAppointments(apptRes.data);
+  } catch (err) {
+    console.error("Booking failed:", err.response?.data || err.message);
+    alert("Error sending request. Check console for details.");
+  }
+};
+
+const handleCancel = async (apptId) => {
+  if (window.confirm("Do you want to withdraw this request?")) {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:8000/api/v1/appointments/request', formData, {
+      await axios.delete(`http://localhost:8000/api/v1/patient/appointments/${apptId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert("Request sent to Receptionist!");
-      setView('list');
       // Refresh list
-      const apptRes = await axios.get('http://localhost:8000/api/v1/appointments/my-requests', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setAppointments(apptRes.data);
+      setAppointments(prev => prev.filter(a => a.id !== apptId));
     } catch (err) {
-      console.error("Booking failed:", err);
-      alert("Error sending request. Please check your connection.");
+      console.error("Cancel failed:", err);
     }
-  };
+  }
+};
+
 
   if (loading) return (
     <div style={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
@@ -164,7 +192,17 @@ useEffect(() => {
                   <div style={cardFooter}>
                     <button style={textBtn}>View Details</button>
                     {appt.status === 'PENDING' && <button style={cancelLink}>Cancel Request</button>}
-                  </div>
+                  </div><div style={dateTimeBar}>
+  {/* 🟢 Updated to match your AppointmentResponse schema */}
+  <div style={dataItem}><Calendar size={14} /> {appt.appointment_date}</div>
+  <div style={dataItem}><Clock size={14} /> {appt.appointment_time}</div>
+</div>
+
+<div style={cardFooter}>
+  <button style={textBtn}>View Details</button>
+  {/* 🟢 Change 'PENDING' to 'Pending' */}
+  {appt.status === 'Pending' && <button style={cancelLink}>Cancel Request</button>}
+</div>
                 </motion.div>
               )) : (
                 <div style={{ textAlign: 'center', gridColumn: '1/-1', padding: '40px', color: '#64748b' }}>

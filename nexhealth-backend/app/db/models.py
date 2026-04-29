@@ -125,7 +125,7 @@ class Appointment(Base):
     status = Column(String, default="Scheduled") # Scheduled, Completed, Cancelled
     reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
+    
 
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("Staff",back_populates="appointments" )

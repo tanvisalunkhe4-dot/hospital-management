@@ -57,7 +57,12 @@ useEffect(() => {
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   };
-
+// --- FILTERING LOGIC ---
+const pendingRequests = useMemo(() => {
+  return (appointmentsList || []).filter(appt => 
+    appt.status?.toLowerCase() === 'pending'
+  );
+}, [appointmentsList]);
   const upcomingSchedule = useMemo(() => {
     const tomorrowTms = getMidnight(new Date().setDate(new Date().getDate() + 1));
     const sevenDaysLaterTms = getMidnight(new Date().setDate(new Date().getDate() + 7));
@@ -170,6 +175,25 @@ useEffect(() => {
       setSearchResults([]);
     }
   };
+
+  const handleApprove = async (apptId) => {
+    try {
+      // Ensure hosp_id is passed so the backend can verify the hospital context
+      const res = await fetch(`http://localhost:8000/api/v1/receptionist/appointments/${apptId}/approve?hosp_id=${hosp_id}`, {
+        method: 'PATCH',
+      });
+      
+      if (res.ok) {
+        if (refresh) refresh(); 
+      } else {
+        const errorData = await res.json();
+        alert(`Failed to approve: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error("Approval failed:", err);
+    }
+  };
+
 
   const toggleMenu = (e, id) => {
     e.stopPropagation();
@@ -306,6 +330,42 @@ useEffect(() => {
       </div>
 
       {/* SECTION 2: SCHEDULE TABLE */}
+      {/* --- NEW SECTION: INCOMING PATIENT REQUESTS --- */}
+{pendingRequests.length > 0 && (
+  <div style={{ ...containerStyle, borderColor: '#fbbf24', backgroundColor: '#fffdfa', borderStyle: 'dashed', borderWidth: '2px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#b45309', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+        <Clock size={18} /> Action Required: New Booking Requests ({pendingRequests.length})
+      </h3>
+    </div>
+    
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+      {pendingRequests.map(req => (
+        <div key={req.id} style={requestCardStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '14px' }}>{req.patient_name}</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Requested: {req.appointment_date}</div>
+            </div>
+            <span style={reqBadgeStyle}>Incoming</span>
+          </div>
+          
+          <div style={{ margin: '12px 0', padding: '8px', background: '#fefce8', borderRadius: '8px', fontSize: '12px', border: '1px solid #fef3c7' }}>
+            <div style={{ color: '#854d0e', fontWeight: '700' }}>Reason:</div>
+            <div style={{ color: '#92400e' }}>{req.reason || "General Consultation"}</div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => handleApprove(req.id)} style={confirmBtnSmall}>Approve</button>
+            <button onClick={() => setRescheduleData(req)} style={modifyBtnSmall}>Modify</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+
       <div style={{ ...containerStyle, overflow: 'visible' }}>
         <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '20px' }}>Upcoming Schedule</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -374,5 +434,45 @@ const menuItemStyle = { padding: '8px', fontSize: '12px', fontWeight: '600', col
 const modalOverlay = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(4px)' };
 const modalContent = { background: 'white', padding: '24px', borderRadius: '20px', width: '350px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
 const labelStyle = { fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '-10px' };
+const requestCardStyle = { 
+  background: 'white', 
+  padding: '16px', 
+  borderRadius: '16px', 
+  border: '1px solid #fde68a', 
+  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' 
+};
 
+const reqBadgeStyle = { 
+  fontSize: '10px', 
+  background: '#fef3c7', 
+  color: '#92400e', 
+  padding: '4px 10px', 
+  borderRadius: '20px', 
+  fontWeight: '800', 
+  textTransform: 'uppercase' 
+};
+
+const confirmBtnSmall = { 
+  flex: 1, 
+  padding: '10px', 
+  background: '#059669', 
+  color: 'white', 
+  border: 'none', 
+  borderRadius: '8px', 
+  fontWeight: '700', 
+  cursor: 'pointer', 
+  fontSize: '12px' 
+};
+
+const modifyBtnSmall = { 
+  flex: 1, 
+  padding: '10px', 
+  background: '#f8fafc', 
+  color: '#475569', 
+  border: '1px solid #e2e8f0', 
+  borderRadius: '8px', 
+  fontWeight: '700', 
+  cursor: 'pointer', 
+  fontSize: '12px' 
+};
 export default BookAppointment;

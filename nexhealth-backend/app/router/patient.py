@@ -407,31 +407,35 @@ def get_dashboard_summary(
         "abha_linked": bool(patient.abha_id),
         "uhid": patient.uhid
     }
+# In app/api/v1/patient.py
 
 @patient_router.post("/request-appointment", response_model=AppointmentResponse)
 def request_appointment(
-    appt_in: PatientAppointmentRequest, # Uses the new schema
+    appt_in: PatientAppointmentRequest, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    patient = get_or_create_patient_profile(db, current_user)
+    # 1. Get the patient profile linked to the logged-in user
+    patient = db.query(models.Patient).filter(models.Patient.user_id == current_user.id).first()
     
-    # We map the patient's request into your existing Appointment model
-    new_appt = Appointment(
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient profile not found")
+
+    # 2. Create the appointment record
+    new_appt = models.Appointment(
         patient_id=patient.id,
         hospital_id=appt_in.hospital_id,
         doctor_name=appt_in.doctor_name,
         appointment_date=appt_in.appointment_date,
         appointment_time=appt_in.appointment_time,
         reason=appt_in.reason,
-        status="Pending" # 🟢 This is the key
+        status="Pending",  # 🟢 Hardcoded so patients can't approve themselves!
     )
+    
     db.add(new_appt)
     db.commit()
     db.refresh(new_appt)
     return new_appt
-# --- 2. UPDATED: VIEW MY APPOINTMENTS ---
-
 @patient_router.get("/appointments", response_model=List[AppointmentRead])
 def read_patient_appointments(
     db: Session = Depends(get_db),
