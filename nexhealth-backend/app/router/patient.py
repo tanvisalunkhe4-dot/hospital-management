@@ -20,13 +20,19 @@ from app.db.session import get_db
 from app.router.deps import get_current_active_user
 from app.db.models import Patient
 from app.db.models import Patient, User, Appointment, MedicalRecord
-from app.schemas.auth_schema import (
-    PatientProfile, 
-    PatientUpdate, 
-    AppointmentRead, 
-    MedicalRecordRead,
+from app.schemas.patient_schema import (
+    PatientProfile,
+    PatientUpdate,
     PatientDashboardSummary,
-    PasswordChange
+    PatientCreate,
+    PatientResponse,
+    PatientInQueue,
+    DoctorQueueResponse
+)
+from app.schemas.auth_schema import (
+    PasswordChange,
+    AppointmentRead,
+    MedicalRecordRead
 )
 # ✅ Use the specific name you used in main.py
 patient_router = APIRouter()
