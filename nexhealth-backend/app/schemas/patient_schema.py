@@ -1,21 +1,39 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime, time
+from datetime import datetime, time, date
 
 
 class PatientBase(BaseModel):
+    # Identity & ABDM
     abha_id: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
+    id_type: Optional[str] = None
+    id_number: Optional[str] = None
+    
+    # Demographics
+    date_of_birth: Optional[date] = None # Using str to match HTML date input
     gender: Optional[str] = None
+    address: Optional[str] = None
+    
+    # Clinical
     blood_group: Optional[str] = None
-    hospital_id: Optional[int] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    allergies: Optional[str] = None
+    chronic_conditions: Optional[str] = None
 
-    # Legacy optional fields
+    occupation: Optional[str] = None
+    marital_status: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    emergency_relation: Optional[str] = None
+    insurance_provider: Optional[str] = None
+    policy_number: Optional[str] = None
+   
+
+    # Legacy fields
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone_number: Optional[str] = None
-    address: Optional[str] = None
-
+    hospital_id: Optional[int] = None
 
 class PatientCreate(PatientBase):
     email: Optional[EmailStr] = None
@@ -34,33 +52,17 @@ class PatientResponse(PatientBase):
     class Config:
         from_attributes = True
 
-
 class PatientProfile(PatientBase):
     id: int
     user_id: int
-    phone_secondary: Optional[str] = None
-    email_professional: Optional[str] = None
-    designation: Optional[str] = None
     created_at: datetime
-
     class Config:
         from_attributes = True
 
 
-class PatientUpdate(BaseModel):
-    abha_id: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
-    gender: Optional[str] = None
-
-    full_name: Optional[str] = None
-    phone_secondary: Optional[str] = None
-    email_professional: Optional[str] = None
-    designation: Optional[str] = None
-
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    address: Optional[str] = None
-
+class PatientUpdate(PatientBase):
+       full_name: Optional[str] = None
+    
 
 class PatientDashboardSummary(BaseModel):
     next_appointment: Optional[datetime] = None

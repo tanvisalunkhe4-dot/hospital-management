@@ -34,10 +34,8 @@ from app.schemas.auth_schema import (
     AppointmentRead,
     MedicalRecordRead
 )
-# ✅ Use the specific name you used in main.py
-patient_router = APIRouter()
 
-
+patient_router = APIRouter(prefix="/api/v1/patient", tags=["patient"])
 def get_or_create_patient_profile(db: Session, current_user: User) -> Patient:
     """Find receptionist-created record or link a new one to the user."""
     if current_user.role != "Patient":
@@ -100,6 +98,7 @@ def read_patient_profile(
     
     return patient
 
+
 @patient_router.patch("/profile", response_model=PatientProfile)
 def update_patient_profile(
     patient_in: PatientUpdate,
@@ -108,19 +107,28 @@ def update_patient_profile(
 ):
     patient = get_or_create_patient_profile(db, current_user)
     
-    # Update User table for the Header
+    # 1. Sync Name across both tables
     if patient_in.full_name:
         current_user.full_name = patient_in.full_name
-        
-    # Update Patient table for Medical Records
+        # Split full_name for the Patient table columns
+        names = patient_in.full_name.split(" ", 1)
+        patient.first_name = names[0]
+        patient.last_name = names[1] if len(names) > 1 else ""
+
+    # 2. Update remaining medical/demographic fields
     update_data = patient_in.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if hasattr(patient, field):
+        if hasattr(patient, field) and field != "full_name":
             setattr(patient, field, value)
             
-    db.commit() # This saves it to the columns in your screenshot!
-    db.refresh(current_user)
+    db.commit()
+    db.refresh(patient) # Forces SQLAlchemy to re-read the state from Postgres
+    
+    # Re-attach these so the 'response_model' doesn't return None for them
+    patient.full_name = current_user.full_name
+    patient.profile_url = current_user.profile_url
     return patient
+
 @patient_router.patch("/profile/change-password")
 def change_password(data: PasswordChange, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     

@@ -62,26 +62,50 @@ class User(Base):
 class Patient(Base):
     __tablename__ = "patients"
     
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+    
+    # --- 1. Basic Info & Identity ---
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     uhid = Column(String, unique=True, index=True, nullable=True)
-    phone_number = Column(String, nullable=True)
-    hashed_password = Column(String, nullable=False)
-    address = Column(String, nullable=True)
-    visit_type = Column(String, nullable=True) # e.g., OPD, Emergency
-    profile_url = Column(String, nullable=True, default="/static/default-patient.png")
-    doctor_name = Column(String, nullable=True)
-    status = Column(String, default="Registered")
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     abha_id = Column(String, unique=True, index=True, nullable=True)
-    date_of_birth = Column(DateTime, nullable=True) # Added for medical records
-    gender = Column(String, nullable=True)
-    blood_group = Column(String, nullable=True)
-    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))    
+    id_type = Column(String, nullable=True) # Aadhar, PAN, etc.
+    id_number = Column(String, nullable=True)
     
+    # --- 2. Demographics ---
+    gender = Column(String, nullable=True)
+    date_of_birth = Column(DateTime, nullable=True)
+    phone_number = Column(String, nullable=True)
+    email = Column(String, nullable=True) # Add this to sync with receptionist form
+    address = Column(String, nullable=True)
+    
+    # --- 3. Clinical Fields (New) ---
+    blood_group = Column(String, nullable=True)
+    weight = Column(Float, nullable=True)
+    height = Column(Float, nullable=True)
+    allergies = Column(Text, nullable=True)
+    chronic_conditions = Column(Text, nullable=True)
+    
+    # --- 4. Professional & Social (New) ---
+    occupation = Column(String, nullable=True)
+    marital_status = Column(String, nullable=True)
+    emergency_contact = Column(String, nullable=True)
+    emergency_relation = Column(String, nullable=True)
+    
+    # --- 5. Insurance Details (New) ---
+    insurance_provider = Column(String, nullable=True)
+    policy_number = Column(String, nullable=True)
+    
+    # --- 6. Status & Metadata ---
+    visit_type = Column(String, nullable=True, default="New Patient")
+    doctor_name = Column(String, nullable=True, default="TBD")
+    status = Column(String, default="Registered")
+    profile_url = Column(String, nullable=True, default="/static/default-patient.png")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     user = relationship("User", back_populates="patient_profile")
+    #relationship
     hospital = relationship("Hospital", back_populates="patients")
     appointments = relationship("Appointment", back_populates="patient")
     medical_records = relationship("MedicalRecord", back_populates="patient")

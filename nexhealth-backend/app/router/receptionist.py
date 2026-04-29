@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import models
 from app.schemas import patient_schema, appointment_schema, invoice_schema
+from app.schemas.patient_schema import PatientUpdate, PatientCreate, PatientResponse
 from app.db.session import get_db
 from passlib.context import CryptContext
 import logging
@@ -425,3 +426,46 @@ def mark_invoice_as_paid(invoice_id: int, hosp_id: int, db: Session = Depends(ge
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Payment processing failed.")
+
+
+@router.patch("/patients/{patient_id}", response_model=PatientResponse)
+def update_patient_profile(
+    patient_id: int,
+    patient_in: PatientUpdate,
+    hosp_id: int,
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch the patient record
+    patient_record = db.query(models.Patient).filter(
+        models.Patient.id == patient_id, 
+        models.Patient.hospital_id == hosp_id
+    ).first()
+    
+    if not patient_record:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    # 2. Update fields dynamically
+    update_data = patient_in.model_dump(exclude_unset=True)
+    
+    try:
+        for field, value in update_data.items():
+            if hasattr(patient_record, field):
+                # Handle Date Conversion for SQL
+                if field == "date_of_birth" and isinstance(value, str) and value:
+                    value = datetime.strptime(value, "%Y-%m-%d")
+                
+                # Special handling for ABHA ID to clear empty strings
+                if field == "abha_id" and (value == "" or value is None):
+                    value = None
+                
+                setattr(patient_record, field, value)
+            
+        # 3. Commit changes
+        db.commit()
+        db.refresh(patient_record)
+        return patient_record
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"UPDATE ERROR: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Database update failed: {str(e)}")

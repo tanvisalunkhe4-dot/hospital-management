@@ -464,16 +464,35 @@ const PatientActionMenu = ({ onView, onEdit, onArchive }) => (
 const PatientProfileModal = ({ patient, onClose, invoices, refresh, hosp_id }) => {
   const patientInvoices = invoices ? invoices.filter(inv => inv.patient_id === patient.id) : [];
   
-  // Local state for the professional fields
   const [formData, setFormData] = useState({
+    // --- 1. PERSONAL ---
+    first_name: patient.first_name || '',
+    last_name: patient.last_name || '',
+    gender: patient.gender || '',
+    date_of_birth: patient.date_of_birth || '',
+    phone_number: patient.phone_number || '',
+    email: patient.email || '',
+    address: patient.address || '',
+    
+    // --- 2. IDENTITY (ABDM Ready) ---
+    abha_id: patient.abha_id || '', // 14 digit ID
+    id_type: patient.id_type || 'Aadhar',
+    id_number: patient.id_number || '',
+    
+    // --- 3. CLINICAL ---
     blood_group: patient.blood_group || '',
     weight: patient.weight || '',
     height: patient.height || '',
+    allergies: patient.allergies || '',
+    chronic_conditions: patient.chronic_conditions || '', // e.g., Diabetes, Hypertension
+    
+    // --- 4. PROFESSIONAL & SOCIAL ---
     occupation: patient.occupation || '',
-    id_type: patient.id_type || 'Aadhar',
-    id_number: patient.id_number || '',
+    marital_status: patient.marital_status || '',
     emergency_contact: patient.emergency_contact || '',
     emergency_relation: patient.emergency_relation || '',
+    
+    // --- 5. INSURANCE ---
     insurance_provider: patient.insurance_provider || '',
     policy_number: patient.policy_number || ''
   });
@@ -499,9 +518,11 @@ const PatientProfileModal = ({ patient, onClose, invoices, refresh, hosp_id }) =
         
         <div style={profileHeader}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={avatarLarge}>{patient.first_name ? patient.first_name[0] : 'P'}</div>
+            <div style={avatarLarge}>{formData.first_name ? formData.first_name[0] : 'P'}</div>
             <div>
-              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e293b', margin: 0 }}>{patient.first_name} {patient.last_name}</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1e293b', margin: 0 }}>
+                {formData.first_name} {formData.last_name}
+              </h2>
               <span style={idBadge}>PID: #{patient.id}</span>
             </div>
           </div>
@@ -509,38 +530,50 @@ const PatientProfileModal = ({ patient, onClose, invoices, refresh, hosp_id }) =
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
-          {/* Section 1: Clinical Essentials */}
-          <h3 style={sectionTitle}>Clinical Essentials</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+          
+          {/* SECTION 1: PERSONAL BIODATA */}
+          <h3 style={sectionTitle}>Personal Biodata</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
             <div>
-              <label style={miniLabel}>Blood Group</label>
-              <select style={modalInput} value={formData.blood_group} onChange={e => setFormData({...formData, blood_group: e.target.value})}>
+              <label style={miniLabel}>First Name</label>
+              <input style={modalInput} value={formData.first_name} onChange={e => setFormData({...formData, first_name: e.target.value})} />
+            </div>
+            <div>
+              <label style={miniLabel}>Last Name</label>
+              <input style={modalInput} value={formData.last_name} onChange={e => setFormData({...formData, last_name: e.target.value})} />
+            </div>
+            <div>
+              <label style={miniLabel}>Gender</label>
+              <select style={modalInput} value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
                 <option value="">Select</option>
-                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
               </select>
             </div>
             <div>
-              <label style={miniLabel}>Weight (kg)</label>
-              <input style={modalInput} type="number" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} />
+              <label style={miniLabel}>Date of Birth</label>
+              <input style={modalInput} type="date" value={formData.date_of_birth} onChange={e => setFormData({...formData, date_of_birth: e.target.value})} />
             </div>
-            <div>
-              <label style={miniLabel}>Height (cm)</label>
-              <input style={modalInput} type="number" value={formData.height} onChange={e => setFormData({...formData, height: e.target.value})} />
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={miniLabel}>Full Address</label>
+              <input style={modalInput} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
             </div>
           </div>
 
-          {/* Section 2: Personal & Identity */}
-          <h3 style={sectionTitle}>Identity & Social</h3>
+          {/* SECTION 2: IDENTITY & ABDM */}
+          <h3 style={sectionTitle}>Identity & ABDM</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={miniLabel}>Occupation</label>
-              <input style={modalInput} value={formData.occupation} onChange={e => setFormData({...formData, occupation: e.target.value})} />
+              <label style={miniLabel}>ABHA Number (14-Digit Digital ID)</label>
+              <input style={{...modalInput, borderColor: '#10b981', backgroundColor: '#f0fdf4'}} placeholder="00-0000-0000-0000" value={formData.abha_id} onChange={e => setFormData({...formData, abha_id: e.target.value})} />
             </div>
             <div>
-              <label style={miniLabel}>ID Type</label>
+              <label style={miniLabel}>Govt ID Type</label>
               <select style={modalInput} value={formData.id_type} onChange={e => setFormData({...formData, id_type: e.target.value})}>
                 <option value="Aadhar">Aadhar</option>
                 <option value="PAN">PAN</option>
+                <option value="Passport">Passport</option>
               </select>
             </div>
             <div>
@@ -549,36 +582,58 @@ const PatientProfileModal = ({ patient, onClose, invoices, refresh, hosp_id }) =
             </div>
           </div>
 
-          {/* Section 3: Insurance Box */}
-          <div style={{ backgroundColor: '#f0fdf4', padding: '20px', borderRadius: '16px', border: '1px solid #dcfce7', marginBottom: '24px' }}>
-             <h4 style={{ color: '#059669', fontSize: '12px', margin: '0 0 12px 0' }}>INSURANCE DETAILS</h4>
-             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <input style={modalInput} placeholder="Provider" value={formData.insurance_provider} onChange={e => setFormData({...formData, insurance_provider: e.target.value})} />
-                <input style={modalInput} placeholder="Policy No" value={formData.policy_number} onChange={e => setFormData({...formData, policy_number: e.target.value})} />
-             </div>
+          {/* SECTION 3: CLINICAL SUMMARY */}
+          <h3 style={sectionTitle}>Clinical Vital Summary</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <select style={modalInput} value={formData.blood_group} onChange={e => setFormData({...formData, blood_group: e.target.value})}>
+              <option value="">Blood Grp</option>
+              {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
+            </select>
+            <input style={modalInput} placeholder="Weight (kg)" type="number" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} />
+            <input style={modalInput} placeholder="Height (cm)" type="number" value={formData.height} onChange={e => setFormData({...formData, height: e.target.value})} />
+          </div>
+          <div style={{ marginBottom: '24px' }}>
+            <label style={miniLabel}>Known Allergies / Chronic Conditions</label>
+            <textarea style={{...modalInput, height: '60px', padding: '10px'}} placeholder="e.g. Peanuts, Hypertension, Asthma..." value={formData.allergies} onChange={e => setFormData({...formData, allergies: e.target.value})} />
           </div>
 
-          {/* Section 4: Billing History (Existing Logic) */}
-          <h3 style={sectionTitle}>Billing History</h3>
-          {patientInvoices.length > 0 ? (
-            <div style={miniTableContainer}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <tbody>
-                  {patientInvoices.map(inv => (
-                    <tr key={inv.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                      <td style={miniTd}>#{inv.id}</td>
-                      <td style={miniTd}>₹{inv.total_amount}</td>
-                      <td style={miniTd}><span style={statusBadgeGreen}>{inv.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* SECTION 4: PROFESSIONAL & EMERGENCY */}
+          <h3 style={sectionTitle}>Professional & Emergency</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+            <div>
+              <label style={miniLabel}>Occupation</label>
+              <input style={modalInput} value={formData.occupation} onChange={e => setFormData({...formData, occupation: e.target.value})} />
             </div>
-          ) : <p style={{ fontSize: '12px', color: '#94a3b8' }}>No records found.</p>}
+            <div>
+              <label style={miniLabel}>Marital Status</label>
+              <select style={modalInput} value={formData.marital_status} onChange={e => setFormData({...formData, marital_status: e.target.value})}>
+                <option value="">Select</option>
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+              </select>
+            </div>
+            <div>
+              <label style={miniLabel}>Emergency Contact</label>
+              <input style={modalInput} placeholder="Phone No." value={formData.emergency_contact} onChange={e => setFormData({...formData, emergency_contact: e.target.value})} />
+            </div>
+            <div>
+              <label style={miniLabel}>Relation</label>
+              <input style={modalInput} placeholder="Spouse/Parent" value={formData.emergency_relation} onChange={e => setFormData({...formData, emergency_relation: e.target.value})} />
+            </div>
+          </div>
+
+          {/* SECTION 5: INSURANCE BOX */}
+          <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '16px', border: '1px solid #dbeafe', marginBottom: '24px' }}>
+             <h4 style={{ color: '#2563eb', fontSize: '12px', margin: '0 0 12px 0' }}>INSURANCE POLICY</h4>
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <input style={modalInput} placeholder="Provider Name" value={formData.insurance_provider} onChange={e => setFormData({...formData, insurance_provider: e.target.value})} />
+                <input style={modalInput} placeholder="Policy / Member ID" value={formData.policy_number} onChange={e => setFormData({...formData, policy_number: e.target.value})} />
+             </div>
+          </div>
         </div>
 
         <div style={profileFooter}>
-          <button style={saveBtnStyle} onClick={handleUpdate}>Update & Sync Profile</button>
+          <button style={saveBtnStyle} onClick={handleUpdate}>Save Master Profile</button>
         </div>
       </motion.div>
     </>
