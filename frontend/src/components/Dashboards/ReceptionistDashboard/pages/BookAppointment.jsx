@@ -21,7 +21,29 @@ const BookAppointment = ({ hosp_id, appointmentsList, refresh, onBack }) => {
     appointment_time: "",
     reason: ""
   });
+// Add these to your State Management section
+const [doctors, setDoctors] = useState([]);
+const [loadingDoctors, setLoadingDoctors] = useState(false);
 
+// Add this useEffect to fetch the live doctor list
+useEffect(() => {
+  const fetchDoctors = async () => {
+    try {
+      setLoadingDoctors(true);
+      const res = await fetch(`http://localhost:8000/api/v1/receptionist/doctors/${hosp_id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDoctors(data); // Expecting [{ staff_id, full_name, specialization }, ...]
+      }
+    } catch (err) {
+      console.error("Failed to load live doctors:", err);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
+  if (hosp_id) fetchDoctors();
+}, [hosp_id]);
   // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = () => setActiveMenuId(null);
@@ -245,12 +267,24 @@ const BookAppointment = ({ hosp_id, appointmentsList, refresh, onBack }) => {
           <form onSubmit={handleBook} style={formGrid}>
             <div style={patientBadge}>Booking for: <strong>{selectedPatient.first_name} {selectedPatient.last_name}</strong></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <input list="dr-list" type="text" placeholder="Select Doctor" required style={inputStyle} value={appointmentData.doctor_name} onChange={(e) => setAppointmentData({...appointmentData, doctor_name: e.target.value})}/>
-                <datalist id="dr-list">
-                    <option value="Dr. Patil" />
-                    <option value="Dr. Salunkhe" />
-                    <option value="Dr. Kelkar" />
-                </datalist>
+            <input 
+  list="dr-list" 
+  type="text" 
+  placeholder={loadingDoctors ? "Loading Doctors..." : "Select Doctor"} 
+  required 
+  style={inputStyle} 
+  value={appointmentData.doctor_name} 
+  onChange={(e) => setAppointmentData({...appointmentData, doctor_name: e.target.value})}
+/>
+<datalist id="dr-list">
+  {/* 🟢 DYNAMIC LIVE DATA REPLACING MOCK DATA */}
+  {doctors.map((dr) => (
+    <option 
+      key={dr.staff_id} 
+      value={`Dr. ${dr.full_name}`} 
+    />
+  ))}
+</datalist>
                 <input type="text" placeholder="Reason (e.g. Fever)" style={inputStyle} value={appointmentData.reason} onChange={(e) => setAppointmentData({...appointmentData, reason: e.target.value})}/>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

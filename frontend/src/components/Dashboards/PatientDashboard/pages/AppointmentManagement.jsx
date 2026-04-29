@@ -47,39 +47,40 @@ const AppointmentManagement = () => {
   });
 
   // 🟢 Load all data from API on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        if (!token) return;
+  // --- Updated Frontend Fetching Logic ---
 
-        // Fetch Doctors and Appointments in parallel
-        const [doctorRes, apptRes] = await Promise.all([
-          axios.get('http://localhost:8000/api/v1/doctors', {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          axios.get('http://localhost:8000/api/v1/appointments/my-requests', {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-        ]);
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      // Replace with your actual hospital ID logic 
+      // (e.g., from your auth context or localStorage)
+      const hospId = 1; 
 
-        setDoctors(doctorRes.data);
-        setAppointments(apptRes.data);
-      } catch (err) {
-        console.error("Data fetch failed:", err);
-        // Fallback for UI preview if API is not yet ready
-        setAppointments([
-          { id: 1, doctor_name: 'Sarah Varma', reason: 'Annual Checkup', date: '2026-05-12', time: '10:30 AM', status: 'CONFIRMED' }
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
+      if (!token) return;
 
-    loadData();
-  }, []);
+      const [doctorRes, apptRes] = await Promise.all([
+        // 🟢 FIX: Change this URL to match your @router.get("/doctors/{hosp_id}")
+        axios.get(`http://localhost:8000/api/v1/receptionist/doctors/${hospId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get('http://localhost:8000/api/v1/patient/appointments', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
 
+      setDoctors(doctorRes.data);
+      setAppointments(apptRes.data);
+    } catch (err) {
+      console.error("Data fetch failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadData();
+}, []);
   const handleBooking = async (e) => {
     e.preventDefault();
     try {
@@ -185,19 +186,19 @@ const AppointmentManagement = () => {
               <div style={inputGroup}>
                 <label style={label}>Select Specialist</label>
                 <select 
-                  style={selectInput}
-                  value={formData.doctor_id}
-                  onChange={(e) => setFormData({...formData, doctor_id: e.target.value})}
-                  required
-                >
-                  <option value="">Choose a Doctor</option>
-                  {/* 🟢 DYNAMIC DOCTOR LIST FROM API */}
-                  {doctors.map(d => (
-                    <option key={d.id} value={d.id}>
-                      {d.full_name || d.name} ({d.specialty})
-                    </option>
-                  ))}
-                </select>
+  style={selectInput}
+  value={formData.doctor_id}
+  onChange={(e) => setFormData({...formData, doctor_id: e.target.value})}
+  required
+>
+  <option value="">Choose a Doctor</option>
+  {doctors.map(d => (
+    // 🟢 FIX: Use staff_id and full_name to match your backend response
+    <option key={d.staff_id} value={d.staff_id}>
+      {d.full_name} ({d.specialization})
+    </option>
+  ))}
+</select>
               </div>
 
               <div style={inputGroup}>
