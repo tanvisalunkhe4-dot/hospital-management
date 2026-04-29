@@ -34,3 +34,15 @@ class AppointmentResponse(AppointmentCreate):
     created_at: Optional[datetime] = None
     class Config:
         from_attributes = True
+
+
+class PatientAppointmentRequest(BaseModel):
+    """Specific schema for Patient Dashboard to avoid touching Receptionist logic"""
+    hospital_id: int
+    doctor_name: str
+    appointment_date: date
+    appointment_time: time
+    reason: str
+
+    class Config:
+        from_attributes = True

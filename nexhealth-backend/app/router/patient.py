@@ -27,12 +27,19 @@ from app.schemas.patient_schema import (
     PatientCreate,
     PatientResponse,
     PatientInQueue,
-    DoctorQueueResponse
+    DoctorQueueResponse,
 )
 from app.schemas.auth_schema import (
     PasswordChange,
     AppointmentRead,
     MedicalRecordRead
+)
+from app.schemas.appointment_schema import(
+    AppointmentBase,
+    AppointmentCreate,
+    AppointmentResponse,
+    AppointmentUpdate,
+    PatientAppointmentRequest
 )
 
 patient_router = APIRouter(prefix="/api/v1/patient", tags=["patient"])
@@ -400,3 +407,40 @@ def get_dashboard_summary(
         "abha_linked": bool(patient.abha_id),
         "uhid": patient.uhid
     }
+
+@patient_router.post("/request-appointment", response_model=AppointmentResponse)
+def request_appointment(
+    appt_in: PatientAppointmentRequest, # Uses the new schema
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    patient = get_or_create_patient_profile(db, current_user)
+    
+    # We map the patient's request into your existing Appointment model
+    new_appt = Appointment(
+        patient_id=patient.id,
+        hospital_id=appt_in.hospital_id,
+        doctor_name=appt_in.doctor_name,
+        appointment_date=appt_in.appointment_date,
+        appointment_time=appt_in.appointment_time,
+        reason=appt_in.reason,
+        status="Pending" # 🟢 This is the key
+    )
+    db.add(new_appt)
+    db.commit()
+    db.refresh(new_appt)
+    return new_appt
+# --- 2. UPDATED: VIEW MY APPOINTMENTS ---
+
+@patient_router.get("/appointments", response_model=List[AppointmentRead])
+def read_patient_appointments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Fetch all appointments including PENDING requests and CONFIRMED visits."""
+    patient = get_or_create_patient_profile(db, current_user)
+
+    # Returns all, so the patient sees their "Pending" request immediately
+    return db.query(Appointment).filter(
+        Appointment.patient_id == patient.id
+    ).order_by(Appointment.appointment_date.desc()).all()
