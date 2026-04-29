@@ -140,15 +140,17 @@ const mainContent = {
   flexDirection: 'column',
   height: '100vh',
   overflowY: 'auto',       
-  msOverflowStyle: 'none', 
-  scrollbarWidth: 'none',  
+  backgroundColor: '#f8fafc',
+  // Standard scrollbar for better usability, but you can hide it if preferred
 };
 
 const pageWrapper = { 
-  padding: '40px',              
+  padding: '24px 40px', // Slightly reduced top padding for better fit
   backgroundColor: '#f8fafc',
-  width: '100%',                
-  margin: 0                     
+  width: '100%',
+  maxWidth: '1400px', // Prevents the content from stretching too wide on large monitors
+  margin: '0 auto',   // Centers the profile in the static view
+  boxSizing: 'border-box' 
 };
 
 export default PatientDashboard;
