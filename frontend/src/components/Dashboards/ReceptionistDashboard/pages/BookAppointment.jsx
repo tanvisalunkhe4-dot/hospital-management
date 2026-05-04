@@ -53,9 +53,15 @@ const BookAppointment = ({ hosp_id, appointmentsList, refresh, onBack }) => {
     if (activeMenuId) window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, [activeMenuId]);
+// Close menus on outside click
+useEffect(() => {
+  const handleClickOutside = () => setActiveMenuId(null);
+  if (activeMenuId) window.addEventListener('click', handleClickOutside);
+  return () => window.removeEventListener('click', handleClickOutside);
+}, [activeMenuId]);
 
-  useEffect(() => {
-  // ⏱️ Set up an interval to refresh data every 5 seconds
+// ⏱️ Set up an interval to refresh data every 5 seconds
+useEffect(() => {
   const autoRefresh = setInterval(() => {
     if (refresh) {
       console.log("Auto-syncing appointments...");
@@ -66,7 +72,7 @@ const BookAppointment = ({ hosp_id, appointmentsList, refresh, onBack }) => {
   // Cleanup: Stop the timer if the user leaves the page
   return () => clearInterval(autoRefresh);
 }, [refresh]);
- ;
+
   // --- FILTERING LOGIC ---
   const getMidnight = (date) => {
     const d = new Date(date);
