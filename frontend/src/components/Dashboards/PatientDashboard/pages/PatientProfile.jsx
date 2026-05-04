@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Mail, Phone, MapPin, Fingerprint, 
   ShieldCheck, Edit3, Loader2, AlertCircle,
@@ -9,137 +8,96 @@ import {
 import axios from 'axios';
 import { useUser } from "../../../../UserContext";
 
-// --- PROFESSIONAL COMPONENTS ---
+// --- CLEAN ENTERPRISE COMPONENTS (No Animations) ---
 
-const AnimatedCard = ({ children, delay = 0, style = {} }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ 
-      type: "spring", 
-      stiffness: 100, 
-      damping: 15, 
-      delay: delay 
-    }}
-    style={{ ...card, ...style }}
-  >
+const StaticCard = ({ children, style = {} }) => (
+  <div style={{ ...cardStyle, ...style }}>
     {children}
-  </motion.div>
+  </div>
 );
+
 const DataRow = ({ label, value, icon: Icon, isCritical }) => (
-  <motion.div 
-    whileHover={{ x: 5 }} 
-    style={infoRow}
-  >
+  <div style={infoRowStyle}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <div style={iconBox}>
+      <div style={iconBoxStyle}>
         {Icon && <Icon size={14} color="#64748b" />}
       </div>
-      <span style={labelStyle}>{label}</span>
+      <span style={labelTextStyle}>{label}</span>
     </div>
     <span style={{ 
-      ...valueStyle, 
+      ...valueTextStyle, 
       color: isCritical ? '#e11d48' : '#0f172a',
       backgroundColor: isCritical ? '#fff1f2' : 'transparent',
-      padding: isCritical ? '2px 10px' : '0',
-      borderRadius: '6px'
+      padding: isCritical ? '2px 8px' : '0',
+      borderRadius: '4px'
     }}>
-      {value || <span style={{ color: '#94a3b8', fontWeight: 400 }}>Not Provided</span>}
+      {value || "Not Provided"}
     </span>
-  </motion.div>
+  </div>
 );
 
-const VitalMetric = ({ label, value, unit, icon: Icon, color, delay }) => (
-  <motion.div 
-    whileHover={{ y: -4, boxShadow: '0 12px 20px -10px rgba(0,0,0,0.1)' }}
-    initial={{ opacity: 0, scale: 0.95 }}
-    animate={{ opacity: 1, scale: 1 }}
-    transition={{ duration: 0.3, delay }}
-    style={{ ...vitalMiniCard, borderLeft: `4px solid ${color}`, position: 'relative', overflow: 'hidden' }}
-  >
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', position: 'relative', zIndex: 2 }}>
-      <div style={{ ...iconCircle, backgroundColor: `${color}15` }}>
+const VitalMetric = ({ label, value, unit, icon: Icon, color }) => (
+  <div style={{ ...vitalCardStyle, borderLeft: `3px solid ${color}` }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ ...iconCircleStyle, backgroundColor: `${color}10` }}>
         <Icon size={16} color={color} />
       </div>
-      <span style={{...statusBadgeMini, color: color, backgroundColor: `${color}10`}}>Normal</span>
+      <span style={{...statusBadgeMiniStyle, color: color, backgroundColor: `${color}08`}}>Recorded</span>
     </div>
-
-    <div style={{ position: 'relative', zIndex: 2 }}>
-      <p style={vitalLabelText}>{label}</p>
+    <div style={{ marginTop: '12px' }}>
+      <p style={vitalLabelTextStyle}>{label}</p>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-        <h4 style={vitalValueText}>{value || '--'}</h4>
-        {unit && <span style={vitalUnitText}>{unit}</span>}
+        <h4 style={vitalValueTextStyle}>{value || '--'}</h4>
+        {unit && <span style={vitalUnitTextStyle}>{unit}</span>}
       </div>
     </div>
-
-    {/* Professional Trend Visual Placeholder */}
-    <div style={{
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: '40px',
-      background: `linear-gradient(180deg, transparent, ${color}10)`,
-      maskImage: 'linear-gradient(to right, transparent, black, transparent)',
-      WebkitMaskImage: 'linear-gradient(to right, transparent, black, transparent)',
-    }} />
-  </motion.div>
+  </div>
 );
+
 const PatientProfile = () => {
   const [profile, setProfile] = useState(null);
-  const [documents, setDocuments] = useState([]); // 🟢 State for dynamic files
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { setProfileImage } = useUser(); 
   const [isUploading, setIsUploading] = useState(false);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error("Authentication token not found.");
+        const headers = { 'Authorization': `Bearer ${token}` };
 
-useEffect(() => {
-  const fetchData = async () => {
+        const [profileRes, docsRes] = await Promise.all([
+          axios.get('http://localhost:8000/api/v1/patient/profile', { headers }),
+          axios.get('http://localhost:8000/api/v1/patient/medical-records', { headers })
+        ]);
+
+        setProfile(profileRes.data);
+        setDocuments(docsRes.data);
+      } catch (err) {
+        setError(err.response?.data?.detail || err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleDeleteDocument = async (recordId) => {
+    if (!recordId) return;
+    if (!window.confirm("Confirm deletion of this medical record?")) return;
+
     try {
       const token = localStorage.getItem('token');
-      if (!token) throw new Error("Authentication token not found.");
-      
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      // 🟢 Fetch both Profile and Medical Records in parallel
-      const [profileRes, docsRes] = await Promise.all([
-        axios.get('http://localhost:8000/api/v1/patient/profile', { headers }),
-        axios.get('http://localhost:8000/api/v1/patient/medical-records', { headers })
-      ]);
-
-      setProfile(profileRes.data);
-      setDocuments(docsRes.data); // 🟢 Store the list of uploaded files
+      await axios.delete(`http://localhost:8000/api/v1/patient/medical-records/${recordId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setDocuments(prev => prev.filter(doc => doc.id !== recordId));
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
-    } finally {
-      setLoading(false);
+      alert("Failed to delete document.");
     }
   };
-  fetchData();
-}, []);
-
-const handleDeleteDocument = async (recordId) => {
-  // 🟢 Safety Check: If recordId is undefined, stop the function
-  if (!recordId) {
-    console.error("Delete failed: Record ID is undefined");
-    return;
-  }
-
-  if (!window.confirm("Are you sure you want to delete this document?")) return;
-
-  try {
-    const token = localStorage.getItem('token');
-    await axios.delete(`http://localhost:8000/api/v1/patient/medical-records/${recordId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    // Update local state to remove the deleted file
-    setDocuments(prev => prev.filter(doc => doc.id !== recordId));
-  } catch (err) {
-    alert("Failed to delete document.");
-  }
-};
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -151,7 +109,7 @@ const handleDeleteDocument = async (recordId) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post( // 🟢 Assign variable here
+      const response = await axios.post(
         'http://localhost:8000/api/v1/patient/upload-document', 
         formData,
         {
@@ -161,444 +119,200 @@ const handleDeleteDocument = async (recordId) => {
           },
         }
       );
-      
       if (response.data) {
-        // 🟢 Update the list immediately so the new file appears instantly
         setDocuments(prevDocs => [response.data, ...prevDocs]);
-        alert("Document uploaded and secured in vault.");
       }
-  
     } catch (err) {
-      console.error("Upload Error:", err);
-      alert("Upload failed. Please ensure the file is a PDF or Image under 5MB.");
+      alert("Upload failed. Ensure file is PDF/JPG under 5MB.");
     } finally {
       setIsUploading(false);
-      // Clear the input so the same file can be uploaded again if needed
       e.target.value = null; 
     }
   };
 
   if (loading) return (
-    <div style={loaderWrapper}>
-      <motion.div 
-        animate={{ rotate: 360 }} 
-        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-      >
-        <Loader2 size={44} color="#10b981" />
-      </motion.div>
-      <p style={loaderText}>Decrypting Health Records...</p>
+    <div style={loaderWrapperStyle}>
+      <Loader2 size={32} style={{animation: 'spin 1s linear infinite'}} color="#059669" />
+      <p>Accessing Secure Health Records...</p>
     </div>
   );
 
   if (error) return (
-    <div style={errorContainer}>
-      <AnimatedCard style={errorCard}>
-        <AlertCircle size={48} color="#ef4444" />
-        <h3 style={{ margin: '16px 0 8px 0', fontSize: '20px', color: '#1e293b' }}>Sync Error</h3>
-        <p style={{ color: '#64748b', marginBottom: '20px' }}>{error}</p>
-        <button onClick={() => window.location.reload()} style={retryBtn}>Reconnect to NexHealth</button>
-      </AnimatedCard>
+    <div style={errorContainerStyle}>
+      <StaticCard style={{textAlign: 'center', maxWidth: '400px'}}>
+        <AlertCircle size={40} color="#ef4444" style={{marginBottom: '16px'}} />
+        <h3 style={{margin: '0 0 8px 0'}}>Connection Error</h3>
+        <p style={{color: '#64748b', fontSize: '14px', marginBottom: '24px'}}>{error}</p>
+        <button onClick={() => window.location.reload()} style={retryButtonStyle}>Retry Connection</button>
+      </StaticCard>
     </div>
   );
 
   return (
-    <div style={container}>
-      {/* 1. HERO HEADER */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        style={heroSection}
-      >
-        <div style={heroContent}>
-          <div style={avatarCircle}>
-            {profile?.first_name || profile?.last_name 
-              ? `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() 
-              : 'P'}
+    <div style={containerStyle}>
+      {/* HEADER SECTION */}
+      <div style={headerSectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <div style={avatarStyle}>
+            {profile?.first_name?.[0]}{profile?.last_name?.[0]}
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <h1 style={title}>
-                {profile?.first_name || profile?.last_name 
-                  ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() 
-                  : 'Loading Name...'}
-              </h1>
-              <div style={statusBadgeActive}>
-                <CheckCircle2 size={12} /> Verified Profile
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h1 style={nameTitleStyle}>{profile?.first_name} {profile?.last_name}</h1>
+              <div style={badgeStyle}><CheckCircle2 size={14} /> Verified Patient</div>
+            </div>
+            <p style={patientIdStyle}>NexHealth UID: {profile?.id || '---'}</p>
+          </div>
+        </div>
+        <button style={outlineButtonStyle}><Edit3 size={16} /> Manage Records</button>
+      </div>
+
+      <div style={contentGridStyle}>
+        {/* IDENTIFICATION BLOCK */}
+        <StaticCard>
+          <div style={cardHeaderStyle}>
+            <ShieldCheck size={18} color="#059669" />
+            <h3 style={sectionTitleStyle}>Government Identification</h3>
+          </div>
+          <div style={dataGrid3Style}>
+            <DataRow label="ABHA ID" value={profile?.abha_id} icon={Fingerprint} />
+            <DataRow label="ID Type" value={profile?.id_type} icon={ShieldCheck} />
+            <DataRow label="ID Number" value={profile?.id_number} icon={ShieldCheck} />
+          </div>
+        </StaticCard>
+
+        {/* VITALS BLOCK */}
+        <StaticCard style={{ borderTop: '4px solid #059669' }}>
+          <div style={cardHeaderStyle}>
+            <Activity size={18} color="#059669" />
+            <h3 style={sectionTitleStyle}>Clinical Parameters</h3>
+          </div>
+          <div style={dataGrid4Style}>
+            <VitalMetric label="Blood Group" value={profile?.blood_group} icon={Droplet} color="#dc2626" />
+            <VitalMetric label="Weight" value={profile?.weight} unit="kg" icon={Scale} color="#2563eb" />
+            <VitalMetric label="Height" value={profile?.height} unit="cm" icon={Activity} color="#0d9488" />
+            <VitalMetric label="Gender" value={profile?.gender} icon={User} color="#7c3aed" />
+          </div>
+          <div style={{marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9'}}>
+            <DataRow label="Date of Birth" value={profile?.date_of_birth} icon={Calendar} />
+          </div>
+        </StaticCard>
+
+        {/* VAULT BLOCK */}
+        <StaticCard>
+          <div style={cardHeaderStyle}>
+            <FileText size={18} color="#059669" />
+            <h3 style={sectionTitleStyle}>Medical Records Vault</h3>
+          </div>
+          <div style={vaultLayoutStyle}>
+            <div style={dropzoneStyle}>
+              {isUploading ? <Loader2 size={24} style={{animation: 'spin 1s linear infinite'}} /> : <Upload size={24} color="#64748b" />}
+              <p style={uploadTextStyle}>Upload Clinical Records</p>
+              <p style={uploadSubTextStyle}>PDF or Image (Max 5MB)</p>
+              <input type="file" id="patient-upload" style={{ display: 'none' }} onChange={handleFileUpload} />
+              <label htmlFor="patient-upload" style={uploadButtonStyle}>Select File</label>
+            </div>
+
+            <div style={fileListStyle}>
+              <p style={smallHeaderStyle}>Recent Documents</p>
+              <div style={scrollContainerStyle}>
+                {documents.length > 0 ? documents.map(doc => (
+                  <div key={doc.id} style={fileRowStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={fileIconBgStyle}><FileText size={16} color="#059669" /></div>
+                      <div>
+                        <p style={fileNameStyle}>{doc.description?.split(': ')[1] || "Record"}</p>
+                        <p style={fileDateStyle}>{new Date(doc.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <a href={`http://localhost:8000/${doc.file_url}`} target="_blank" rel="noreferrer" style={actionIconStyle}><ExternalLink size={14} /></a>
+                      <button onClick={() => handleDeleteDocument(doc.id)} style={actionIconRedStyle}><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                )) : <p style={emptyTextStyle}>No documents currently in vault.</p>}
               </div>
             </div>
           </div>
-        </div>
-        <motion.button 
-          whileHover={{ scale: 1.02 }} 
-          whileTap={{ scale: 0.98 }} 
-          style={editBtn}
-        >
-          <Edit3 size={18} /> Update Medical Records
-        </motion.button>
-      </motion.div>
+        </StaticCard>
 
-      {/* --- RESTRUCTURED STACKED CONTENT --- */}
-      <div style={stackedLayout}>
-        
-        {/* 2. GOVERNMENT DIGITAL ID (Full Width Priority) */}
-        <AnimatedCard delay={0.1}>
-          <div style={cardHeader}>
-            <ShieldCheck size={18} color="#28a745" />
-            <h3 style={cardTitle}>Government Digital ID</h3>
-          </div>
-          <div style={tripleGrid}>
-            <DataRow label="ABHA ID" value={profile?.abha_id} />
-            <DataRow label="ID Type" value={profile?.id_type} />
-            <DataRow label="ID Number" value={profile?.id_number} />
-          </div>
-        </AnimatedCard>
-
-        {/* 3. CLINICAL BASELINE (Linear 4-Metric Grid) */}
-<AnimatedCard delay={0.2} style={{ borderTop: '4px solid #28a745' }}>
-  <div style={cardHeader}>
-    <Activity size={18} color="#28a745" />
-    <h3 style={cardTitle}>Vital Sign's</h3>
-  </div>
-  
-  <div style={vitalsFullWidthGrid}>
-    <VitalMetric label="Blood Group" value={profile?.blood_group} unit="" icon={Droplet} color="#f59e0b" delay={0.3} />
-    <VitalMetric label="Weight" value={profile?.weight} unit="kg" icon={Scale} color="#ec4899" delay={0.4} />
-    <VitalMetric label="Height" value={profile?.height} unit="cm" icon={Activity} color="#06b6d4" delay={0.5} />
-    <VitalMetric label="Gender" value={profile?.gender} unit="" icon={User} color="#8b5cf6" delay={0.6} />
-  </div>
-
-  <div style={{ marginTop: '20px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
-     <DataRow label="Date of Birth" value={profile?.date_of_birth} icon={Calendar} />
-  </div>
-</AnimatedCard>
-
-  {/* 4. NEW: MEDICAL DOCUMENTS BLOCK */}
-  <AnimatedCard delay={0.3}>
-          <div style={cardHeader}>
-            <FileText size={18} color="#28a745" />
-            <h3 style={cardTitle}>Medical Records & KYC Vault</h3>
-          </div>
-          
-          <div style={uploadLayout}>
-            {/* Upload Area */}
-            <div style={dropZone}>
-              {isUploading ? (
-                <Loader2 size={32} className="animate-spin" color="#10b981" />
-              ) : (
-                <Upload size={32} color="#94a3b8" />
-              )}
-              <p style={uploadMainText}>Click to upload clinical records</p>
-              <p style={uploadSubText}>Supports PDF, JPG (Max 5MB)</p>
-              <input 
-                type="file" 
-                id="file-input" 
-                style={{ display: 'none' }} 
-                onChange={handleFileUpload}
-                disabled={isUploading}
-              />
-              <label htmlFor="file-input" style={uploadButton}>
-                {isUploading ? "Uploading..." : "Select File"}
-              </label>
+        {/* CONTACT & EMERGENCY GRID */}
+        <div style={dataGrid2Style}>
+          <StaticCard>
+            <div style={cardHeaderStyle}>
+              <Phone size={18} color="#059669" />
+              <h3 style={sectionTitleStyle}>Contact Details</h3>
             </div>
-
-            {/* File List Area */}
-            <div style={fileListContainer}>
-  <h4 style={listHeader}>Recent Uploads</h4>
-  
-  {documents.length > 0 ? (
-    documents.map((doc) => (
-      <div key={doc.id} style={fileItemRow}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={fileIconBg}>
-            <FileText size={16} color="#059669" />
-          </div>
-          <div>
-            {/* Display description (filename) and formatted date */}
-            <p style={fileNameText}>{doc.description || "Medical Document"}</p>
-            <p style={fileMetaText}>
-              Uploaded on {new Date(doc.created_at).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <a 
-            href={`http://localhost:8000/${doc.file_url}`} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={fileActionBtn}
-          >
-            <ExternalLink size={14} />
-          </a>
-          <button 
-    onClick={() => handleDeleteDocument(doc.id)}
-    style={fileActionBtnRed}
-  >
-    <Trash2 size={14} />
-  </button>
-        </div>
-      </div>
-    ))
-  ) : (
-    <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
-      No records found.
-    </p>
-  )}
-</div>
-          </div>
-        </AnimatedCard>
-
-        {/* 5. CONTACT & LOCATION */}
-        <AnimatedCard delay={0.3}>
-          <div style={cardHeader}>
-            <Phone size={18} color="#28a745" />
-            <h3 style={cardTitle}>Contact & Location</h3>
-          </div>
-          <div style={doubleGrid}>
-            <DataRow label="Email" value={profile?.email} icon={Mail} />
-            <DataRow label="Phone" value={profile?.phone_number} icon={Phone} />
-          </div>
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <DataRow label="Email Address" value={profile?.email} icon={Mail} />
+            <DataRow label="Primary Phone" value={profile?.phone_number} icon={Phone} />
             <DataRow label="Permanent Address" value={profile?.address} icon={MapPin} />
-          </div>
-        </AnimatedCard>
+          </StaticCard>
 
-        {/* 5. PROFESSIONAL & EMERGENCY (Side by Side) */}
-        <div style={doubleGrid}>
-          <AnimatedCard delay={0.4} style={{ marginBottom: 0 }}>
-            <div style={cardHeader}>
-              <Briefcase size={18} color="#28a745" />
-              <h3 style={cardTitle}>Professional</h3>
-            </div>
-            <DataRow label="Occupation" value={profile?.occupation} />
-            <DataRow label="Marital Status" value={profile?.marital_status} />
-          </AnimatedCard>
-
-          <AnimatedCard delay={0.5} style={{ borderLeft: '4px solid #e11d48', marginBottom: 0 }}>
-            <div style={cardHeader}>
+          <StaticCard style={{ borderLeft: '4px solid #e11d48' }}>
+            <div style={cardHeaderStyle}>
               <ShieldAlert size={18} color="#e11d48" />
-              <h3 style={cardTitle}>Emergency</h3>
+              <h3 style={sectionTitleStyle}>Emergency Response</h3>
             </div>
-            <DataRow label="Primary Contact" value={profile?.emergency_contact} />
+            <DataRow label="Emergency Contact" value={profile?.emergency_contact} icon={ShieldAlert} />
             <DataRow label="Relationship" value={profile?.emergency_relation} />
-          </AnimatedCard>
+            <DataRow label="Occupation" value={profile?.occupation} icon={Briefcase} />
+          </StaticCard>
         </div>
-
-        {/* ABDM Secure Badge */}
-        <AnimatedCard delay={0.6} style={trustCard}>
-          <div style={{ flex: 1 }}>
-            <p style={trustText}>Identity Secured</p>
-            <p style={{fontSize: '11px', color: '#166534', opacity: 0.8}}>Linked via ABDM Health Stack</p>
-          </div>
-          <ShieldCheck size={28} color="#28a745" />
-        </AnimatedCard>
-
       </div>
     </div>
   );
 };
 
-// --- MODERN ENTERPRISE STYLES ---
-const container = { maxWidth: '1240px', margin: '0 auto', padding: '40px 24px' };
-const uploadContainer = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginTop: '10px' };
-const uploadPlaceholder = { 
-  border: '2px dashed #cbd5e1', borderRadius: '16px', padding: '30px', 
-  textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center',
-  backgroundColor: '#fff'
-};
-const fileInputHidden = { position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', border: '0' };
-const uploadActionBtn = { marginTop: '16px', padding: '8px 20px', backgroundColor: '#10b981', color: '#fff', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' };
-const fileList = { display: 'flex', flexDirection: 'column', gap: '12px' };
-const fileItem = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' };
-const heroSection = { 
-  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-  marginBottom: '32px', padding: '32px', borderRadius: '28px',
-  backgroundColor: '#ffffff', border: '1px solid #e2e8f0', 
-  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.03)'
-};
-const uploadLayout = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginTop: '10px' };
-const dropZone = { 
-  border: '2px dashed #e2e8f0', backgroundColor: '#f8fafc', borderRadius: '20px', 
-  padding: '40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' 
-};
-const uploadMainText = { fontSize: '14px', fontWeight: '700', color: '#1e293b', margin: '12px 0 4px 0' };
-const uploadSubText = { fontSize: '12px', color: '#94a3b8', margin: 0 };
-const uploadButton = { 
-  marginTop: '16px', padding: '10px 24px', backgroundColor: '#10b981', color: '#fff', 
-  borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' 
-};
+// --- STYLING OBJECTS ---
 
-const fileListContainer = { display: 'flex', flexDirection: 'column', gap: '12px' };
-const listHeader = { fontSize: '12px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' };
-const fileItemRow = { 
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-  padding: '16px', borderRadius: '16px', border: '1px solid #f1f5f9', backgroundColor: '#fff' 
-};
-const fileIconBg = { padding: '10px', backgroundColor: '#ecfdf5', borderRadius: '10px' };
-const fileNameText = { fontSize: '13px', fontWeight: '700', color: '#1e293b', margin: 0 };
-const fileMetaText = { fontSize: '11px', color: '#94a3b8', margin: 0 };
-const fileActionBtn = { padding: '8px', border: 'none', backgroundColor: '#f1f5f9', borderRadius: '8px', cursor: 'pointer', color: '#64748b' };
-const fileActionBtnRed = { ...fileActionBtn, color: '#ef4444' };
-const heroContent = { display: 'flex', alignItems: 'center', gap: '28px' };
+const containerStyle = { maxWidth: '1100px', margin: '0 auto', padding: '40px 20px', fontFamily: '"Inter", sans-serif' };
+const headerSectionStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', padding: '24px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px' };
+const avatarStyle = { width: '64px', height: '64px', borderRadius: '10px', backgroundColor: '#0f172a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: '700' };
+const nameTitleStyle = { fontSize: '22px', fontWeight: '700', color: '#0f172a', margin: 0 };
+const patientIdStyle = { fontSize: '13px', color: '#64748b', marginTop: '4px' };
+const badgeStyle = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700', color: '#059669', backgroundColor: '#ecfdf5', padding: '4px 10px', borderRadius: '20px' };
 
-const avatarCircle = {
-  width: '88px', height: '88px', borderRadius: '24px', 
-  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  fontSize: '36px', fontWeight: '800', color: '#fff', 
-  boxShadow: '0 12px 20px -8px rgba(16, 185, 129, 0.4)'
-};
+const cardStyle = { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px' };
+const cardHeaderStyle = { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' };
+const sectionTitleStyle = { fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 };
 
-const title = { fontSize: '34px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.03em' };
-const subtitle = { fontSize: '15px', fontWeight: '600', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' };
+const contentGridStyle = { display: 'flex', flexDirection: 'column', gap: '20px' };
+const dataGrid3Style = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' };
+const dataGrid4Style = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' };
+const dataGrid2Style = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
 
-const statusBadgeActive = { 
-  display: 'flex', alignItems: 'center', gap: '6px',
-  backgroundColor: '#f0fdf4', color: '#166534', 
-  padding: '6px 12px', borderRadius: '10px', 
-  fontSize: '12px', fontWeight: '700', border: '1px solid #dcfce7'
-};
+const infoRowStyle = { display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f1f5f9' };
+const labelTextStyle = { fontSize: '13px', color: '#64748b', fontWeight: '500' };
+const valueTextStyle = { fontSize: '14px', color: '#0f172a', fontWeight: '600' };
+const iconBoxStyle = { width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
+const vitalCardStyle = { backgroundColor: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0' };
+const vitalLabelTextStyle = { fontSize: '10px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' };
+const vitalValueTextStyle = { fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: 0 };
+const vitalUnitTextStyle = { fontSize: '12px', color: '#64748b', fontWeight: '500' };
+const iconCircleStyle = { width: '32px', height: '32px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const statusBadgeMiniStyle = { fontSize: '9px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' };
 
+const vaultLayoutStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' };
+const dropzoneStyle = { border: '2px dashed #cbd5e1', borderRadius: '12px', padding: '32px', textAlign: 'center', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center' };
+const uploadTextStyle = { fontSize: '14px', fontWeight: '600', color: '#1e293b', margin: '12px 0 4px 0' };
+const uploadSubTextStyle = { fontSize: '11px', color: '#94a3b8', margin: 0 };
+const uploadButtonStyle = { marginTop: '16px', padding: '8px 20px', backgroundColor: '#0f172a', color: '#fff', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' };
 
-const cardHeader = { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' };
-const cardTitle = { fontSize: '13px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 };
+const fileListStyle = { display: 'flex', flexDirection: 'column', gap: '10px' };
+const scrollContainerStyle = { maxHeight: '240px', overflowY: 'auto', paddingRight: '8px' };
+const fileRowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: '1px solid #f1f5f9', borderRadius: '8px', marginBottom: '8px' };
+const fileIconBgStyle = { padding: '8px', backgroundColor: '#ecfdf5', borderRadius: '6px' };
+const fileNameStyle = { fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 };
+const fileDateStyle = { fontSize: '11px', color: '#94a3b8', margin: 0 };
+const smallHeaderStyle = { fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '12px' };
 
-const infoRow = { 
-  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-  padding: '14px 0', borderBottom: '1px solid #f8fafc' 
-};
-
-const iconBox = {
-  width: '28px', height: '28px', borderRadius: '8px', 
-  backgroundColor: '#f8fafc', display: 'flex', 
-  alignItems: 'center', justifyContent: 'center'
-};
-
-const labelStyle = { color: '#94a3b8', fontSize: '12px', fontWeight: '700' };
-const valueStyle = { fontWeight: '700', color: '#1e293b', fontSize: '15px' };
-
-const editBtn = { 
-  display: 'flex', alignItems: 'center', gap: '10px', 
-  padding: '14px 28px', borderRadius: '14px', 
-  border: '1px solid #e2e8f0', backgroundColor: '#ffffff', 
-  color: '#1e293b', fontWeight: '700', cursor: 'pointer',
-  transition: 'all 0.2s ease'
-};
-
-
-const iconCircle = {
-  width: '32px',
-  height: '32px',
-  borderRadius: '10px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center'
-};
-
-const statusBadgeMini = {
-  fontSize: '9px',
-  fontWeight: '800',
-  color: '#10b981',
-  backgroundColor: '#f0fdf4',
-  padding: '2px 6px',
-  borderRadius: '6px',
-  textTransform: 'uppercase'
-};
-const vitalsDashboardGrid = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '16px', // Increased gap for a more airy feel
-  marginTop: '16px'
-};
-
-
-const vitalLabelText = { 
-  fontSize: '10px', 
-  fontWeight: '800', 
-  color: '#94a3b8', 
-  margin: '12px 0 4px 0', 
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em' 
-};
-
-const vitalValueText = { 
-  fontSize: '18px', 
-  fontWeight: '800', 
-  color: '#0f172a', 
-  margin: 0 
-};
-// A simple column layout to stack cards
-const stackedLayout = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  gap: '24px' 
-};
-
-// For the ABHA ID section to look clean in one row
-const tripleGrid = { 
-  display: 'grid', 
-  gridTemplateColumns: '1fr 1fr 1fr', 
-  gap: '32px' 
-};
-
-// For the Clinical Baseline section to show all 4 in one row
-const vitalsFullWidthGrid = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)', // Forces 4 fields in same line
-  gap: '16px',
-  marginTop: '16px',
-  width: '100%'
-};
-
-const vitalMiniCard = {
-  backgroundColor: '#ffffff',
-  padding: '20px', 
-  borderRadius: '16px', // Slightly smoother corners
-  border: '1px solid #f1f5f9',
-  display: 'flex',
-  flexDirection: 'column',
-  transition: 'all 0.3s ease',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-  boxSizing: 'border-box'
-};
-
-// Update your card constant to remove bottom margin since stackedLayout handles the gap
-const card = { 
-  backgroundColor: '#fff', 
-  padding: '28px', 
-  borderRadius: '24px', 
-  border: '1px solid #f1f5f9', 
-  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)',
-  width: '100%',
-  boxSizing: 'border-box'
-};
-const vitalUnitText = { fontSize: '10px', color: '#94a3b8', fontWeight: '600', marginLeft: '2px' };
-const vitalsGrid = { display: 'flex', flexDirection: 'column' };
-const doubleGrid = { 
-  display: 'grid', 
-  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-  gap: '24px',
-  width: '100%' 
-};
-const trustCard = { 
-  display: 'flex', alignItems: 'center', gap: '16px',
-  padding: '24px', borderRadius: '20px', backgroundColor: '#f0fdf4', border: '1px solid #dcfce7'
-};
-
-const trustText = { fontSize: '15px', fontWeight: '800', color: '#166534', margin: 0 };
-const mainLayout = { 
-  display: 'flex', 
-  flexDirection: 'column', 
-  width: '100%' 
-};
-const sideCol = { display: 'flex', flexDirection: 'column' };
-const contentCol = { display: 'flex', flexDirection: 'column' };
-
-const loaderWrapper = { height: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' };
-const loaderText = { fontSize: '16px', color: '#64748b', fontWeight: '700', letterSpacing: '0.02em' };
-
-const errorContainer = { height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' };
-const errorCard = { textAlign: 'center', padding: '48px', maxWidth: '440px' };
-const retryBtn = { marginTop: '24px', padding: '14px 32px', borderRadius: '12px', border: 'none', backgroundColor: '#ef4444', color: '#fff', fontWeight: '700', cursor: 'pointer' };
+const outlineButtonStyle = { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', fontWeight: '600', fontSize: '13px', cursor: 'pointer' };
+const retryButtonStyle = { padding: '10px 24px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' };
+const actionIconStyle = { padding: '6px', color: '#64748b', borderRadius: '4px', cursor: 'pointer', border: 'none', backgroundColor: '#f1f5f9' };
+const actionIconRedStyle = { ...actionIconStyle, color: '#ef4444' };
+const emptyTextStyle = { fontSize: '13px', color: '#94a3b8', textAlign: 'center', padding: '40px' };
+const loaderWrapperStyle = { height: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', color: '#64748b', fontSize: '14px' };
+const errorContainerStyle = { height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
 export default PatientProfile;
