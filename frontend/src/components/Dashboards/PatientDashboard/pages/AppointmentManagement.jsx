@@ -24,12 +24,17 @@ const StatusBadge = ({ status }) => {
   return (
     <div style={{ 
       display: 'flex', alignItems: 'center', gap: '6px', 
-      padding: '6px 12px', borderRadius: '20px', 
+      padding: '6px 14px', borderRadius: '20px', 
       backgroundColor: config.bg, color: config.color,
-      fontSize: '11px', fontWeight: '700', textTransform: 'uppercase'
+      fontSize: '10px', fontWeight: '800', 
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      whiteSpace: 'nowrap', // Prevents text wrapping
+      border: `1px solid ${config.color}20` // Adds a subtle border
     }}>
       <Icon size={12} /> {config.label}
     </div>
+  
   );
 };
 
@@ -41,6 +46,8 @@ const AppointmentManagement = () => {
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [hospitalInfo, setHospitalInfo] = useState(null);  
   const [contactInfo, setContactInfo] = useState({ name: "Hospital", phone: "" });
+  const [searchTerm, setSearchTerm] = useState('');
+const [filterStatus, setFilterStatus] = useState('All');
   const [formData, setFormData] = useState({
     doctor_id: '',
     reason: '',
@@ -173,6 +180,15 @@ const handleBooking = async (e) => {
     const today = new Date().toISOString().split('T')[0];
     return dateString === today;
   };
+  // Add this logic before the return statement
+const filteredAppointments = appointments.filter((appt) => {
+  const matchesSearch = appt.doctor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        appt.reason?.toLowerCase().includes(searchTerm.toLowerCase());
+  
+  const matchesStatus = filterStatus === 'All' || appt.status === filterStatus;
+
+  return matchesSearch && matchesStatus;
+});
   return (
     <div style={container}>
       {/* HEADER SECTION */}
@@ -201,17 +217,46 @@ const handleBooking = async (e) => {
             exit={{ opacity: 0, y: -10 }}
           >
             <div style={toolbar}>
-              <div style={searchBox}>
-                <Search size={16} color="#94a3b8" />
-                <input type="text" placeholder="Search appointments..." style={searchInput} />
-              </div>
-              <button style={filterBtn}><Filter size={16} /> Filter Status</button>
+            <div style={searchBox}>
+  <Search size={16} color="#94a3b8" />
+  <input 
+    type="text" 
+    placeholder="Search by doctor or reason..." 
+    style={searchInput}
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)} // Makes search work
+  />
+</div>
+<div style={filterWrapper}>
+  <Filter size={16} style={filterIcon} />
+  <select 
+    style={styledSelect}
+    value={filterStatus}
+    onChange={(e) => setFilterStatus(e.target.value)}
+  >
+    <option value="All">All Statuses</option>
+    <option value="Scheduled">Confirmed</option>
+    <option value="Pending">Pending</option>
+    <option value="Rescheduled">Rescheduled</option>
+    <option value="Cancelled">Cancelled</option>
+  </select>
+  {/* Custom arrow replaces the default browser look */}
+  <div style={customArrow}>▾</div>
+</div>
             </div>
 
             <div style={appointmentGrid}>
-              {appointments.length > 0 ? appointments.map((appt) => (
-                <motion.div key={appt.id} style={appointmentCard} whileHover={{ y: -4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+  {filteredAppointments.length > 0 ? filteredAppointments.map((appt) => (
+    <motion.div 
+  key={appt.id} 
+  style={appointmentCard} 
+  whileHover={{ 
+    y: -5, 
+    borderColor: '#10b981', // Highlights the border on hover
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' 
+  }}
+>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={doctorInfo}>
                       <div style={doctorAvatar}>{appt.doctor_name?.[0] || 'D'}</div>
                       <div>
@@ -250,12 +295,25 @@ const handleBooking = async (e) => {
                     )}
                   </div>
                 </motion.div>
-              )) : (
-                <div style={{ textAlign: 'center', gridColumn: '1/-1', padding: '40px', color: '#64748b' }}>
-                    No appointments found. Start by booking a new request.
-                </div>
-              )}
-            </div>
+              )
+            ) : (
+              <div style={{ textAlign: 'center', gridColumn: '1/-1', padding: '60px', color: '#64748b' }}>
+                <Search size={40} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <p style={{ fontSize: '16px', fontWeight: '500' }}>
+                  No appointments found matching "<strong>{searchTerm}</strong>"
+                </p>
+                {searchTerm !== '' && (
+                  <button 
+                    onClick={() => setSearchTerm('')} 
+                    style={{ ...textBtn, marginTop: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Clear Search and Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+            
           </motion.div>
         )}
 
@@ -506,13 +564,11 @@ const handleBooking = async (e) => {
 // --- STYLES (Kept for Layout Integrity) ---
 const container = { 
   width: '100%',        
-  maxWidth: 'none',     
-  margin: '0',          
-  overflowX: 'hidden', 
+  maxWidth: '1200px',     // Centered "profile" feel
+  margin: '0 auto',       // Center the content
+  padding: '24px 40px',   // Match the internal padding of the profile view
   minHeight: '100vh',
-  paddingLeft: '20px', // Adjust this number based on your actual sidebar width
-  paddingRight: '0px', // Adds some breathing room on the right
-  paddingTop: '20px'    
+  backgroundColor: '#f8fafc' // Subtle background to make white cards pop
 };
 const appointmentCard = { 
   backgroundColor: '#fff', 
@@ -530,8 +586,6 @@ const pageTitle = { fontSize: '24px', fontWeight: '800', color: '#0f172a', margi
 const pageSubtitle = { color: '#64748b', margin: '4px 0 0 0', fontSize: '14px' };
 const primaryBtn = { backgroundColor: '#28a745', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' };
 const secondaryBtn = { backgroundColor: '#fff', color: '#64748b', border: '1px solid #e2e8f0', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' };
-const toolbar = { display: 'flex', gap: '16px', marginBottom: '24px' };
-const searchBox = { flex: 1, backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', padding: '0 16px' };
 const searchInput = { border: 'none', padding: '12px', outline: 'none', width: '100%', fontSize: '14px' };
 const filterBtn = { backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '0 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontWeight: '600' };
 const appointmentGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' };
@@ -541,8 +595,82 @@ const docName = { margin: 0, fontSize: '16px', color: '#1e293b' };
 const reasonLabel = { margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' };
 const dateTimeBar = { display: 'flex', gap: '16px', margin: '20px 0', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '12px' };
 const dataItem = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569', fontWeight: '600' };
-const cardFooter = { display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: '16px' };
 const textBtn = { border: 'none', background: 'none', color: '#10b981', fontWeight: '700', cursor: 'pointer', fontSize: '13px' };
+const cardFooter = { 
+  display: 'flex', 
+  justifyContent: 'space-between', 
+  alignItems: 'center', // Align buttons vertically
+  borderTop: '1px solid #f1f5f9', 
+  paddingTop: '16px',
+  marginTop: 'auto' // Pushes footer to the bottom of the card
+};
+
+// Add this new style for a more "button-like" feel
+const actionBtn = {
+  padding: '6px 12px',
+  borderRadius: '8px',
+  fontSize: '12px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+  border: '1px solid transparent'
+};
+const toolbar = { 
+  display: 'flex', 
+  gap: '12px', 
+  marginBottom: '24px', 
+  alignItems: 'stretch' 
+};
+
+const searchBox = { 
+  flex: 1, 
+  backgroundColor: '#fff', 
+  border: '1px solid #e2e8f0', 
+  borderRadius: '10px', // Matches card radius slightly more closely
+  display: 'flex', 
+  alignItems: 'center', 
+  padding: '0 14px' 
+};
+const filterWrapper = {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  backgroundColor: '#fff',
+  border: '1px solid #e2e8f0',
+  borderRadius: '12px',
+  transition: 'all 0.2s ease',
+  minWidth: '180px', // Matches the width seen in your screenshots
+  cursor: 'pointer'
+};
+
+const filterIcon = {
+  position: 'absolute',
+  left: '14px',
+  color: '#64748b',
+  pointerEvents: 'none'
+};
+
+const styledSelect = {
+  width: '100%',
+  padding: '12px 35px 12px 40px',
+  backgroundColor: 'transparent',
+  border: 'none',
+  outline: 'none',
+  fontSize: '14px',
+  fontWeight: '600',
+  color: '#475569',
+  cursor: 'pointer',
+  appearance: 'none', // Critical: Removes default browser arrow
+  zIndex: 1
+};
+
+const customArrow = {
+  position: 'absolute',
+  right: '14px',
+  color: '#94a3b8',
+  fontSize: '12px',
+  pointerEvents: 'none'
+};
 const cancelLink = { border: 'none', background: 'none', color: '#ef4444', fontWeight: '700', cursor: 'pointer', fontSize: '13px' };
 const formCard = { backgroundColor: '#fff', padding: '40px', borderRadius: '24px', border: '1px solid #e2e8f0', maxWidth: '600px', margin: '0 auto' };
 const formTitle = { margin: '0 0 24px 0', fontSize: '20px', color: '#0f172a' };

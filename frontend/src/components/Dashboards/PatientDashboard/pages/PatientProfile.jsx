@@ -316,3 +316,4 @@ const loaderWrapperStyle = { height: '80vh', display: 'flex', flexDirection: 'co
 const errorContainerStyle = { height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
 export default PatientProfile;
+

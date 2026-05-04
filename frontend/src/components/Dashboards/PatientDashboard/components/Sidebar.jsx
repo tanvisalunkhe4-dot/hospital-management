@@ -29,7 +29,6 @@ const Sidebar = () => {
 
       {/* Navigation Group */}
       <div style={navGroup}>
-        <p style={groupLabel}>Main Menu</p>
         <nav style={navLinks}>
           {menuItems.map((item) => (
             <NavLink 
