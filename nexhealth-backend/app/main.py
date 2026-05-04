@@ -53,7 +53,6 @@ app.include_router(superadmin_router)
 # Your Specialized Portals
 app.include_router(receptionist_router.router)
 app.include_router(doctor_router.router)
-app.include_router(patient_router)
 
 # Patient Portal with specific prefix
 app.include_router(

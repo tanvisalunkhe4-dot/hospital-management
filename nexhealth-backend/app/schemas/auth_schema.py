@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Any
-from datetime import datetime
+from datetime import datetime, date, time
 # --- ADD THIS CLASS ---
 class HospitalCreate(BaseModel):
     name: str
@@ -148,12 +148,13 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
+
 class AppointmentRead(BaseModel):
     id: int
     doctor_name: Optional[str] = None
-    hospital_name: Optional[str] = None
-    appointment_date: datetime
-    status: str 
+    appointment_date: date
+    appointment_time: Optional[time] = None  # 🟢 ADD THIS
+    status: str
     reason: Optional[str] = None
 
     class Config:
