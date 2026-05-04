@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, Clock, User, MessageSquare, 
@@ -39,7 +39,7 @@ const AppointmentManagement = () => {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('list'); 
   const [selectedAppt, setSelectedAppt] = useState(null);
-
+  const [hospitalInfo, setHospitalInfo] = useState(null);  
   const [formData, setFormData] = useState({
     doctor_id: '',
     reason: '',
@@ -48,38 +48,41 @@ const AppointmentManagement = () => {
     urgency: 'Normal'
   });
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const hospId = localStorage.getItem('hospital_id') || 1;
-        if (!token) return;
-  
-        const [doctorRes, apptRes, hospRes] = await Promise.all([
-          axios.get(`http://localhost:8000/api/v1/receptionist/doctors/${hospId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }), // <--- Ensure this comma exists
-          axios.get('http://localhost:8000/api/v1/patient/appointments', {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-          
-        ]);
-        setDoctors(doctorRes.data);
-        setAppointments(apptRes.data);
-        setHospitalInfo(hospRes.data); // Store live hospital data
-      } catch (err) {
-        console.error("Data fetch failed:", err);
-      } finally {
-        setLoading(false);
+  const loadData = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const hospId = localStorage.getItem('hospital_id') || 1;
+      
+      if (!token) {
+        console.error("No authentication token found.");
+        return;
       }
-    };
-  
-    loadData();
-  
-    // 🟢 LIVE SYNC: Refresh appointment status every 10 seconds
-    const interval = setInterval(loadData, 10000); 
-    return () => clearInterval(interval); // Cleanup on unmount
+
+      const [doctorRes, apptRes, hospRes] = await Promise.all([
+        axios.get(`http://localhost:8000/api/v1/receptionist/doctors/${hospId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get('http://localhost:8000/api/v1/patient/appointments', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
+      setDoctors(doctorRes.data);
+      setAppointments(apptRes.data);
+    } catch (err) {
+      console.error("Data fetch failed:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+    // Refresh every 10 seconds to keep status updated
+    const interval = setInterval(loadData, 10000); 
+    return () => clearInterval(interval);
+  }, [loadData]);
+  
 
 
   const handleCancel = async (apptId) => {
