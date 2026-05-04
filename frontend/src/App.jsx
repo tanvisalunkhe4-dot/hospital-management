@@ -14,6 +14,9 @@ import DoctorDashboard from "./components/Dashboards/DoctorDashboard/pages/Docto
 import NurseDashboard from './components/Dashboards/NurseDashboard/pages/NurseDashboard';
 import NurseOverview from './components/Dashboards/NurseDashboard/pages/NurseOverview';
 import PatientMonitoring from './components/Dashboards/NurseDashboard/pages/PatientMonitoring';
+import WardManagement from './components/Dashboards/NurseDashboard/pages/WardManagement';
+import TreatmentSupport from './components/Dashboards/NurseDashboard/pages/TreatmentSupport';
+import RecordsAccess from './components/Dashboards/NurseDashboard/pages/RecordsAccess';
 
 // New Dashboards from the merge
 import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
@@ -37,11 +40,18 @@ function App() {
         <Route path="/reception-desk" element={<ReceptionistDashboardWrapper />} />
         <Route path="/doctor-portal" element={<DoctorDashboardWrapper />} />
         <Route path="/admin-dashboard" element={<AdminDashboard key={localStorage.getItem('hospital_id')} />} />
-        <Route path="/nurse-dashboard" element={<NurseDashboardWrapper />}>
-          <Route index element={<NurseOverview />} />
-          <Route path="overview" element={<NurseOverview />} />
-          <Route path="monitoring" element={<PatientMonitoring />} />
-        </Route>
+        // Inside the Routes block in App.jsx
+<Route path="/nurse-dashboard" element={<NurseDashboardWrapper />}>
+  <Route index element={<NurseOverview />} />
+  <Route path="overview" element={<NurseOverview />} />
+  <Route path="monitoring" element={<PatientMonitoring />} />
+  
+  {/* Add these to match your Sidebar and Image 9b959b.png */}
+  <Route path="ward" element={<WardManagement />} /> 
+  <Route path="vitals" element={<PatientMonitoring />} /> 
+  <Route path="treatment" element={<TreatmentSupport />} />
+  <Route path="records" element={<RecordsAccess />} />
+\</Route>
         
         {/* Patient Portal with Nested Routing */}
         <Route path="/patient-dashboard/*" element={<PatientDashboard />} />
