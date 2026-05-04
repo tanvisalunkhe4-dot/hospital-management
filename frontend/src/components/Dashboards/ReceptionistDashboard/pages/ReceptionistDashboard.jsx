@@ -652,9 +652,15 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [rescheduleAppt, setRescheduleAppt] = useState(null);
 
-  // Filtering logic
+  // --- UPDATED FILTERING LOGIC ---
+  // 1. Patients currently with the doctor
+  const inConsultation = appointments.filter(a => a.status === 'In Consultation');
+  // 2. Patients who have arrived and are waiting
   const waitingRoom = appointments.filter(a => a.status === 'Checked In');
-  const upcomingToday = appointments.filter(a => a.status !== 'Checked In' && a.status !== 'Cancelled');
+  // 3. Patients scheduled for later (not arrived, cancelled, or finished)
+  const upcomingToday = appointments.filter(a => 
+    !['Checked In', 'In Consultation', 'Cancelled', 'Completed'].includes(a.status)
+  );
 
   const handleAction = async (type, appt) => {
     setActiveMenuId(null);
@@ -672,7 +678,6 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
           if (response.ok) refresh();
           break;
         case 'RESCHEDULE':
-          // Open the local modal instead of switching views
           setRescheduleAppt(appt);
           break;
         default:
@@ -708,7 +713,24 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
         <button onClick={onBack} style={backBtn}><ArrowLeft size={16} /> Back to Dashboard</button>
       </div>
       
-      {/* Live Waiting Room */}
+      {/* 1. NEW: Active Consultations Block */}
+      {inConsultation.length > 0 && (
+        <div style={{ ...tableCardStyle, borderColor: '#0284c7', backgroundColor: '#f0f9ff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#0284c7' }}></div>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0284c7' }}>Currently In Consultation</h3>
+          </div>
+          <AppointmentTable 
+            data={inConsultation} 
+            onAction={() => {}} 
+            activeMenuId={activeMenuId}
+            setActiveMenuId={setActiveMenuId}
+            isConsulting={true}
+          />
+        </div>
+      )}
+
+      {/* 2. Live Waiting Room */}
       <div style={tableCardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669', animation: 'pulse 2s infinite' }}></div>
@@ -722,7 +744,7 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
         />
       </div>
 
-      {/* Remaining Schedule */}
+      {/* 3. Remaining Schedule */}
       <div style={{ ...tableCardStyle, borderStyle: 'dashed', borderColor: '#cbd5e1', overflow: 'visible' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 20px 0', color: '#64748b' }}>Remaining Schedule</h3>
         <AppointmentTable 
@@ -733,7 +755,6 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
         />
       </div>
 
-      {/* Reschedule Card Overlay */}
       <AnimatePresence>
         {rescheduleAppt && (
           <RescheduleModal 
@@ -747,7 +768,7 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
   );
 };
 
-const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId }) => (
+const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId, isConsulting }) => (
   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
     <thead>
       <tr style={{ textAlign: 'left', borderBottom: `1px solid #f1f5f9` }}>
@@ -770,13 +791,24 @@ const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId }) => 
           </td>
           <td style={tdStyle}>{appt.doctor_name}</td>
           <td style={tdStyle}>
-            <span style={appt.status === 'Checked In' ? statusBadgeGreen : statusBadgeBlue}>
+            <span style={
+              appt.status === 'In Consultation' ? { ...statusBadgeBlue, backgroundColor: '#f0f9ff', color: '#0284c7' } :
+              appt.status === 'Checked In' ? statusBadgeGreen : statusBadgeBlue
+            }>
               {appt.status}
             </span>
           </td>
           <td style={{ ...tdStyle, position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {appt.status !== 'Checked In' ? (
+              {isConsulting ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0284c7', fontWeight: '700', fontSize: '13px' }}>
+                  <Clock size={16} /> With Doctor
+                </div>
+              ) : appt.status === 'Checked In' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669', fontWeight: '600', fontSize: '13px' }}>
+                  <CheckCircle size={16} /> In Waiting Room
+                </div>
+              ) : (
                 <>
                   <button onClick={() => onAction('CHECK_IN', appt)} style={miniBtn}>Check In</button>
                   <div style={{ position: 'relative' }}>
@@ -810,10 +842,6 @@ const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId }) => 
                     </AnimatePresence>
                   </div>
                 </>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669', fontWeight: '600', fontSize: '13px' }}>
-                <CheckCircle size={16} /> In Waiting
-              </div>
               )}
             </div>
           </td>

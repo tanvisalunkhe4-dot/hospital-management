@@ -229,7 +229,8 @@ useEffect(() => {
 
   const getStatusBadge = (status) => {
     const styles = {
-      'Checked-in': { bg: '#dcfce7', text: '#166534' },
+      'In Consultation': { bg: '#f0f9ff', text: '#0284c7' }, // Light blue theme
+      'Checked In': { bg: '#dcfce7', text: '#166534' },
       'Waiting': { bg: '#fef9c3', text: '#854d0e' },
       'Scheduled': { bg: '#eff6ff', text: '#1e40af' },
       'default': { bg: '#f1f5f9', text: '#475569' }
