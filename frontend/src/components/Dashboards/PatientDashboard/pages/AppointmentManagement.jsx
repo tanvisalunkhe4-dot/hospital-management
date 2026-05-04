@@ -40,6 +40,7 @@ const AppointmentManagement = () => {
   const [view, setView] = useState('list'); 
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [hospitalInfo, setHospitalInfo] = useState(null);  
+  const [contactInfo, setContactInfo] = useState({ name: "Hospital", phone: "" });
   const [formData, setFormData] = useState({
     doctor_id: '',
     reason: '',
@@ -64,11 +65,22 @@ const AppointmentManagement = () => {
         }),
         axios.get('http://localhost:8000/api/v1/patient/appointments', {
           headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`http://localhost:8000/api/v1/patient/hospital-contact/${hospId}`, {
+          headers: { Authorization: `Bearer ${token}` }
         })
       ]);
-
+      
       setDoctors(doctorRes.data);
       setAppointments(apptRes.data);
+      
+      // Fix applied here: changed contactRes to hospRes
+      if (hospRes.data) {
+        setContactInfo({
+          name: hospRes.data.hospital_name,
+          phone: hospRes.data.phone_number
+        });
+      }
     } catch (err) {
       console.error("Data fetch failed:", err);
     } finally {
@@ -156,6 +168,11 @@ const handleBooking = async (e) => {
     </div>
   );
   const hospitalName = doctors.length > 0 ? doctors[0].hospital_name : "NexHealth Medical Center";
+  const isToday = (dateString) => {
+    if (!dateString) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return dateString === today;
+  };
   return (
     <div style={container}>
       {/* HEADER SECTION */}
@@ -255,6 +272,31 @@ const handleBooking = async (e) => {
     <h3 style={formTitle}>
       {isRescheduling ? `Reschedule Appointment #${selectedAppt?.id}` : 'New Appointment Request'}
     </h3>
+
+    {/* 🟢 NEW: Same-Day Booking Alert */}
+    {isToday(formData.preferred_date) && (
+      <motion.div 
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        style={contactAlertBox}
+      >
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <AlertCircle color="#9a3412" size={20} />
+          <div>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#9a3412' }}>
+              Urgent: Same-Day Appointment
+            </p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#c2410c' }}>
+              Online requests for today might not be processed immediately. 
+              Please call <strong>{contactInfo.name}</strong> at: 
+              <a href={`tel:${contactInfo.phone}`} style={{ marginLeft: '5px', fontWeight: '800', color: '#9a3412', textDecoration: 'underline' }}>
+                {contactInfo.phone}
+              </a>
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    )}
 
     <form onSubmit={handleBooking} style={bookingForm}>
       <div style={inputGroup}>
@@ -566,7 +608,14 @@ const locationBox = {
   display: 'flex',
   alignItems: 'center'
 };
-
+const contactAlertBox = {
+  backgroundColor: '#fff7ed',
+  border: '1px solid #fdba74',
+  padding: '16px',
+  borderRadius: '12px',
+  marginBottom: '20px',
+  overflow: 'hidden'
+};
 const iconCircle = {
   width: '36px',
   height: '36px',

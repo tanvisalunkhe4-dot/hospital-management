@@ -4,7 +4,7 @@ import {
   User, Mail, Phone, MapPin, Fingerprint, 
   ShieldCheck, Edit3, Loader2, AlertCircle,
   Droplet, Calendar, Activity,
-  CheckCircle2, Briefcase, ShieldAlert, Scale
+  CheckCircle2, Briefcase, ShieldAlert, Scale, FileText, Upload, Trash2, ExternalLink
 } from 'lucide-react';
 import axios from 'axios';
 import { useUser } from "../../../../UserContext";
@@ -13,17 +13,24 @@ import { useUser } from "../../../../UserContext";
 
 const AnimatedCard = ({ children, delay = 0, style = {} }) => (
   <motion.div
-    initial={{ opacity: 0, y: 15 }}
+    initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.4, delay }}
+    transition={{ 
+      type: "spring", 
+      stiffness: 100, 
+      damping: 15, 
+      delay: delay 
+    }}
     style={{ ...card, ...style }}
   >
     {children}
   </motion.div>
 );
-
 const DataRow = ({ label, value, icon: Icon, isCritical }) => (
-  <div style={infoRow}>
+  <motion.div 
+    whileHover={{ x: 5 }} 
+    style={infoRow}
+  >
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
       <div style={iconBox}>
         {Icon && <Icon size={14} color="#64748b" />}
@@ -39,7 +46,7 @@ const DataRow = ({ label, value, icon: Icon, isCritical }) => (
     }}>
       {value || <span style={{ color: '#94a3b8', fontWeight: 400 }}>Not Provided</span>}
     </span>
-  </div>
+  </motion.div>
 );
 
 const VitalMetric = ({ label, value, unit, icon: Icon, color, delay }) => (
@@ -80,28 +87,96 @@ const VitalMetric = ({ label, value, unit, icon: Icon, color, delay }) => (
 );
 const PatientProfile = () => {
   const [profile, setProfile] = useState(null);
+  const [documents, setDocuments] = useState([]); // 🟢 State for dynamic files
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { setProfileImage } = useUser(); 
+  const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
-    const fetchProfileData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error("Authentication token not found.");
 
-        const response = await axios.get('http://localhost:8000/api/v1/patient/profile', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setProfile(response.data);
-      } catch (err) {
-        setError(err.response?.data?.detail || err.message);
-      } finally {
-        setLoading(false);
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error("Authentication token not found.");
+      
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      // 🟢 Fetch both Profile and Medical Records in parallel
+      const [profileRes, docsRes] = await Promise.all([
+        axios.get('http://localhost:8000/api/v1/patient/profile', { headers }),
+        axios.get('http://localhost:8000/api/v1/patient/medical-records', { headers })
+      ]);
+
+      setProfile(profileRes.data);
+      setDocuments(docsRes.data); // 🟢 Store the list of uploaded files
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchData();
+}, []);
+
+const handleDeleteDocument = async (recordId) => {
+  // 🟢 Safety Check: If recordId is undefined, stop the function
+  if (!recordId) {
+    console.error("Delete failed: Record ID is undefined");
+    return;
+  }
+
+  if (!window.confirm("Are you sure you want to delete this document?")) return;
+
+  try {
+    const token = localStorage.getItem('token');
+    await axios.delete(`http://localhost:8000/api/v1/patient/medical-records/${recordId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    // Update local state to remove the deleted file
+    setDocuments(prev => prev.filter(doc => doc.id !== recordId));
+  } catch (err) {
+    alert("Failed to delete document.");
+  }
+};
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post( // 🟢 Assign variable here
+        'http://localhost:8000/api/v1/patient/upload-document', 
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      
+      if (response.data) {
+        // 🟢 Update the list immediately so the new file appears instantly
+        setDocuments(prevDocs => [response.data, ...prevDocs]);
+        alert("Document uploaded and secured in vault.");
       }
-    };
-    fetchProfileData();
-  }, []);
+  
+    } catch (err) {
+      console.error("Upload Error:", err);
+      alert("Upload failed. Please ensure the file is a PDF or Image under 5MB.");
+    } finally {
+      setIsUploading(false);
+      // Clear the input so the same file can be uploaded again if needed
+      e.target.value = null; 
+    }
+  };
 
   if (loading) return (
     <div style={loaderWrapper}>
@@ -197,7 +272,82 @@ const PatientProfile = () => {
   </div>
 </AnimatedCard>
 
-        {/* 4. CONTACT & LOCATION */}
+  {/* 4. NEW: MEDICAL DOCUMENTS BLOCK */}
+  <AnimatedCard delay={0.3}>
+          <div style={cardHeader}>
+            <FileText size={18} color="#28a745" />
+            <h3 style={cardTitle}>Medical Records & KYC Vault</h3>
+          </div>
+          
+          <div style={uploadLayout}>
+            {/* Upload Area */}
+            <div style={dropZone}>
+              {isUploading ? (
+                <Loader2 size={32} className="animate-spin" color="#10b981" />
+              ) : (
+                <Upload size={32} color="#94a3b8" />
+              )}
+              <p style={uploadMainText}>Click to upload clinical records</p>
+              <p style={uploadSubText}>Supports PDF, JPG (Max 5MB)</p>
+              <input 
+                type="file" 
+                id="file-input" 
+                style={{ display: 'none' }} 
+                onChange={handleFileUpload}
+                disabled={isUploading}
+              />
+              <label htmlFor="file-input" style={uploadButton}>
+                {isUploading ? "Uploading..." : "Select File"}
+              </label>
+            </div>
+
+            {/* File List Area */}
+            <div style={fileListContainer}>
+  <h4 style={listHeader}>Recent Uploads</h4>
+  
+  {documents.length > 0 ? (
+    documents.map((doc) => (
+      <div key={doc.id} style={fileItemRow}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={fileIconBg}>
+            <FileText size={16} color="#059669" />
+          </div>
+          <div>
+            {/* Display description (filename) and formatted date */}
+            <p style={fileNameText}>{doc.description || "Medical Document"}</p>
+            <p style={fileMetaText}>
+              Uploaded on {new Date(doc.created_at).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <a 
+            href={`http://localhost:8000/${doc.file_url}`} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={fileActionBtn}
+          >
+            <ExternalLink size={14} />
+          </a>
+          <button 
+    onClick={() => handleDeleteDocument(doc.id)}
+    style={fileActionBtnRed}
+  >
+    <Trash2 size={14} />
+  </button>
+        </div>
+      </div>
+    ))
+  ) : (
+    <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
+      No records found.
+    </p>
+  )}
+</div>
+          </div>
+        </AnimatedCard>
+
+        {/* 5. CONTACT & LOCATION */}
         <AnimatedCard delay={0.3}>
           <div style={cardHeader}>
             <Phone size={18} color="#28a745" />
@@ -249,14 +399,45 @@ const PatientProfile = () => {
 
 // --- MODERN ENTERPRISE STYLES ---
 const container = { maxWidth: '1240px', margin: '0 auto', padding: '40px 24px' };
-
+const uploadContainer = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginTop: '10px' };
+const uploadPlaceholder = { 
+  border: '2px dashed #cbd5e1', borderRadius: '16px', padding: '30px', 
+  textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center',
+  backgroundColor: '#fff'
+};
+const fileInputHidden = { position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', border: '0' };
+const uploadActionBtn = { marginTop: '16px', padding: '8px 20px', backgroundColor: '#10b981', color: '#fff', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' };
+const fileList = { display: 'flex', flexDirection: 'column', gap: '12px' };
+const fileItem = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' };
 const heroSection = { 
   display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
   marginBottom: '32px', padding: '32px', borderRadius: '28px',
   backgroundColor: '#ffffff', border: '1px solid #e2e8f0', 
   boxShadow: '0 10px 25px -5px rgba(0,0,0,0.03)'
 };
+const uploadLayout = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginTop: '10px' };
+const dropZone = { 
+  border: '2px dashed #e2e8f0', backgroundColor: '#f8fafc', borderRadius: '20px', 
+  padding: '40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' 
+};
+const uploadMainText = { fontSize: '14px', fontWeight: '700', color: '#1e293b', margin: '12px 0 4px 0' };
+const uploadSubText = { fontSize: '12px', color: '#94a3b8', margin: 0 };
+const uploadButton = { 
+  marginTop: '16px', padding: '10px 24px', backgroundColor: '#10b981', color: '#fff', 
+  borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' 
+};
 
+const fileListContainer = { display: 'flex', flexDirection: 'column', gap: '12px' };
+const listHeader = { fontSize: '12px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' };
+const fileItemRow = { 
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+  padding: '16px', borderRadius: '16px', border: '1px solid #f1f5f9', backgroundColor: '#fff' 
+};
+const fileIconBg = { padding: '10px', backgroundColor: '#ecfdf5', borderRadius: '10px' };
+const fileNameText = { fontSize: '13px', fontWeight: '700', color: '#1e293b', margin: 0 };
+const fileMetaText = { fontSize: '11px', color: '#94a3b8', margin: 0 };
+const fileActionBtn = { padding: '8px', border: 'none', backgroundColor: '#f1f5f9', borderRadius: '8px', cursor: 'pointer', color: '#64748b' };
+const fileActionBtnRed = { ...fileActionBtn, color: '#ef4444' };
 const heroContent = { display: 'flex', alignItems: 'center', gap: '28px' };
 
 const avatarCircle = {

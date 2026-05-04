@@ -13,13 +13,19 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 PROFILE_PICS_DIR = os.path.join(STATIC_DIR, "profile_pics")
 
-# 2. Setup the directory and mount
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+MEDICAL_RECORDS_DIR = os.path.join(UPLOAD_DIR, "medical_records")
+
+# 2. CREATE DIRECTORIES BEFORE MOUNTING
+# This prevents the "RuntimeError: Directory 'uploads' does not exist"
 os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
+os.makedirs(MEDICAL_RECORDS_DIR, exist_ok=True)
 
 # 🟢 Mount using the full absolute path we just found
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-load_dotenv()
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+load_dotenv()
 # Database imports
 from app.db import models
 from app.db.session import engine

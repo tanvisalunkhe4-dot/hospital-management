@@ -51,6 +51,19 @@ useEffect(() => {
     return () => window.removeEventListener('click', handleClickOutside);
   }, [activeMenuId]);
 
+  // Add this near your other useEffect hooks in BookAppointment.jsx
+useEffect(() => {
+  // ⏱️ Set up an interval to refresh data every 5 seconds
+  const autoRefresh = setInterval(() => {
+    if (refresh) {
+      console.log("Auto-syncing appointments...");
+      refresh();
+    }
+  }, 5000);
+
+  // Cleanup: Stop the timer if the user leaves the page
+  return () => clearInterval(autoRefresh);
+}, [refresh]);
  ;
   // --- FILTERING LOGIC ---
   const getMidnight = (date) => {
