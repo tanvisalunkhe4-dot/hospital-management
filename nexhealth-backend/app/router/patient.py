@@ -42,7 +42,8 @@ from app.schemas.appointment_schema import(
     PatientAppointmentRequest
 )
 
-patient_router = APIRouter(prefix="/api/v1/patient", tags=["patient"])
+# Remove the prefix here because it is already defined in main.py
+patient_router = APIRouter(tags=["patient"])
 def get_or_create_patient_profile(db: Session, current_user: User) -> Patient:
     """Find receptionist-created record or link a new one to the user."""
     if current_user.role != "Patient":
@@ -448,3 +449,63 @@ def read_patient_appointments(
     return db.query(Appointment).filter(
         Appointment.patient_id == patient.id
     ).order_by(Appointment.appointment_date.desc()).all()
+
+
+
+from app.schemas.appointment_schema import AppointmentUpdate
+
+# --- REQUEST CANCELLATION ---
+@patient_router.patch("/appointments/{appointment_id}/request-cancel")
+def request_cancel_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Instead of deleting, we tag the appointment for receptionist review."""
+    patient = get_or_create_patient_profile(db, current_user)
+    
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id,
+        Appointment.patient_id == patient.id
+    ).first()
+
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    # 🟢 Set status to a new state that the receptionist will see
+    appointment.status = "Cancellation Requested"
+    
+    db.commit()
+    db.refresh(appointment)
+    return {"message": "Cancellation request sent to receptionist"}
+    
+# --- RESCHEDULE APPOINTMENT ---
+@patient_router.patch("/appointments/{appointment_id}/reschedule")
+def reschedule_appointment(
+    appointment_id: int,
+    appt_update: AppointmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Allows a patient to request a different time/date. Sets status to Rescheduled."""
+    patient = get_or_create_patient_profile(db, current_user)
+    
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id,
+        Appointment.patient_id == patient.id
+    ).first()
+
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    # Update the date and time
+    if appt_update.appointment_date:
+        appointment.appointment_date = appt_update.appointment_date
+    if appt_update.appointment_time:
+        appointment.appointment_time = appt_update.appointment_time
+
+    appointment.status = "Rescheduled" 
+    
+    db.commit()
+    db.refresh(appointment)
+    return appointment

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+
 
 import { ArrowLeft } from 'lucide-react';
 import theme from "../../../../theme/theme";
@@ -65,7 +66,25 @@ const PatientRegistration = ({ onBack }) => {
       setStatus({ loading: false, msg: errorMsg, type: 'error' });
     }
   };
+  const [doctors, setDoctors] = useState([]);
 
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const hospId = localStorage.getItem('hospital_id') || 1;
+        
+        const res = await axios.get(`http://localhost:8000/api/v1/receptionist/doctors/${hospId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setDoctors(res.data);
+      } catch (err) {
+        console.error("Failed to load doctors for registration:", err);
+      }
+    };
+  
+    fetchDoctors();
+  }, []);
   // --- STYLES ---
   const backBtnStyle = { 
     border: 'none', 
@@ -190,14 +209,23 @@ const PatientRegistration = ({ onBack }) => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-               <label style={labelStyle}>Assign Consultant</label>
-               <select name="doctor_name" value={formData.doctor_name} onChange={handleChange} style={inputStyle}>
-                  <option value="TBD">Assign Later (TBD)</option>
-                  <option value="Dr. Patil">Dr. Patil</option>
-                  <option value="Dr. Salunkhe">Dr. Salunkhe</option>
-                  <option value="Dr. Kelkar">Dr. Kelkar</option>
-               </select>
-            </div>
+   <label style={labelStyle}>Assign Consultant</label>
+   <select 
+      name="doctor_name" 
+      value={formData.doctor_name} 
+      onChange={handleChange} 
+      style={inputStyle}
+      required
+   >
+      <option value="TBD">Assign Later (TBD)</option>
+      {/* 🟢 DYNAMIC LIVE DATA MAP */}
+      {doctors.map((doc) => (
+         <option key={doc.staff_id} value={doc.full_name}>
+            Dr. {doc.full_name} ({doc.specialization})
+         </option>
+      ))}
+   </select>
+</div>
 
             <div style={{ display: 'flex', flexDirection: 'column' }}>
                <label style={labelStyle}>ABHA ID (Optional)</label>

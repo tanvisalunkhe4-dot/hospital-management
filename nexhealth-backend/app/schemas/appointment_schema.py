@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import date, datetime, time
 from typing import Optional
 
@@ -33,10 +33,19 @@ class AppointmentResponse(BaseModel):
     doctor_name: Optional[str] = None
     hospital_name: Optional[str] = None
     appointment_date: date
-    appointment_time: time
+    appointment_time: Optional[time] = None
     status: str # Required in response so frontend always has a value
     reason: Optional[str] = None
     created_at: Optional[datetime] = None
+
+    @field_validator('appointment_time', mode='before')
+    @classmethod
+    def handle_null_time(cls, v):
+        # If the time is "00:00:00" or None, return None so 
+        # the frontend can explicitly see it's not set.
+        if v is None or str(v) == "00:00:00":
+            return None
+        return v
 
     class Config:
         from_attributes = True
@@ -52,3 +61,13 @@ class PatientAppointmentRequest(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RescheduleRequestSchema(BaseModel):
+    new_date: str
+    new_time: str
+    reason: Optional[str] = None
+
+class FinalizeSchema(BaseModel):
+    decision: str  # e.g., "approve_cancel" or "approve_reschedule"
+    notes: str = None # Optional notes for the patient

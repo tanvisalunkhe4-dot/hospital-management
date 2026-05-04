@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from "../../../../UserContext";
-import { Bell, Settings, User, Camera, X, LogOut, ChevronRight, ShieldCheck, Lock, Download, Eye, Building2, Activity, Database,  } from 'lucide-react';
+import { Bell, Settings, User, Camera, X, LogOut, ChevronRight, ShieldCheck, Lock, Download, Eye,EyeOff, Building2, Activity, Database,  } from 'lucide-react';
 import axios from 'axios';
 
 const AdminHeader = ({ userData, onProfileUpdated }) => {
@@ -102,7 +102,7 @@ try {
     setIsUpdating(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.patch('http://localhost:8000/api/v1/staff/profile/change-password', {
+      await axios.patch('http://localhost:8000/api/v1/admin/profile/change-password', {
         current_password: passwordData.currentPassword,
         new_password: passwordData.newPassword,
         confirm_password: passwordData.confirmPassword
@@ -118,26 +118,32 @@ try {
     }
   };
 
-  // 5. LIVE REPORT EXPORT (Hospital Revenue/Staff Logs)
   const handleAdminExport = async (type) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:8000/api/v1/admin/export/${type}`, {
+      const response = await axios.get(`http://localhost:8000/api/v1/admin/export/${type}`, {
         headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob'
+        responseType: 'blob', // This is vital for PDF files
       });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+
+      // Creates the download link for the PDF blob
+      const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `NexHealth_${type}_Report.pdf`);
+      link.setAttribute('download', `NexHealth_Revenue_Audit_${new Date().toISOString().split('T')[0]}.pdf`);
       document.body.appendChild(link);
       link.click();
-      link.remove();
-    } catch (err) {
-      alert("Failed to generate live report.");
+      
+      // Cleanup
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert("Operational Error: Could not generate live audit. Ensure Backend is active.");
     }
   };
 
+ 
   const avatarLetter = userData?.full_name ? userData.full_name.charAt(0).toUpperCase() : 'A';
 
   return (
@@ -151,44 +157,52 @@ try {
         <div style={{ flex: 1 }} /> 
 
         <div style={profileGroup}>
-  {/* Settings Icon */}
-  <button 
-    onClick={() => setActiveTab('settings')} // Direct access to settings tab
-    style={actionButton}
-    title="System Configuration"
-  >
-    <Settings size={19} strokeWidth={2.5} />
-  </button>
+          {/* Settings Icon */}
+          <button 
+            onClick={() => {
+              setIsProfileOpen(true);
+              setActiveTab('settings');
+            }} 
+            style={actionButton}
+            title="System Configuration"
+          >
+            <Settings size={19} strokeWidth={2.5} />
+          </button>
 
-  {/* Notification Icon */}
-  <button 
-    onClick={() => setIsNotificationOpen(true)} 
-    style={actionButton}
-    title="System Logs"
-  >
-    <div style={notificationBadge} /> {/* Pulse dot for live feel */}
-    <Bell size={19} strokeWidth={2.5} />
-  </button>
+          {/* Notification Icon */}
+          <button 
+            onClick={() => setIsNotificationOpen(true)} 
+            style={actionButton}
+            title="System Logs"
+          >
+            <div style={notificationBadge} />
+            <Bell size={19} strokeWidth={2.5} />
+          </button>
 
-  <div style={verticalDivider} />
+          <div style={verticalDivider} />
 
-  <div style={identityWrapper} onClick={() => setIsProfileOpen(true)}>
-    <div style={textContainer}>
-      <div style={statusWrapper}>
-        <div style={onlineIndicator} />
-        <span style={nameText}>{userData?.full_name || "Admin"}</span>
-      </div>
-      <span style={adminBadge}>STAFF ID: {userData?.id || "ADM-00"}</span>
-    </div>
-    <div style={adminAvatarSquare}>
-      {profileImage ? (
-        <img src={profileImage} alt="Admin" style={avatarImgSmall} />
-      ) : (
-        avatarLetter
-      )}
-    </div>
-  </div>
-</div>
+          <div style={identityWrapper} onClick={() => setIsProfileOpen(true)}>
+            <div style={textContainer}>
+              <div style={statusWrapper}>
+                <div style={onlineIndicator} />
+                <span style={nameText}>{userData?.full_name || "Admin"}</span>
+              </div>
+              <span style={adminBadge}>STAFF ID: {userData?.id || "ADM-00"}</span>
+            </div>
+            <div style={adminAvatarSquare}>
+              {/* Fallback chain: context state -> userData prop -> Initial letter */}
+              {profileImage || userData?.profile_url ? (
+                <img 
+                  src={profileImage || `http://localhost:8000${userData.profile_url}`} 
+                  alt="Admin" 
+                  style={avatarImgSmall} 
+                />
+              ) : (
+                avatarLetter
+              )}
+            </div>
+          </div>
+        </div>
       </header>
 
       {/* Notifications Drawer (Live Logs) */}
@@ -208,7 +222,7 @@ try {
                     <div style={drawerItemDesc}>{log.desc}</div>
                   </div>
                 </div>
-              )) : <p style={{textAlign: 'center', color: '#94a3b8', fontSize: '12px'}}>No active logs</p>}
+              )) : <p style={{textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '20px'}}>No active logs recorded</p>}
             </div>
           </div>
         </div>
@@ -226,16 +240,20 @@ try {
             <div style={modalBody}>
               <div style={imageUploadSection}>
                 <div style={largeAvatar} onClick={() => fileInputRef.current.click()}>
-                  {profileImage ? <img src={profileImage} style={avatarImgLarge} alt="Admin" /> : avatarLetter}
+                  {profileImage || userData?.profile_url ? (
+                    <img src={profileImage || `http://localhost:8000${userData.profile_url}`} style={avatarImgLarge} alt="Admin" />
+                  ) : (
+                    avatarLetter
+                  )}
                   <div style={cameraBadge}><Camera size={16} /></div>
                 </div>
-                <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
+                <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} accept="image/*" />
                 <div style={uploadHint}>Click to update professional avatar</div>
               </div>
 
               <div style={tabNav}>
-                <button onClick={() => setActiveTab('profile')} style={activeTab === 'profile' ? activeTabBtn : tabBtn}>Authority</button>
-                <button onClick={() => setActiveTab('settings')} style={activeTab === 'settings' ? activeTabBtn : tabBtn}>Operations</button>
+                <button onClick={() => {setActiveTab('profile'); setShowPasswordChange(false);}} style={activeTab === 'profile' ? activeTabBtn : tabBtn}>Authority</button>
+                <button onClick={() => setActiveTab('settings')} style={activeTab === 'settings' ? activeTabBtn : tabBtn}>Settings</button>
               </div>
 
               {activeTab === 'profile' ? (
@@ -243,15 +261,19 @@ try {
                   <div style={rowGrid}>
                     <div style={formGroup}>
                       <label style={inputLabel}>Full Name</label>
-                      <input style={inputField} value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} />
+                      <input 
+                        style={inputField} 
+                        value={formData.full_name} 
+                        onChange={(e) => setFormData({...formData, full_name: e.target.value})} 
+                      />
                     </div>
                     <div style={formGroup}>
                       <label style={inputLabel}>Access Role</label>
                       <input style={readOnlyInput} value={userData?.role || "System Admin"} readOnly />
                     </div>
                   </div>
-                  <button style={saveBtn} onClick={() => alert("Live Update Triggered")} disabled={isUpdating}>
-                    {isUpdating ? "Saving..." : "Apply Operational Changes"}
+                  <button style={saveBtn} onClick={() => alert("Changes Synchronized with Master Node")} disabled={isUpdating}>
+                    {isUpdating ? "Processing..." : "Apply Operational Changes"}
                   </button>
                   <button style={logoutBtn} onClick={() => {localStorage.clear(); window.location.href='/';}}>
                     <LogOut size={16}/> Terminate Session
@@ -277,7 +299,7 @@ try {
                         <Download size={16} color="#10b981"/>
                       </div>
 
-                      <div style={actionItem}>
+                      <div style={actionItem} onClick={() => alert("Running Integrity Check...")}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <div style={iconCircle}><Database size={16} color="#10b981"/></div>
                           <span>Database Integrity Check</span>
@@ -286,13 +308,74 @@ try {
                       </div>
                     </>
                   ) : (
-                    <div style={contentGrid}>
-                       <button onClick={() => setShowPasswordChange(false)} style={backLink}>← Back to Operations</button>
-                       {/* Password fields with Eye toggle here (similar to your patient code) */}
-                       <button style={saveBtn} onClick={handlePasswordUpdate}>Update Password</button>
-                    </div>
-                  )}
-                </div>
+<div style={contentGrid}>
+   <button onClick={() => setShowPasswordChange(false)} style={backLink}>← Back to Settings </button>
+   
+   {/* Current Password */}
+   <div style={formGroup}>
+      <label style={inputLabel}>Current Password</label>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input 
+          type={showPasswords ? "text" : "password"} 
+          style={inputField} 
+          value={passwordData.currentPassword}
+          onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
+        />
+        <button 
+          type="button"
+          onClick={() => setShowPasswords(!showPasswords)} 
+          style={eyeButtonStyle}
+        >
+          {showPasswords ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+        </button>
+      </div>
+   </div>
+
+   {/* New Password */}
+   <div style={formGroup}>
+      <label style={inputLabel}>New Password</label>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input 
+          type={showPasswords ? "text" : "password"} 
+          style={inputField} 
+          value={passwordData.newPassword}
+          onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+        />
+        <button 
+          type="button"
+          onClick={() => setShowPasswords(!showPasswords)} 
+          style={eyeButtonStyle}
+        >
+          {showPasswords ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+        </button>
+      </div>
+   </div>
+
+   {/* Confirm New Password */}
+   <div style={formGroup}>
+      <label style={inputLabel}>Confirm New Password</label>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <input 
+          type={showPasswords ? "text" : "password"} 
+          style={inputField} 
+          value={passwordData.confirmPassword}
+          onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+        />
+        <button 
+          type="button"
+          onClick={() => setShowPasswords(!showPasswords)} 
+          style={eyeButtonStyle}
+        >
+          {showPasswords ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+        </button>
+      </div>
+   </div>
+
+   <button style={saveBtn} onClick={handlePasswordUpdate} disabled={isUpdating}>
+      {isUpdating ? "Updating..." : "Update Security Password"}
+   </button>
+</div>)}
+                </div>  
               )}
             </div>
           </div>
@@ -374,17 +457,6 @@ const modalOverlay = {
   alignItems: 'center',      // 🟢 Keeps it vertically centered
   padding: '20px' 
 };
-
-const modalContent = { 
-  width: '480px',            // Slightly wider for the two-column grid
-  maxHeight: '90vh', 
-  overflowY: 'auto',
-  backgroundColor: '#ffffff', 
-  borderRadius: '32px',      // Softer corners for a premium feel
-  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)', 
-  padding: '30px',
-  position: 'relative'
-};
 const eyeButtonStyle = {
   position: 'absolute',
   right: '12px',
@@ -396,8 +468,24 @@ const eyeButtonStyle = {
   justifyContent: 'center',
   padding: '4px',
   borderRadius: '8px',
-  transition: 'background 0.2s'
+  transition: 'background 0.2s',
+  // Adds a subtle hover effect
+  '&:hover': {
+    backgroundColor: '#f1f5f9'
+  }
 };
+const modalContent = { 
+  width: '480px',            // Slightly wider for the two-column grid
+  maxHeight: '90vh', 
+  overflowY: 'auto',
+  backgroundColor: '#ffffff', 
+  borderRadius: '32px',      // Softer corners for a premium feel
+  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)', 
+  padding: '30px',
+  position: 'relative'
+};
+
+
 const modalHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' };
 const modalTitle = { fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 };
 const closeBtn = { border: 'none', background: '#f1f5f9', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: '#64748b' };

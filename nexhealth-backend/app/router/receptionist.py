@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db import models
 from app.schemas import patient_schema, appointment_schema, invoice_schema
+from app.schemas.appointment_schema import FinalizeSchema, RescheduleRequestSchema
 from app.schemas.patient_schema import PatientUpdate, PatientCreate, PatientResponse
 from app.db.session import get_db
 from passlib.context import CryptContext
@@ -517,3 +518,17 @@ def approve_appointment_request(
     db.refresh(appt)
     
     return {"message": "Appointment approved successfully", "status": appt.status}
+
+
+@router.patch("/appointments/{appt_id}/finalize")
+async def finalize_request(appt_id: int, action: FinalizeSchema, db: Session = Depends(get_db)):
+    appointment = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    
+    if action.decision == "approve_cancel":
+        appointment.status = "Cancelled"
+    elif action.decision == "approve_reschedule":
+        appointment.status = "Scheduled"
+        # Update to the new time stored in notes
+    
+    db.commit()
+    return {"message": f"Action {action.decision} successful"}

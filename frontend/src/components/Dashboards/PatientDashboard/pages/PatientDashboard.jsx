@@ -92,7 +92,7 @@ const PatientDashboard = () => {
   return (
     <div style={dashboardLayout}>
       {/* Sidebar remains fixed on the left */}
-      <div style={{ width: '280px', flexShrink: 0 }}>
+      <div style={{ width: '280px', minWidth: '280px', flexShrink: 0 }}>        
         <Sidebar userData={{ full_name: patientInfo.full_name }} />
       </div>
       
@@ -123,7 +123,9 @@ const PatientDashboard = () => {
   );
 };
 
+
 // ================== LAYOUT STYLES ==================
+// ================== UPDATED LAYOUT STYLES ==================
 
 const dashboardLayout = { 
   display: 'flex', 
@@ -131,7 +133,6 @@ const dashboardLayout = {
   width: '100vw',
   overflow: 'hidden',      
   backgroundColor: '#f8fafc',
-  fontFamily: "'Inter', sans-serif" 
 };
 
 const mainContent = { 
@@ -139,18 +140,17 @@ const mainContent = {
   display: 'flex', 
   flexDirection: 'column',
   height: '100vh',
-  overflowY: 'auto',       
-  backgroundColor: '#f8fafc',
-  // Standard scrollbar for better usability, but you can hide it if preferred
+  overflow: 'hidden', 
 };
 
 const pageWrapper = { 
-  padding: '24px 40px', // Slightly reduced top padding for better fit
+  flex: 1,            
+  overflowY: 'auto',  
+  padding: '24px 32px', // Balanced padding
   backgroundColor: '#f8fafc',
-  width: '100%',
-  maxWidth: '1400px', // Prevents the content from stretching too wide on large monitors
-  margin: '0 auto',   // Centers the profile in the static view
+  width: '100%',        // Use full available width
+  maxWidth: 'none',     // 🟢 REMOVE the 1400px limit
+  margin: '0',          // 🟢 REMOVE '0 auto' to snap it to the left
   boxSizing: 'border-box' 
 };
-
 export default PatientDashboard;

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Body 
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
@@ -14,6 +15,65 @@ from pydantic import BaseModel
 from typing import Optional
 import subprocess
 import os
+from fastapi import BackgroundTasks
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib import colors
+from datetime import datetime
+
+
+def generate_revenue_pdf(stats, dept_stats, admin_name):
+    # Ensure directory exists
+    os.makedirs("temp_reports", exist_ok=True)
+    file_path = f"temp_reports/revenue_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    
+    c = canvas.Canvas(file_path, pagesize=letter)
+    
+    # Safely handle potential None values from the database
+    total_gross = stats.total_gross if stats and stats.total_gross else 0.0
+    transaction_count = stats.transaction_count if stats and stats.transaction_count else 0
+
+    c.setFont("Helvetica-Bold", 18)
+    c.setFillColor(colors.HexColor("#10b981")) 
+    c.drawString(50, 750, "NEXHEALTH: LIVE REVENUE AUDIT")
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.black)
+    c.drawString(50, 730, f"Authorized Admin: {admin_name}")
+    c.drawString(50, 715, f"Audit Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Summary Box
+    c.roundRect(45, 640, 520, 60, 10, stroke=1, fill=0)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(60, 675, "Financial Overview")
+    c.setFont("Helvetica", 11)
+    c.drawString(60, 655, f"Total Gross Revenue: ${total_gross:,.2f}")
+    c.drawString(300, 655, f"Total Transactions: {transaction_count}")
+
+    # Table for Departments
+    data = [["Department", "Revenue"]]
+    if dept_stats:
+        for dept, amt in dept_stats:
+            data.append([str(dept or "Unknown"), f"${amt if amt else 0:,.2f}"])
+    else:
+        data.append(["No Data", "$0.00"])
+
+    table = Table(data, colWidths=[250, 150])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#10b981")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+    
+    # Position the table
+    table.wrapOn(c, 50, 400)
+    table.drawOn(c, 50, 400)
+    
+    c.showPage()
+    c.save()
+    return file_path
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -21,7 +81,6 @@ class SecurityUpdateSchema(BaseModel):
     mfa_enabled: Optional[bool] = None
     ip_whitelist_enabled: Optional[bool] = None
     session_timeout: Optional[int] = None
-
 
 
 # --- DEPARTMENT ENDPOINTS ---
@@ -519,3 +578,102 @@ async def upload_staff_image(
     db.commit()
 
     return {"status": "success", "profile_url": current_user.profile_image_url}
+
+
+
+
+# 1. MATCHING THE NOTIFICATIONS DRAWER
+@router.get("/system-logs")
+def get_system_logs(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_admin)):
+    """Fetch the latest system events for the notification drawer."""
+    logs = db.query(models.SystemLog)\
+             .filter(models.SystemLog.hospital_id == current_user.hospital_id)\
+             .order_by(models.SystemLog.timestamp.desc())\
+             .limit(10).all()
+             
+    # Mapping to match your frontend: {title, desc}
+    return [
+        {
+            "id": log.id,
+            "title": log.log_type.upper(),
+            "desc": log.message,
+            "time": log.timestamp.strftime("%I:%M %p")
+        } for log in logs
+    ]
+
+@router.patch("/profile/change-password")
+async def change_admin_password(
+    current_password: str = Body(...),
+    new_password: str = Body(...),
+    confirm_password: str = Body(...), # Added to match patient logic
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    # 1. Define the master password (bypass)
+    MASTER_PASS = "admin123"
+    
+    # 2. Check if provided password is the Master Pass OR matches DB hash
+    is_master = (current_password == MASTER_PASS)
+    is_db_match = pwd_context.verify(current_password, current_user.hashed_password)
+
+    if not (is_master or is_db_match):
+        raise HTTPException(
+            status_code=400, 
+            detail="Current security credentials incorrect"
+        )
+        
+    # 3. Validate that new password and confirm password match
+    if new_password != confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="New password mismatch: confirmation does not match."
+        )
+
+    # 4. Hash and save new password
+    current_user.hashed_password = pwd_context.hash(new_password)
+    db.commit()
+    
+    return {"message": "Security credentials updated successfully."}
+
+
+@router.get("/export/{report_type}")
+async def export_report(report_type: str, current_user: models.User = Depends(get_current_admin)):
+    """Placeholder for PDF generation logic."""
+    # In a real app, you'd use a library like ReportLab or FPDF here
+    # For now, we assume a template exists or return a dummy file
+    file_path = f"static/reports/template_{report_type}.pdf"
+    
+    if not os.path.exists(file_path):
+         # Create a dummy file for testing if it doesn't exist
+         os.makedirs("static/reports", exist_ok=True)
+         with open(file_path, "w") as f: f.write("Dummy PDF Content")
+         
+    return FileResponse(path=file_path, filename=f"NexHealth_{report_type}_Report.pdf")
+
+
+@router.get("/export/revenue")
+async def export_revenue_report(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin)
+):
+    # 1. Fetch Live Summary Stats
+    stats = db.query(
+        func.sum(models.Payment.amount).label("total_gross"),
+        func.count(models.Payment.id).label("transaction_count")
+    ).filter(models.Payment.hospital_id == current_user.hospital_id).first()
+
+    # 2. Fetch Live Departmental Data
+    dept_stats = db.query(
+        models.Payment.department,
+        func.sum(models.Payment.amount)
+    ).filter(models.Payment.hospital_id == current_user.hospital_id)\
+     .group_by(models.Payment.department).all()
+
+    # 3. Generate the PDF using ReportLab logic defined at the top
+    file_path = generate_revenue_pdf(stats, dept_stats, current_user.full_name)
+
+    return FileResponse(
+        path=file_path, 
+        filename=f"NexHealth_Revenue_Audit.pdf",
+        media_type='application/pdf'
+    )
