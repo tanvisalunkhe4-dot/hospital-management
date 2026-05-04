@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Clock, Users, Loader2, AlertCircle } from 'lucide-react';
+import { Play, Clock, Users, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 const PatientQueue = ({ onStartConsultation }) => {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const getActiveStaffId = () => {
     const rawData = localStorage.getItem('user_data');
@@ -12,19 +13,18 @@ const PatientQueue = ({ onStartConsultation }) => {
     try {
       const userData = JSON.parse(rawData);
       return userData.staff_id;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   };
 
-  const fetchQueue = useCallback(async () => {
+  const fetchQueue = useCallback(async (showLoader = true) => {
     const staffId = getActiveStaffId();
     if (!staffId) {
-      setError("Session expired. Please login again.");
+      setError("Session expired.");
       setLoading(false);
       return;
     }
 
+    if (showLoader) setIsRefreshing(true);
     try {
       const response = await fetch(`http://localhost:8000/api/v1/doctor/queue/${staffId}`);
       if (!response.ok) throw new Error("Failed to load queue.");
@@ -32,17 +32,21 @@ const PatientQueue = ({ onStartConsultation }) => {
       setQueue(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
-      console.error("Network error fetching queue:", err);
       setError("Connection error.");
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
     fetchQueue();
-    const interval = setInterval(fetchQueue, 20000); // Polling every 20 seconds
-    return () => clearInterval(interval);
+
+    // Strategy: Instead of a 5s timer, refresh when the doctor switches back to this tab
+    const handleFocus = () => fetchQueue(false);
+    window.addEventListener('focus', handleFocus);
+    
+    return () => window.removeEventListener('focus', handleFocus);
   }, [fetchQueue]);
 
   const handleStartVisit = async (patient) => {
@@ -50,14 +54,10 @@ const PatientQueue = ({ onStartConsultation }) => {
       const response = await fetch(`http://localhost:8000/api/v1/doctor/consultation/start/${patient.id}`, {
         method: 'POST',
       });
-
-      if (!response.ok) {
-        alert("Could not update patient status.");
-        return;
+      if (response.ok) {
+        onStartConsultation(patient);
+        fetchQueue(false); 
       }
-
-      onStartConsultation(patient);
-      fetchQueue(); 
     } catch (err) {
       console.error("Error starting visit:", err);
     }
@@ -72,12 +72,24 @@ const PatientQueue = ({ onStartConsultation }) => {
   return (
     <div style={{ padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '800', color: '#1e293b' }}>Waiting Room</h2>
-        <span style={{ fontSize: '13px', color: '#94a3b8' }}>Live Updates active</span>
+        <div>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '800', color: '#1e293b' }}>Waiting Room</h2>
+            <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>Patients currently checked-in</p>
+        </div>
+        
+        {/* Manual Refresh instead of constant background polling */}
+        <button 
+            onClick={() => fetchQueue()} 
+            style={styles.refreshBtn}
+            disabled={isRefreshing}
+        >
+            <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+            {isRefreshing ? "Updating..." : "Refresh Queue"}
+        </button>
       </div>
 
       {error && (
-        <div style={{ padding: '16px', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={styles.errorBanner}>
           <AlertCircle size={18} /> {error}
         </div>
       )}
@@ -99,12 +111,7 @@ const PatientQueue = ({ onStartConsultation }) => {
                     <Clock size={12} /> Appt: {patient.time}
                   </div>
                 </div>
-                <button 
-                  style={styles.startButton} 
-                  onClick={() => handleStartVisit(patient)}
-                  onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
-                  onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
-                >
+                <button style={styles.startButton} onClick={() => handleStartVisit(patient)}>
                   <Play size={14} fill="white" /> Start Visit
                 </button>
               </div>
@@ -116,7 +123,7 @@ const PatientQueue = ({ onStartConsultation }) => {
           <div style={styles.emptyState}>
             <Users size={48} color="#cbd5e1" />
             <h4 style={{ color: '#64748b', marginTop: '12px' }}>Queue is currently empty</h4>
-            <p style={{ fontSize: '13px', color: '#94a3b8' }}>Checked-in patients will appear here automatically.</p>
+            <p style={{ fontSize: '13px', color: '#94a3b8' }}>Once a receptionist checks in a patient, they will appear here.</p>
           </div>
         )}
       </div>
@@ -132,6 +139,19 @@ const styles = {
     border: '1px solid #e2e8f0',
     boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
   },
+  refreshBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    background: 'white',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#64748b',
+    cursor: 'pointer'
+  },
   startButton: {
     backgroundColor: '#10b981',
     color: 'white',
@@ -142,8 +162,17 @@ const styles = {
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    transition: '0.2s'
+    gap: '8px'
+  },
+  errorBanner: {
+    padding: '16px',
+    backgroundColor: '#fef2f2',
+    color: '#ef4444',
+    borderRadius: '12px',
+    marginBottom: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
   },
   emptyState: {
     textAlign: 'center',

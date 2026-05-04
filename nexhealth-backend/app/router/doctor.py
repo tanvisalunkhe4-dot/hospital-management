@@ -2,17 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from datetime import date
-
 from app.db import models
 from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
-# Standardized Status Constants
+STATUS_SCHEDULED = "Scheduled"
 STATUS_CHECKED_IN = "Checked In"
 STATUS_IN_CONSULTATION = "In Consultation"
+STATUS_COMPLETED = "Completed"
 
 def resolve_staff_record(staff_id: str, db: Session) -> models.Staff:
+    """Helper to find internal database ID using the public staff_id."""
     staff = db.query(models.Staff).filter(models.Staff.staff_id == staff_id).first()
     if not staff:
         raise HTTPException(
@@ -21,14 +22,17 @@ def resolve_staff_record(staff_id: str, db: Session) -> models.Staff:
         )
     return staff
 
-# --- doctor.py ---
 @router.get("/queue/{staff_id}")
 def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """
+    Fetches the live 'Waiting Room' queue for a specific doctor.
+    Shows only patients who have been 'Checked In' by the receptionist today.
+    """
     doctor = resolve_staff_record(staff_id, db)
 
     rows = (
         db.query(
-            models.Appointment.id.label("id"), # Use 'id' to match frontend patient.id
+            models.Appointment.id.label("appt_id"),
             models.Appointment.appointment_time,
             models.Appointment.reason,
             models.Patient.id.label("patient_id"),
@@ -36,7 +40,8 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         )
         .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
         .filter(
-            models.Appointment.doctor_name == doctor.full_name,
+            # Filtering by ID is safer than doctor_name strings
+            models.Appointment.doctor_id == doctor.id, 
             models.Appointment.status == STATUS_CHECKED_IN,
             models.Appointment.appointment_date == date.today(),
         )
@@ -46,7 +51,7 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
 
     return [
         {
-            "id": r.id,
+            "id": r.appt_id,
             "patient_id": r.patient_id,
             "patient_name": r.patient_name,
             "reason": r.reason,
@@ -54,18 +59,29 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         }
         for r in rows
     ]
+
 @router.post("/consultation/start/{appointment_id}")
 def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
+    """
+    Moves a patient from 'Checked In' to 'In Consultation'.
+    This triggers the patient to move from the Queue to the Active Visit view.
+    """
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
     appointment.status = STATUS_IN_CONSULTATION
-    db.commit()
-    return {"status": "success", "message": f"Started visit for appointment {appointment_id}"}
+    
+    try:
+        db.commit()
+        return {"status": "success", "message": f"Started visit for appointment {appointment_id}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update consultation status.")
 
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
+    """Fetches full clinical history for the Doctor's record archive."""
     results = (
         db.query(
             models.MedicalRecord.id,
@@ -80,7 +96,7 @@ def get_all_records(db: Session = Depends(get_db)):
 
     return [
         {
-            "id": f"NX-{r.id}",
+            "id": f"NX-{r.id}", # Standardized Autonex ID format
             "patient_name": f"{r.first_name} {r.last_name}",
             "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
             "diagnosis": r.diagnosis,

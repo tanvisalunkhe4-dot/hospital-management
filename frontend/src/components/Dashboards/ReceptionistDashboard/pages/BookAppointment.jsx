@@ -15,35 +15,38 @@ const BookAppointment = ({ hosp_id, appointmentsList, refresh, onBack }) => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState(null); 
   const [rescheduleData, setRescheduleData] = useState(null); 
+  const [doctors, setDoctors] = useState([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(false);
+
+  // Tracks the form data including the critical doctor_id
   const [appointmentData, setAppointmentData] = useState({
+    doctor_id: "", 
     doctor_name: "",
     appointment_date: "",
     appointment_time: "",
     reason: ""
   });
-// Add these to your State Management section
-const [doctors, setDoctors] = useState([]);
-const [loadingDoctors, setLoadingDoctors] = useState(false);
 
-// Add this useEffect to fetch the live doctor list
-useEffect(() => {
-  const fetchDoctors = async () => {
-    try {
-      setLoadingDoctors(true);
-      const res = await fetch(`http://localhost:8000/api/v1/receptionist/doctors/${hosp_id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDoctors(data); // Expecting [{ staff_id, full_name, specialization }, ...]
+  // Fetch live doctor list on mount or when hosp_id changes
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        setLoadingDoctors(true);
+        const res = await fetch(`http://localhost:8000/api/v1/receptionist/doctors/${hosp_id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDoctors(data); 
+        }
+      } catch (err) {
+        console.error("Failed to load live doctors:", err);
+      } finally {
+        setLoadingDoctors(false);
       }
-    } catch (err) {
-      console.error("Failed to load live doctors:", err);
-    } finally {
-      setLoadingDoctors(false);
-    }
-  };
+    };
 
-  if (hosp_id) fetchDoctors();
-}, [hosp_id]);
+    if (hosp_id) fetchDoctors();
+  }, [hosp_id]);
+
   // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = () => setActiveMenuId(null);
@@ -51,23 +54,21 @@ useEffect(() => {
     return () => window.removeEventListener('click', handleClickOutside);
   }, [activeMenuId]);
 
- ;
   // --- FILTERING LOGIC ---
   const getMidnight = (date) => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   };
-// --- FILTERING LOGIC ---
 
-const pendingRequests = useMemo(() => {
-  return (appointmentsList || []).filter(appt => {
-    const status = appt.status?.toLowerCase();
-    return status === 'pending' || 
-           status === 'rescheduled' || 
-           status === 'cancellation requested';
-  });
-}, [appointmentsList]);
+  const pendingRequests = useMemo(() => {
+    return (appointmentsList || []).filter(appt => {
+      const status = appt.status?.toLowerCase();
+      return status === 'pending' || 
+             status === 'rescheduled' || 
+             status === 'cancellation requested';
+    });
+  }, [appointmentsList]);
 
   const upcomingSchedule = useMemo(() => {
     const tomorrowTms = getMidnight(new Date().setDate(new Date().getDate() + 1));
@@ -90,9 +91,12 @@ const pendingRequests = useMemo(() => {
     const newApptTime = new Date(`${appointmentData.appointment_date}T${appointmentData.appointment_time}`);
 
     const isSlotOccupied = (appointmentsList || []).some(appt => {
-      // Only check same doctor and same day
-      if (appt.doctor_name.toLowerCase() !== appointmentData.doctor_name.toLowerCase() || 
-          appt.appointment_date !== appointmentData.appointment_date) {
+      // Comparison using ID for precision where possible
+      const isSameDoctor = appt.doctor_id 
+        ? appt.doctor_id === appointmentData.doctor_id 
+        : appt.doctor_name.toLowerCase() === appointmentData.doctor_name.toLowerCase();
+
+      if (!isSameDoctor || appt.appointment_date !== appointmentData.appointment_date) {
         return false;
       }
 
@@ -122,7 +126,7 @@ const pendingRequests = useMemo(() => {
         setIsSuccess(true);
         setSearchQuery("");
         setSelectedPatient(null);
-        setAppointmentData({ doctor_name: "", appointment_date: "", appointment_time: "", reason: "" });
+        setAppointmentData({ doctor_id: "", doctor_name: "", appointment_date: "", appointment_time: "", reason: "" });
         if (refresh) refresh();
         setTimeout(() => setIsSuccess(false), 3000);
       } else {
@@ -169,7 +173,7 @@ const pendingRequests = useMemo(() => {
   const handleSearch = async (e) => {
     const query = e.target.value;
     setSearchQuery(query);
-    if (query.length > 0) { // Search starts from 1st character
+    if (query.length > 0) {
       try {
         const res = await fetch(`http://localhost:8000/api/v1/receptionist/patients/search?query=${query}&hosp_id=${hosp_id}`);
         const data = await res.json();
@@ -184,7 +188,6 @@ const pendingRequests = useMemo(() => {
 
   const handleApprove = async (apptId) => {
     try {
-      // Ensure hosp_id is passed so the backend can verify the hospital context
       const res = await fetch(`http://localhost:8000/api/v1/receptionist/appointments/${apptId}/approve?hosp_id=${hosp_id}`, {
         method: 'PATCH',
       });
@@ -199,7 +202,6 @@ const pendingRequests = useMemo(() => {
       console.error("Approval failed:", err);
     }
   };
-
 
   const toggleMenu = (e, id) => {
     e.stopPropagation();
@@ -218,7 +220,6 @@ const pendingRequests = useMemo(() => {
   };
 
   const AppointmentRow = ({ appt }) => {
-    // Status lock: Cannot reschedule/cancel if patient is checked in
     const isLocked = appt.status?.toLowerCase().includes('check');
 
     return (
@@ -264,7 +265,6 @@ const pendingRequests = useMemo(() => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* 1. BACK NAVIGATION */}
       <button onClick={onBack} style={backBtnStyle}>
         <ArrowLeft size={16} /> Back to Dashboard
       </button>
@@ -297,25 +297,33 @@ const pendingRequests = useMemo(() => {
           <form onSubmit={handleBook} style={formGrid}>
             <div style={patientBadge}>Booking for: <strong>{selectedPatient.first_name} {selectedPatient.last_name}</strong></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <input 
-  list="dr-list" 
-  type="text" 
-  placeholder={loadingDoctors ? "Loading Doctors..." : "Select Doctor"} 
-  required 
-  style={inputStyle} 
-  value={appointmentData.doctor_name} 
-  onChange={(e) => setAppointmentData({...appointmentData, doctor_name: e.target.value})}
-/>
-<datalist id="dr-list">
-  {/* 🟢 DYNAMIC LIVE DATA REPLACING MOCK DATA */}
-  {doctors.map((dr) => (
-    <option 
-      key={dr.staff_id} 
-      value={`Dr. ${dr.full_name}`} 
-    />
-  ))}
-</datalist>
-                <input type="text" placeholder="Reason (e.g. Fever)" style={inputStyle} value={appointmentData.reason} onChange={(e) => setAppointmentData({...appointmentData, reason: e.target.value})}/>
+              <input 
+                list="dr-list" 
+                type="text" 
+                placeholder={loadingDoctors ? "Loading Doctors..." : "Select Doctor"} 
+                required 
+                style={inputStyle} 
+                value={appointmentData.doctor_name} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // Matches the name to find the integer ID
+                  const selectedDoc = doctors.find(dr => `Dr. ${dr.full_name}` === val);
+                  setAppointmentData({
+                    ...appointmentData, 
+                    doctor_name: val,
+                    doctor_id: selectedDoc ? selectedDoc.id : ""
+                  });
+                }}
+              />
+              <datalist id="dr-list">
+                {doctors.map((dr) => (
+                  <option 
+                    key={dr.staff_id} 
+                    value={`Dr. ${dr.full_name}`} 
+                  />
+                ))}
+              </datalist>
+              <input type="text" placeholder="Reason (e.g. Fever)" style={inputStyle} value={appointmentData.reason} onChange={(e) => setAppointmentData({...appointmentData, reason: e.target.value})}/>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <input 
@@ -335,123 +343,62 @@ const pendingRequests = useMemo(() => {
         )}
       </div>
 
-      {/* SECTION 2: SCHEDULE TABLE */}
-      {/* --- NEW SECTION: INCOMING PATIENT REQUESTS --- */}
-{pendingRequests.length > 0 && (
-  <div style={{ ...containerStyle, borderColor: '#fbbf24', backgroundColor: '#fffdfa', borderStyle: 'dashed', borderWidth: '2px' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-      <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#b45309', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-        <Clock size={18} /> Action Required: New Booking Requests ({pendingRequests.length})
-      </h3>
-    </div>
-    
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-    
-   
-    {pendingRequests.map(req => {
-  // 1. Identify the specific type of request
-  const status = req.status?.toLowerCase();
-  const isReschedule = status === 'rescheduled';
-  const isCancelRequest = status === 'cancellation requested';
+      {/* SECTION 2: REQUEST CARDS */}
+      {pendingRequests.length > 0 && (
+        <div style={{ ...containerStyle, borderColor: '#fbbf24', backgroundColor: '#fffdfa', borderStyle: 'dashed', borderWidth: '2px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#b45309', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <Clock size={18} /> Action Required: New Booking Requests ({pendingRequests.length})
+            </h3>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+          {pendingRequests.map(req => {
+            const status = req.status?.toLowerCase();
+            const isReschedule = status === 'rescheduled';
+            const isCancelRequest = status === 'cancellation requested';
 
-  // 2. Define Theme configuration based on the type
-  // This handles the colors, labels, and borders for each state
-  const theme = isCancelRequest 
-    ? { 
-        border: '#fca5a5', // Red
-        bg: '#fef2f2', 
-        text: '#991b1b', 
-        badge: 'CANCEL REQ', 
-        badgeBg: '#fee2e2',
-        description: 'Patient requested to cancel this slot'
-      }
-    : isReschedule 
-    ? { 
-        border: '#93c5fd', // Blue
-        bg: '#f0f9ff', 
-        text: '#1e40af', 
-        badge: 'RESCHEDULE', 
-        badgeBg: '#eff6ff',
-        description: 'Requested Reschedule Time:'
-      }
-    : { 
-        border: '#fbbf24', // Yellow/Gold
-        bg: '#fefce8', 
-        text: '#92400e', 
-        badge: 'INCOMING', 
-        badgeBg: '#fef3c7',
-        description: 'Reason for Appointment:'
-      };
+            const cardTheme = isCancelRequest 
+              ? { border: '#fca5a5', bg: '#fef2f2', text: '#991b1b', badge: 'CANCEL REQ', badgeBg: '#fee2e2', description: 'Patient requested to cancel this slot' }
+              : isReschedule 
+              ? { border: '#93c5fd', bg: '#f0f9ff', text: '#1e40af', badge: 'RESCHEDULE', badgeBg: '#eff6ff', description: 'Requested Reschedule Time:' }
+              : { border: '#fbbf24', bg: '#fefce8', text: '#92400e', badge: 'INCOMING', badgeBg: '#fef3c7', description: 'Reason for Appointment:' };
 
-  return (
-    <div key={req.id} style={{ ...requestCardStyle, borderColor: theme.border }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>{req.patient_name}</div>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', marginTop: '2px' }}>
-            Consultant: {req.doctor_name || "Any Doctor"}
+            return (
+              <div key={req.id} style={{ ...requestCardStyle, borderColor: cardTheme.border }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>{req.patient_name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', marginTop: '2px' }}>
+                      Consultant: {req.doctor_name || "Any Doctor"}
+                    </div>
+                  </div>
+                  <span style={{ ...reqBadgeStyle, backgroundColor: cardTheme.badgeBg, color: cardTheme.text }}>{cardTheme.badge}</span>
+                </div>
+                
+                <div style={{ margin: '12px 0', padding: '10px', background: cardTheme.bg, borderRadius: '8px', fontSize: '12px', border: `1px solid ${cardTheme.border}` }}>
+                  <div style={{ color: cardTheme.text, fontWeight: '700', marginBottom: '4px' }}>{cardTheme.description}</div>
+                  <div style={{ color: cardTheme.text, fontStyle: 'italic' }}>"{req.reason || "General Consultation"}"</div>
+                </div>
+
+                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                   <Calendar size={12} /> {req.appointment_date} <Clock size={12} style={{marginLeft: '8px'}}/> {req.appointment_time}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => isCancelRequest ? handleCancel(req.id) : handleApprove(req.id)} style={{ ...confirmBtnSmall, background: isCancelRequest ? '#ef4444' : '#059669' }}>
+                    {isCancelRequest ? 'Confirm Cancel' : (isReschedule ? 'Confirm Slot' : 'Approve')}
+                  </button>
+                  <button onClick={() => setRescheduleData(req)} style={modifyBtnSmall}>{isCancelRequest ? 'Keep Slot' : 'Modify'}</button>
+                </div>
+              </div>
+            );
+          })}
           </div>
         </div>
-        
-        {/* DYNAMIC BADGE */}
-        <span style={{
-          ...reqBadgeStyle,
-          backgroundColor: theme.badgeBg,
-          color: theme.text
-        }}>
-          {theme.badge}
-        </span>
-      </div>
-      
-      {/* DYNAMIC CARD BODY */}
-      <div style={{ 
-        margin: '12px 0', 
-        padding: '10px', 
-        background: theme.bg, 
-        borderRadius: '8px', 
-        fontSize: '12px', 
-        border: `1px solid ${theme.border}` 
-      }}>
-        <div style={{ color: theme.text, fontWeight: '700', marginBottom: '4px' }}>
-          {theme.description}
-        </div>
-        <div style={{ color: theme.text, fontStyle: 'italic' }}>
-          "{req.reason || "General Consultation"}"
-        </div>
-      </div>
+      )}
 
-      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-         <Calendar size={12} /> {req.appointment_date} <Clock size={12} style={{marginLeft: '8px'}}/> {req.appointment_time}
-      </div>
-
-      <div style={{ display: 'flex', gap: '10px' }}>
-        {/* DYNAMIC ACTION BUTTON */}
-        <button 
-          onClick={() => isCancelRequest ? handleCancel(req.id) : handleApprove(req.id)} 
-          style={{ 
-            ...confirmBtnSmall, 
-            background: isCancelRequest ? '#ef4444' : '#059669' 
-          }}
-        >
-          {isCancelRequest ? 'Confirm Cancel' : (isReschedule ? 'Confirm Slot' : 'Approve')}
-        </button>
-
-        <button 
-          onClick={() => setRescheduleData(req)} 
-          style={modifyBtnSmall}
-        >
-          {isCancelRequest ? 'Keep Slot' : 'Modify'}
-        </button>
-      </div>
-    </div>
-  );
-})}
-
-        </div>
-  </div>
-)}
-
-
+      {/* SECTION 3: SCHEDULE TABLE */}
       <div style={{ ...containerStyle, overflow: 'visible' }}>
         <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '20px' }}>Upcoming Schedule</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -500,14 +447,7 @@ const pendingRequests = useMemo(() => {
 };
 
 /* --- STYLES --- */
-const containerStyle = { 
-  background: 'white', 
-  padding: '24px', 
-  borderRadius: '20px', 
-  border: `1px solid #e2e8f0`, 
-  position: 'relative',
-  minHeight: '150px' // 🟢 Ensures the box doesn't collapse while loading
-};
+const containerStyle = { background: 'white', padding: '24px', borderRadius: '20px', border: `1px solid #e2e8f0`, position: 'relative', minHeight: '150px' };
 const backBtnStyle = { border: 'none', background: 'none', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', width: 'fit-content', padding: '0' };
 const successToast = { backgroundColor: '#ecfdf5', color: '#059669', padding: '4px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' };
 const searchWrapper = { display: 'flex', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' };
@@ -527,49 +467,9 @@ const menuItemStyle = { padding: '8px', fontSize: '12px', fontWeight: '600', col
 const modalOverlay = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(4px)' };
 const modalContent = { background: 'white', padding: '24px', borderRadius: '20px', width: '350px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
 const labelStyle = { fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '-10px' };
-const requestCardStyle = { 
-  background: 'white', 
-  padding: '18px', 
-  borderRadius: '16px', 
-  border: '1px solid #fbbf24', // 🟢 Matches the orange border from your screenshot
-  boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  transition: 'transform 0.2s ease'
-};
+const requestCardStyle = { background: 'white', padding: '18px', borderRadius: '16px', border: '1px solid #fbbf24', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' };
+const reqBadgeStyle = { fontSize: '10px', background: '#fef3c7', color: '#92400e', padding: '4px 10px', borderRadius: '20px', fontWeight: '800', textTransform: 'uppercase' };
+const confirmBtnSmall = { flex: 1, padding: '10px', background: '#059669', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '12px' };
+const modifyBtnSmall = { flex: 1, padding: '10px', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '12px' };
 
-const reqBadgeStyle = { 
-  fontSize: '10px', 
-  background: '#fef3c7', 
-  color: '#92400e', 
-  padding: '4px 10px', 
-  borderRadius: '20px', 
-  fontWeight: '800', 
-  textTransform: 'uppercase' 
-};
-
-const confirmBtnSmall = { 
-  flex: 1, 
-  padding: '10px', 
-  background: '#059669', 
-  color: 'white', 
-  border: 'none', 
-  borderRadius: '8px', 
-  fontWeight: '700', 
-  cursor: 'pointer', 
-  fontSize: '12px' 
-};
-
-const modifyBtnSmall = { 
-  flex: 1, 
-  padding: '10px', 
-  background: '#f8fafc', 
-  color: '#475569', 
-  border: '1px solid #e2e8f0', 
-  borderRadius: '8px', 
-  fontWeight: '700', 
-  cursor: 'pointer', 
-  fontSize: '12px' 
-};
 export default BookAppointment;

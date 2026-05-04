@@ -11,7 +11,9 @@ import logging
 import datetime 
 from typing import List
 from sqlalchemy import desc
-
+STATUS_SCHEDULED = "Scheduled"
+STATUS_CHECKED_IN = "Checked In"
+STATUS_IN_CONSULTATION = "In Consultation"
 # Setup for logging
 router = APIRouter(prefix="/api/v1/receptionist", tags=["receptionist"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -86,6 +88,7 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
         new_appt = models.Appointment(
             patient_id=appt_in.patient_id,
             hospital_id=hosp_id,
+            doctor_id=appt_in.doctor_id,
             doctor_name=appt_in.doctor_name,
             appointment_date=appt_in.appointment_date,
             appointment_time=appt_in.appointment_time,
@@ -104,23 +107,39 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
 
 @router.get("/stats/{hosp_id}")
 async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches real-time statistics for the receptionist dashboard, 
+    including patient counts, today's appointments, and live queue status.
+    """
     today = datetime.date.today()
     
-    patient_count = db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).count()
-    # We only count appointments that are Scheduled, Waiting, or In Queue
+    # 1. Total registered patients in this hospital
+    patient_count = db.query(models.Patient).filter(
+        models.Patient.hospital_id == hosp_id
+    ).count()
+    
+    # 2. All valid appointments scheduled for today
     appt_count = db.query(models.Appointment).filter(
         models.Appointment.hospital_id == hosp_id,
         models.Appointment.appointment_date == today,
-        models.Appointment.status.notin_(["Cancelled", "Completed"]) 
+        models.Appointment.status != "Cancelled"
     ).count()
 
-    # 3. Calculate Total Collections
+    # 3. Live Consultations: Only those actively in the building (Checked In or currently with Doctor)
+    # This specifically uses the constants defined above to avoid NameErrors.
+    live_queue = db.query(models.Appointment).filter(
+        models.Appointment.hospital_id == hosp_id,
+        models.Appointment.appointment_date == today,
+        models.Appointment.status.in_([STATUS_CHECKED_IN, STATUS_IN_CONSULTATION])
+    ).count()
+
+    # 4. Financial Summary: Total paid invoices
     total_collections = db.query(func.sum(models.Invoice.total_amount)).filter(
         models.Invoice.hospital_id == hosp_id,
         models.Invoice.status == "Paid"
     ).scalar() or 0
 
-    # 4. Count Pending Bills
+    # 5. Financial Summary: Count of pending payments
     unpaid_count = db.query(models.Invoice).filter(
         models.Invoice.hospital_id == hosp_id,
         models.Invoice.status == "Pending"
@@ -128,10 +147,10 @@ async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
 
     return {
         "total_patients": patient_count,
-        "appointments_today": appt_count, # This will now show 3
-        "total_collections": total_collections,
+        "appointments_today": appt_count,
+        "total_collections": float(total_collections), # Ensure JSON compatibility
         "pending_bills": unpaid_count,
-        "consultations": appt_count # You can use this for the 'Live' card
+        "consultations": live_queue 
     }
 
 @router.get("/patients/search", response_model=list[patient_schema.PatientResponse])
@@ -234,55 +253,27 @@ def delete_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)
 
 @router.patch("/appointments/{appt_id}/check-in")
 def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Updates appointment status to 'Checked In'.
-    This moves the patient from the Receptionist's 'Pending' list 
-    directly into the Doctor's 'Waiting Room' queue.
-    """
-    # 1. Find the appointment ensuring it belongs to the correct hospital
+    """Moves patient from Scheduled to the Doctor's Live Queue."""
     appt = db.query(models.Appointment).filter(
         models.Appointment.id == appt_id, 
         models.Appointment.hospital_id == hosp_id
     ).first()
 
     if not appt:
-        logger.warning(f"Check-in failed: Appointment {appt_id} not found for Hospital {hosp_id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Appointment record not found."
-        )
+        raise HTTPException(status_code=404, detail="Appointment record not found.")
 
-    # Prevent double check-in if already in consultation or completed
-    if appt.status in ["In Consultation", "Completed"]:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Cannot check-in. Patient is already {appt.status}."
-        )
+    if appt.status in [STATUS_IN_CONSULTATION, "Completed"]:
+        raise HTTPException(status_code=400, detail=f"Cannot check-in. Patient is already {appt.status}.")
 
     try:
-        # 2. Update the status string to exactly "Checked In"
-        # The Doctor's portal listens for this specific string
-        appt.status = "Checked In"
-        
-        # 3. Save to database
+        appt.status = STATUS_CHECKED_IN  # Synchronized with doctor_10.py
         db.commit()
         db.refresh(appt)
-        
-        logger.info(f"SUCCESS: Patient {appt.patient_id} checked in for Doctor {appt.doctor_id}")
-        
-        return {
-            "message": "Patient checked in successfully", 
-            "status": appt.status,
-            "appointment_id": appt.id
-        }
-        
+        return {"message": "Patient checked in successfully", "status": appt.status}
     except Exception as e:
         db.rollback()
-        logger.error(f"DATABASE ERROR during check-in: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Failed to update check-in status due to a database error."
-        )
+        logger.error(f"CHECK-IN ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update check-in status.")
 @router.patch("/appointments/{appt_id}/reschedule")
 def reschedule_appointment(
     appt_id: int, 
@@ -319,6 +310,8 @@ def reschedule_appointment(
         db.rollback()
         logger.error(f"RESCHEDULE ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to reschedule appointment.")
+
+        
 # --- INVOICE & BILLING ACTIONS ---
 
 @router.post("/invoices/generate", response_model=invoice_schema.InvoiceResponse)

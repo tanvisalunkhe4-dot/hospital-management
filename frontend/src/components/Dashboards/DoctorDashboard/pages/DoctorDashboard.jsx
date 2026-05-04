@@ -52,11 +52,8 @@ const DoctorDashboard = ({ onLogout }) => {
   const [records, setRecords] = useState([]);
 
 // --- DYNAMIC USER DATA ---
- // --- DYNAMIC USER DATA ---
-  const userData = JSON.parse(localStorage.getItem('user_data'));
-  
-  // Use staff_id (the string identifier) for the API call
-  const activeStaffId = userData?.staff_id; 
+const userData = JSON.parse(localStorage.getItem('user_data'));
+const activeStaffId = userData?.staff_id;
   const doctorName = userData?.full_name || "Doctor";
   useEffect(() => {
     if (activeTab === 'records') {
@@ -104,11 +101,11 @@ const DoctorDashboard = ({ onLogout }) => {
             {activeTab === 'overview' && <DoctorOverview />}
             
             {activeTab === 'queue' && (
-              <PatientQueue 
-                onStartConsultation={handleStartConsultation} 
-                doctorId={doctorId} 
-              />
-            )}
+  <PatientQueue 
+    onStartConsultation={handleStartConsultation} 
+    doctorId={activeStaffId} // Change doctorId to activeStaffId
+  />
+)}
             
             {activeTab === 'consultation' && (
               <ConsultationWorkspace 
