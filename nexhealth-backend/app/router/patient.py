@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime
+from sqlalchemy import desc
+from typing import List, Optional, Dict
+from datetime import datetime, timezone
 from fastapi.responses import Response
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -14,6 +15,8 @@ from app.db.models import User
 from app.router.deps import get_current_active_user as get_current_user
 import shutil
 import os
+import uuid
+from app.db.models import MedicalRecord
 # Import your shared logic
 from ..utils import verify_password, hash_password
 from app.db.session import get_db
@@ -509,3 +512,181 @@ def reschedule_appointment(
     db.commit()
     db.refresh(appointment)
     return appointment
+
+@patient_router.get("/hospital-contact/{hospital_id}", response_model=Dict[str, str])
+def get_hospital_contact(
+    hospital_id: int, 
+    db: Session = Depends(get_db)
+):
+    """
+    Returns the public contact phone number for a specific hospital.
+    Matches the Hospital model schema: 'name' and 'phone'.
+    """
+    # Query the database
+    hospital = db.query(models.Hospital).filter(models.Hospital.id == hospital_id).first()
+    
+    # Error handling if ID doesn't exist
+    if not hospital:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Hospital with ID {hospital_id} not found"
+        )
+        
+    # Mapping your DB model fields to the keys the Frontend expects
+    return {
+        "hospital_name": hospital.name,
+        "phone_number": hospital.phone or "No contact number available"
+    }
+
+#Overview page
+
+@patient_router.get("/dashboard-summary")
+def get_dashboard_summary(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # 1. Fetch Patient Profile
+    patient = db.query(models.Patient).filter(models.Patient.user_id == current_user.id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient profile not found")
+
+    # 2. Get Next Upcoming Appointment
+    next_appt = db.query(models.Appointment).filter(
+        models.Appointment.patient_id == patient.id,
+        models.Appointment.appointment_date >= datetime.now().date(),
+        models.Appointment.status == "Scheduled"
+    ).order_by(models.Appointment.appointment_date.asc()).first()
+
+    # 3. Get Recent Vitals (From Medical Records)
+    # Assuming MedicalRecord table stores vitals as JSON or specific columns
+    latest_record = db.query(models.MedicalRecord).filter(
+        models.MedicalRecord.patient_id == patient.id
+    ).order_by(desc(models.MedicalRecord.created_at)).first()
+
+    # 4. Get Active Medications
+    active_meds = db.query(models.Medication).filter(
+        models.Medication.patient_id == patient.id,
+        models.Medication.is_active == True
+    ).limit(3).all()
+
+    return {
+        "name": patient.full_name,
+        "uhid": patient.uhid,
+        "blood_group": patient.blood_group,
+        "is_profile_complete": all([patient.address, patient.emergency_contact]),
+        "next_appointment": next_appt.appointment_date.strftime("%d %b %Y") if next_appt else "No upcoming",
+        "last_visit": latest_record.created_at.strftime("%d %b %Y") if latest_record else "N/A",
+        "pending_reports": 0, # Integrate with your Lab/Diagnostics table later
+        "vitals": {
+            "heart_rate": getattr(latest_record, 'heart_rate', "72"),
+            "blood_pressure": getattr(latest_record, 'blood_pressure', "120/80")
+        },
+        "medications": [
+            {"name": m.name, "dosage": m.dosage} for m in active_meds
+        ]
+    }
+
+UPLOAD_DIR = "uploads/medical_records"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@patient_router.post("/upload-document")
+async def upload_document(
+    file: UploadFile = File(...), 
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Fetch the linked Patient profile
+    patient = get_or_create_patient_profile(db, current_user)
+
+    # 2. Validate File Extension
+    allowed_extensions = ["pdf", "jpg", "jpeg", "png"]
+    file_ext = file.filename.split(".")[-1].lower()
+    
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Invalid file type. Supports PDF, JPG, PNG.")
+
+    # 3. Create a Unique Filename
+    # Format: patientID_UUID_originalName.ext
+    unique_filename = f"p{patient.id}_{uuid.uuid4().hex[:8]}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+    # 4. Save file to Local Storage
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Server failed to write file to disk.")
+
+    # 5. Save Metadata to Database
+    # This ensures the file appears in the 'Medical Vault' section
+    new_record = MedicalRecord(
+        patient_id=patient.id,
+        record_type="Patient Upload",
+        file_url=file_path,  # Store the path to retrieve it later
+        description=f"Self-uploaded document: {file.filename}",
+        created_at=datetime.now(timezone.utc)
+    )
+    
+    db.add(new_record)
+    db.commit()
+    db.refresh(new_record)
+
+    return {
+        "id": new_record.id,  # 🟢 Changed from "record_id" to "id"
+        "filename": file.filename,
+        "description": f"Self-uploaded document: {file.filename}",
+        "file_url": file_path,
+        "created_at": new_record.created_at,
+        "status": "verified"
+    }
+
+@patient_router.get("/medical-records", response_model=List[MedicalRecordRead])
+def list_my_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    patient = get_or_create_patient_profile(db, current_user)
+    return db.query(models.MedicalRecord).filter(
+        models.MedicalRecord.patient_id == patient.id
+    ).order_by(desc(models.MedicalRecord.created_at)).all()
+
+    return [
+        {
+            "id": r.id, 
+            "description": r.description, 
+            "file_url": r.file_url, 
+            "created_at": r.created_at
+        } for r in records
+    ]
+
+
+import os
+
+@patient_router.delete("/medical-records/{record_id}")
+def delete_medical_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Secure check: Ensure the record belongs to the logged-in patient
+    patient = get_or_create_patient_profile(db, current_user)
+    record = db.query(MedicalRecord).filter(
+        MedicalRecord.id == record_id, 
+        MedicalRecord.patient_id == patient.id
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # 2. Delete physical file from disk
+    try:
+        if os.path.exists(record.file_url):
+            os.remove(record.file_url)
+    except Exception as e:
+        print(f"File deletion error: {e}")
+
+    # 3. Delete database entry
+    db.delete(record)
+    db.commit()
+
+    return {"message": "Document deleted successfully"}

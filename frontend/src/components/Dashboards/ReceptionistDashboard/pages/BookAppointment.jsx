@@ -54,6 +54,19 @@ const BookAppointment = ({ hosp_id, appointmentsList, refresh, onBack }) => {
     return () => window.removeEventListener('click', handleClickOutside);
   }, [activeMenuId]);
 
+  useEffect(() => {
+  // ⏱️ Set up an interval to refresh data every 5 seconds
+  const autoRefresh = setInterval(() => {
+    if (refresh) {
+      console.log("Auto-syncing appointments...");
+      refresh();
+    }
+  }, 5000);
+
+  // Cleanup: Stop the timer if the user leaves the page
+  return () => clearInterval(autoRefresh);
+}, [refresh]);
+ ;
   // --- FILTERING LOGIC ---
   const getMidnight = (date) => {
     const d = new Date(date);
