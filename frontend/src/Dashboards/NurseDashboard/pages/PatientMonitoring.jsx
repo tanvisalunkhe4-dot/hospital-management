@@ -1,19 +1,52 @@
-import React, { useState } from 'react';
-import { Activity, Thermometer, Droplets, Heart, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Activity, Thermometer, Heart, Search, Loader2 } from 'lucide-react';
 
 const PatientMonitoring = () => {
+  const [patients, setPatients] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  // Mock data to visualize the vitals management
-  const patients = [
-    { id: "P-101", name: "Rahul Sharma", bed: "Ward A-10", bp: "120/80", pulse: "72", temp: "98.6°F" },
-    { id: "P-102", name: "Priya Patil", bed: "Ward A-12", bp: "145/95", pulse: "88", temp: "101.2°F" },
-  ];
+  // 1. Fetch Live Data from FastAPI
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      try {
+        setLoading(true);
+        // Ensure this URL matches your FastAPI backend address
+        const response = await axios.get('http://localhost:8000/api/v1/nurse/patients-monitoring');
+        setPatients(response.data);
+      } catch (error) {
+        console.error("Error fetching live monitoring data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatientData();
+    // Optional: Set up polling to refresh every 30 seconds for "live" updates
+    const interval = setInterval(fetchPatientData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 2. Filter logic for the search bar
+  const filteredPatients = patients.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.bed_number.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div style={loaderContainer}>
+        <Loader2 className="animate-spin" size={40} color="#10b981" />
+        <p>Syncing Live Patient Data...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
-        <h2 style={titleStyle}>Patient Monitoring & Vitals</h2>
+        <h2 style={titleStyle}>Live Patient Monitoring</h2>
         <div style={searchBox}>
           <Search size={18} color="#64748b" />
           <input 
@@ -25,20 +58,25 @@ const PatientMonitoring = () => {
       </div>
 
       <div style={gridStyle}>
-        {patients.map((patient) => (
+        {filteredPatients.map((patient) => (
           <div key={patient.id} style={cardStyle}>
             <div style={cardHeader}>
-              <span style={bedBadge}>{patient.bed}</span>
+              <span style={bedBadge}>{patient.bed_number}</span>
               <h3 style={patientName}>{patient.name}</h3>
             </div>
             
             <div style={vitalsGrid}>
-              <VitalItem icon={<Heart size={16} color="#ef4444"/>} label="B.P" value={patient.bp} />
-              <VitalItem icon={<Activity size={16} color="#10b981"/>} label="Pulse" value={`${patient.pulse} bpm`} />
-              <VitalItem icon={<Thermometer size={16} color="#f59e0b"/>} label="Temp" value={patient.temp} />
+              <VitalItem icon={<Heart size={16} color="#ef4444"/>} label="B.P" value={patient.latest_bp || 'N/A'} />
+              <VitalItem icon={<Activity size={16} color="#10b981"/>} label="Pulse" value={patient.latest_pulse ? `${patient.latest_pulse} bpm` : 'N/A'} />
+              <VitalItem icon={<Thermometer size={16} color="#f59e0b"/>} label="Temp" value={patient.latest_temp ? `${patient.latest_temp}°F` : 'N/A'} />
             </div>
 
-            <button style={updateButtonStyle}>Update Vitals</button>
+            <button 
+              style={updateButtonStyle}
+              onClick={() => window.location.href = `/nurse-dashboard/vitals?patientId=${patient.id}`}
+            >
+              Update Vitals
+            </button>
           </div>
         ))}
       </div>
@@ -46,7 +84,10 @@ const PatientMonitoring = () => {
   );
 };
 
-// Reusable Sub-component
+// Reusable VitalItem and Styles remain same as your original code...
+const loaderContainer = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '50vh', gap: '10px', color: '#64748b' };
+// ... (rest of your styles)
+
 const VitalItem = ({ icon, label, value }) => (
   <div style={vitalItemStyle}>
     <div style={iconCircle}>{icon}</div>
@@ -57,7 +98,6 @@ const VitalItem = ({ icon, label, value }) => (
   </div>
 );
 
-// --- Styles ---
 const containerStyle = { display: 'flex', flexDirection: 'column', gap: '20px' };
 const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const titleStyle = { margin: 0, fontSize: '20px', color: '#1e293b', fontWeight: '800' };
@@ -75,5 +115,4 @@ const vitalLabel = { fontSize: '11px', color: '#64748b', fontWeight: '600' };
 const vitalValue = { fontSize: '14px', color: '#1e293b', fontWeight: '700' };
 const updateButtonStyle = { width: '100%', padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' };
 
-// 🟢 CRITICAL: THIS PREVENTS THE "SYNTAX ERROR: NO DEFAULT EXPORT"
 export default PatientMonitoring;

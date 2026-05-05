@@ -22,7 +22,7 @@ import RecordsAccess from './components/Dashboards/NurseDashboard/pages/RecordsA
 import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
 import AdminHeader from "./components/Dashboards/AdminDashboard/components/Header";
 import PatientDashboard from './components/Dashboards/PatientDashboard/pages/PatientDashboard';
-
+import NurseDashboard from ',/component/Dashboards/NurseDashboard';
 import './App.css'
 
 function App() {
