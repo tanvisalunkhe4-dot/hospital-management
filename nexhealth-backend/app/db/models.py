@@ -106,10 +106,33 @@ class Patient(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     user = relationship("User", back_populates="patient_profile")
     #relationship
+    vitals_history = relationship("Vitals", back_populates="patient", cascade="all, delete-orphan")
     hospital = relationship("Hospital", back_populates="patients")
     appointments = relationship("Appointment", back_populates="patient")
     medical_records = relationship("MedicalRecord", back_populates="patient")
     invoices = relationship("Invoice", back_populates="patient")
+
+class Vitals(Base):
+    __tablename__ = "vitals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    nurse_id = Column(Integer, ForeignKey("staff.id"), nullable=True)    
+    # --- Vital Sign Fields ---
+    blood_pressure = Column(String, nullable=True) # e.g., "120/80"
+    pulse_rate = Column(Integer, nullable=True)     # beats per minute
+    temperature = Column(Float, nullable=True)      # in Fahrenheit
+    sp_o2 = Column(Integer, nullable=True)         # Oxygen saturation %
+    respiratory_rate = Column(Integer, nullable=True) # breaths per minute
+    weight = Column(Float, nullable=True)           # Current weight
+    
+    # --- Metadata ---
+    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    remarks = Column(Text, nullable=True) # e.g., "Patient was resting"
+    
+    # Relationships
+    patient = relationship("Patient", back_populates="vitals_history")
+    recorded_by = relationship("Staff", foreign_keys=[nurse_id])
 
 class Appointment(Base):
     __tablename__ = "appointments"

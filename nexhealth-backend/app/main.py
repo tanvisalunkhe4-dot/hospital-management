@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import datetime
-from fastapi.staticfiles import StaticFiles # 🟢 Add this import!
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
 
@@ -17,7 +17,6 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 MEDICAL_RECORDS_DIR = os.path.join(UPLOAD_DIR, "medical_records")
 
 # 2. CREATE DIRECTORIES BEFORE MOUNTING
-# This prevents the "RuntimeError: Directory 'uploads' does not exist"
 os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
 os.makedirs(MEDICAL_RECORDS_DIR, exist_ok=True)
 
@@ -26,6 +25,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 load_dotenv()
+
 # Database imports
 from app.db import models
 from app.db.session import engine
@@ -38,6 +38,7 @@ from app.router.admin import router as admin_router
 from app.router.superadmin import router as superadmin_router
 from app.router.patient import patient_router
 from app.router import security
+from app.router import nurse
 # Initialize Database tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -59,13 +60,14 @@ app.include_router(superadmin_router)
 # Your Specialized Portals
 app.include_router(receptionist_router.router)
 app.include_router(doctor_router.router)
-
+app.include_router(nurse.router)
 # Patient Portal with specific prefix
 app.include_router(
     patient_router, 
     prefix="/api/v1/patient", 
     tags=["Patient Portal"]
 )
+
 
 @app.get("/")
 def health_check():

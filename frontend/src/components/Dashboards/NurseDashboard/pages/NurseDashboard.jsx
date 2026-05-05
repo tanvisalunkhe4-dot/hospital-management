@@ -3,7 +3,7 @@ import NurseSidebar from '../components/NurseSidebar';
 import NurseHeader from '../components/NurseHeader';
 
 import PatientMonitoring from './PatientMonitoring';
-
+import VitalsManagement from './VitalsManagement';
 import { Outlet } from 'react-router-dom'; 
 
 const NurseDashboard = () => {
