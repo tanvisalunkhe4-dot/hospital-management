@@ -117,8 +117,7 @@ class Vitals(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
-    nurse_id = Column(Integer, ForeignKey("staff.id"), nullable=True) # The nurse who took the reading
-    
+    nurse_id = Column(Integer, ForeignKey("staff.id"), nullable=True)    
     # --- Vital Sign Fields ---
     blood_pressure = Column(String, nullable=True) # e.g., "120/80"
     pulse_rate = Column(Integer, nullable=True)     # beats per minute
@@ -133,8 +132,7 @@ class Vitals(Base):
     
     # Relationships
     patient = relationship("Patient", back_populates="vitals_history")
-    recorded_by = relationship("Staff")
-
+    recorded_by = relationship("Staff", foreign_keys=[nurse_id])
 
 class Appointment(Base):
     __tablename__ = "appointments"

@@ -234,6 +234,9 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         )
         db.add(new_user)
         db.flush() # Generates new_staff.id for child tables
+        new_staff.user_id = new_user.id
+    
+       
 
         # 4. PREPARE SPECIALIZED DATA (Role-Specific)
         if data.role == "Doctor":

@@ -22,8 +22,8 @@ import RecordsAccess from './components/Dashboards/NurseDashboard/pages/RecordsA
 import AdminDashboard from "./components/Dashboards/AdminDashboard/pages/AdminDashboard";
 import AdminHeader from "./components/Dashboards/AdminDashboard/components/Header";
 import PatientDashboard from './components/Dashboards/PatientDashboard/pages/PatientDashboard';
-import NurseDashboard from ',/component/Dashboards/NurseDashboard';
 import './App.css'
+import VitalsManagement from './components/Dashboards/NurseDashboard/pages/VitalsManagement';
 
 function App() {
   return (
@@ -45,10 +45,8 @@ function App() {
   <Route index element={<NurseOverview />} />
   <Route path="overview" element={<NurseOverview />} />
   <Route path="monitoring" element={<PatientMonitoring />} />
-  
-  {/* Add these to match your Sidebar and Image 9b959b.png */}
+  <Route path="vitals" element={<VitalsManagement />} />
   <Route path="ward" element={<WardManagement />} /> 
-  <Route path="vitals" element={<PatientMonitoring />} /> 
   <Route path="treatment" element={<TreatmentSupport />} />
   <Route path="records" element={<RecordsAccess />} />
 \</Route>
@@ -62,14 +60,7 @@ function App() {
         <Route path="/features" element={<FeaturesPageWrapper />} />
         <Route path="/solutions" element={<SolutionsPageWrapper />} />
 
-        {/* ABDM SUB-PAGES (Keeping your progress here) */}
-        <Route path="/create-abha" element={<CreateAbhaWrapper />} />
-        <Route path="/verify-abha" element={<VerifyAbhaWrapper />} />
-        <Route path="/link-records" element={<LinkRecordsWrapper />} />
-        <Route path="/fetch-records" element={<FetchRecordsWrapper />} />
-        <Route path="/upload-records" element={<UploadRecordsWrapper />} />
-        <Route path="/consent-mgmt" element={<ConsentManagerWrapper />} />
-        <Route path="/download-abha" element={<DownloadAbhaWrapper />} />
+        
       </Routes>
     </Router>
     </UserProvider>
@@ -111,14 +102,5 @@ const NurseDashboardWrapper = () => {
 const AboutPageWrapper = () => { const n = useNavigate(); return <AboutPage onBack={() => n('/')} />; };
 const FeaturesPageWrapper = () => { const n = useNavigate(); return <FeaturesPage onBack={() => n('/')} />; };
 const SolutionsPageWrapper = () => { const n = useNavigate(); return <SolutionsPage onBack={() => n('/')} />; };
-
-// ABDM Wrappers (Ensure these components are imported!)
-const CreateAbhaWrapper = () => { const n = useNavigate(); return <CreateAbha onBack={() => n('/')} />; };
-const VerifyAbhaWrapper = () => { const n = useNavigate(); return <VerifyAbha onBack={() => n('/')} />; };
-const LinkRecordsWrapper = () => { const n = useNavigate(); return <LinkRecords onBack={() => n('/')} />; };
-const FetchRecordsWrapper = () => { const n = useNavigate(); return <FetchRecords onBack={() => n('/')} />; };
-const UploadRecordsWrapper = () => { const n = useNavigate(); return <UploadRecords onBack={() => n('/')} />; };
-const ConsentManagerWrapper = () => { const n = useNavigate(); return <ConsentManager onBack={() => n('/')} />; };
-const DownloadAbhaWrapper = () => { const n = useNavigate(); return <DownloadAbha onBack={() => n('/')} />; };
 
 export default App;

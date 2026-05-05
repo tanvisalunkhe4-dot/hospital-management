@@ -60,14 +60,15 @@ app.include_router(superadmin_router)
 # Your Specialized Portals
 app.include_router(receptionist_router.router)
 app.include_router(doctor_router.router)
-
+app.include_router(nurse.router)
 # Patient Portal with specific prefix
 app.include_router(
     patient_router, 
     prefix="/api/v1/patient", 
     tags=["Patient Portal"]
 )
-app.include_router(nurse.router, prefix="/api/v1/nurse", tags=["Nurse"])
+
+
 @app.get("/")
 def health_check():
     return {
