@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Play, Clock, Users, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-const PatientQueue = ({ onStartConsultation }) => {
+const PatientQueue = ({ onStartConsultation, isBusy }) => {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Helper to get ID from local storage
   const getActiveStaffId = () => {
     const rawData = localStorage.getItem('user_data');
     if (!rawData) return null;
@@ -26,6 +27,7 @@ const PatientQueue = ({ onStartConsultation }) => {
 
     if (showLoader) setIsRefreshing(true);
     try {
+      // Fetches today's checked-in patients for this doctor and hospital[cite: 7]
       const response = await fetch(`http://localhost:8000/api/v1/doctor/queue/${staffId}`);
       if (!response.ok) throw new Error("Failed to load queue.");
       const data = await response.json();
@@ -42,7 +44,7 @@ const PatientQueue = ({ onStartConsultation }) => {
   useEffect(() => {
     fetchQueue();
 
-    // Strategy: Instead of a 5s timer, refresh when the doctor switches back to this tab
+    // Strategy: Auto-refresh the queue whenever the doctor switches back to this tab[cite: 5]
     const handleFocus = () => fetchQueue(false);
     window.addEventListener('focus', handleFocus);
     
@@ -50,13 +52,23 @@ const PatientQueue = ({ onStartConsultation }) => {
   }, [fetchQueue]);
 
   const handleStartVisit = async (patient) => {
+    // Safety block: prevent starting a new visit if one is already active in the Dashboard[cite: 7]
+    if (isBusy) {
+      alert("Please complete your current consultation before starting a new one.");
+      return;
+    }
+  
     try {
       const response = await fetch(`http://localhost:8000/api/v1/doctor/consultation/start/${patient.id}`, {
         method: 'POST',
       });
+      
       if (response.ok) {
-        onStartConsultation(patient);
+        onStartConsultation(patient); // Tell Dashboard to switch to Workspace[cite: 5]
         fetchQueue(false); 
+      } else {
+        const errorData = await response.json();
+        alert(errorData.detail || "Could not start visit.");
       }
     } catch (err) {
       console.error("Error starting visit:", err);
@@ -77,7 +89,6 @@ const PatientQueue = ({ onStartConsultation }) => {
             <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>Patients currently checked-in</p>
         </div>
         
-        {/* Manual Refresh instead of constant background polling */}
         <button 
             onClick={() => fetchQueue()} 
             style={styles.refreshBtn}
@@ -96,10 +107,17 @@ const PatientQueue = ({ onStartConsultation }) => {
 
       <div style={{ display: 'grid', gap: '16px' }}>
         {queue.map((patient) => (
-          <div key={patient.id} style={styles.patientCard}>
+          <div 
+            key={patient.id} 
+            style={{
+              ...styles.patientCard,
+              opacity: isBusy ? 0.7 : 1, // Visually dim other cards when busy[cite: 7]
+              filter: isBusy ? 'grayscale(0.2)' : 'none'
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: isBusy ? '#94a3b8' : '#1e293b' }}>
                   {patient.patient_name} <span style={{ fontSize: 12, color: '#94a3b8' }}>PID: #{patient.patient_id}</span>
                 </h3>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>Reason: {patient.reason}</p>
@@ -111,8 +129,21 @@ const PatientQueue = ({ onStartConsultation }) => {
                     <Clock size={12} /> Appt: {patient.time}
                   </div>
                 </div>
-                <button style={styles.startButton} onClick={() => handleStartVisit(patient)}>
-                  <Play size={14} fill="white" /> Start Visit
+                
+                <button 
+                  style={{
+                    ...styles.startButton,
+                    // Keep "Start Visit" text but change color to grey when blocked[cite: 7]
+                    backgroundColor: isBusy ? '#e2e8f0' : '#10b981',
+                    color: isBusy ? '#94a3b8' : 'white',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                    border: isBusy ? '1px solid #cbd5e1' : 'none'
+                  }} 
+                  onClick={() => handleStartVisit(patient)}
+                  disabled={isBusy}
+                >
+                  <Play size={14} fill={isBusy ? "#94a3b8" : "white"} /> 
+                  Start Visit
                 </button>
               </div>
             </div>
@@ -137,7 +168,8 @@ const styles = {
     padding: '20px',
     borderRadius: '16px',
     border: '1px solid #e2e8f0',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+    transition: 'all 0.3s ease'
   },
   refreshBtn: {
     display: 'flex',
@@ -162,7 +194,8 @@ const styles = {
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px'
+    gap: '8px',
+    transition: 'background-color 0.2s'
   },
   errorBanner: {
     padding: '16px',

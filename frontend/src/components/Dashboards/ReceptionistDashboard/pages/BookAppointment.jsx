@@ -226,17 +226,28 @@ useEffect(() => {
     e.stopPropagation();
     setActiveMenuId(activeMenuId === id ? null : id);
   };
-
   const getStatusBadge = (status) => {
     const styles = {
-      'In Consultation': { bg: '#f0f9ff', text: '#0284c7' }, // Light blue theme
+      // 🟠 Orange: Doctor is currently seeing the patient
+      'In Consultation': { bg: '#fff7ed', text: '#ea580c' }, 
+      
+      // 🔵 Blue: Consultation finished, ready for billing
+      'Completed': { bg: '#eff6ff', text: '#1e40af' },      
+      
       'Checked In': { bg: '#dcfce7', text: '#166534' },
       'Waiting': { bg: '#fef9c3', text: '#854d0e' },
       'Scheduled': { bg: '#eff6ff', text: '#1e40af' },
       'default': { bg: '#f1f5f9', text: '#475569' }
     };
     const s = styles[status] || styles['default'];
-    return { fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', background: s.bg, color: s.text };
+    return { 
+      fontSize: '11px', 
+      fontWeight: '700', 
+      padding: '4px 10px', 
+      borderRadius: '20px', 
+      background: s.bg, 
+      color: s.text 
+    };
   };
 
   const AppointmentRow = ({ appt }) => {

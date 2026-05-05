@@ -24,10 +24,7 @@ def resolve_staff_record(staff_id: str, db: Session) -> models.Staff:
 
 @router.get("/queue/{staff_id}")
 def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
-    """
-    Fetches the live 'Waiting Room' queue for a specific doctor.
-    Shows only patients who have been 'Checked In' by the receptionist today.
-    """
+    # Resolve the doctor record once
     doctor = resolve_staff_record(staff_id, db)
 
     rows = (
@@ -40,8 +37,9 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         )
         .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
         .filter(
-            # Filtering by ID is safer than doctor_name strings
-            models.Appointment.doctor_id == doctor.id, 
+            models.Appointment.doctor_id == doctor.id,
+            # NEW: Filter by hospital_id so patients from other clinics don't appear
+            models.Appointment.hospital_id == doctor.hospital_id,
             models.Appointment.status == STATUS_CHECKED_IN,
             models.Appointment.appointment_date == date.today(),
         )
@@ -60,25 +58,91 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         for r in rows
     ]
 
+# ADD THIS NEW ENDPOINT FOR THE RESUME LOGIC
+@router.get("/active-session/{staff_id}")
+def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
+    doctor = resolve_staff_record(staff_id, db)
+    
+    # Only look for a session that started TODAY
+    active_row = (
+        db.query(
+            models.Appointment.id,
+            models.Patient.id.label("patient_id"),
+            (models.Patient.first_name + " " + models.Patient.last_name).label("patient_name"),
+            models.Appointment.reason
+        )
+        .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
+        .filter(
+            models.Appointment.doctor_id == doctor.id,
+            models.Appointment.status == STATUS_IN_CONSULTATION,
+            models.Appointment.appointment_date == date.today() # Strict Date Filter
+        )
+        .first()
+    )
+    
+    if active_row:
+        return {
+            "id": active_row.id,
+            "patient_id": active_row.patient_id,
+            "patient_name": active_row.patient_name,
+            "reason": active_row.reason
+        }
+    return None
+
 @router.post("/consultation/start/{appointment_id}")
 def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
+    # 1. Get the appointment the doctor is trying to start
+    target_appt = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    
+    # 2. Check if the doctor ALREADY has a session active TODAY
+    active_session = db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == target_appt.doctor_id,
+        models.Appointment.status == "In Consultation",
+        models.Appointment.appointment_date == date.today() # <--- THE CRITICAL ADDITION
+    ).first()
+
+    if active_session:
+        raise HTTPException(
+            status_code=400, 
+            detail="You already have an active consultation in progress for today."
+        )
+
+    # 3. If no active session today, proceed to start the new one
+    target_appt.status = "IN_CONSULTATION"
+    db.commit()
+    return {"status": "started"}
+
+@router.post("/consultation/finish/{appointment_id}")
+def finish_consultation(appointment_id: int, db: Session = Depends(get_db)):
     """
-    Moves a patient from 'Checked In' to 'In Consultation'.
-    This triggers the patient to move from the Queue to the Active Visit view.
+    1. Updates status to 'Completed' (Turns badge Blue in Receptionist view)
+    2. Automatically creates a record in the Billing Queue
     """
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    appointment.status = STATUS_IN_CONSULTATION
+    # Update the status so the Receptionist sees the Blue badge
+    appointment.status = STATUS_COMPLETED
+    
+    # Create the Billing record (Invoice)
+    new_invoice = models.Invoice(
+        patient_id=appointment.patient_id,
+        hospital_id=appointment.hospital_id,
+        doctor_id=appointment.doctor_id,
+        appointment_id=appointment.id,
+        amount=500.00,  # Or calculate based on doctor's consultation fee
+        status="Pending"
+    )
     
     try:
+        db.add(new_invoice)
         db.commit()
-        return {"status": "success", "message": f"Started visit for appointment {appointment_id}"}
+        return {"status": "success", "message": "Consultation finalized and billed."}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to update consultation status.")
-
+        raise HTTPException(status_code=500, detail="Transaction failed.")
+        
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
     """Fetches full clinical history for the Doctor's record archive."""

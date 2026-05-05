@@ -714,21 +714,34 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
       </div>
       
       {/* 1. NEW: Active Consultations Block */}
-      {inConsultation.length > 0 && (
-        <div style={{ ...tableCardStyle, borderColor: '#0284c7', backgroundColor: '#f0f9ff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#0284c7' }}></div>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0284c7' }}>Currently In Consultation</h3>
-          </div>
-          <AppointmentTable 
-            data={inConsultation} 
-            onAction={() => {}} 
-            activeMenuId={activeMenuId}
-            setActiveMenuId={setActiveMenuId}
-            isConsulting={true}
-          />
-        </div>
-      )}
+     {/* 1. Active Consultations Block */}
+{inConsultation.length > 0 && (
+  <div style={{ ...tableCardStyle, borderColor: '#fdba74', backgroundColor: 'white' }}> 
+    {/* ^ Softened orange border (#fdba74) */}
+    
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+      {/* Change this dot to Orange and add a subtle pulse if you can */}
+      <div style={{ 
+        width: '10px', 
+        height: '10px', 
+        borderRadius: '50%', 
+        backgroundColor: '#ea580c' 
+      }}></div>
+      
+      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#ea580c' }}>
+        Currently In Consultation
+      </h3>
+    </div>
+    
+    <AppointmentTable 
+      data={inConsultation} 
+      onAction={() => {}} 
+      activeMenuId={activeMenuId}
+      setActiveMenuId={setActiveMenuId}
+      isConsulting={true}
+    />
+  </div>
+)}
 
       {/* 2. Live Waiting Room */}
       <div style={tableCardStyle}>
@@ -782,7 +795,19 @@ const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId, isCon
     <tbody>
       {data.length > 0 ? data.map((appt) => (
         <tr key={appt.id} style={{ borderBottom: `1px solid #f8fafc` }}>
-          <td style={tdStyle}><span style={timeBadgeStyle}>{appt.appointment_time}</span></td>
+          {/* Updated Time Logic: Truncates 12:00:00 to 12:00 */}
+          <td style={tdStyle}>
+            <span style={{
+              ...timeBadgeStyle,
+              backgroundColor: '#f1f5f9',
+              color: '#475569',
+              border: '1px solid #e2e8f0',
+              fontWeight: '600'
+            }}>
+              {appt.appointment_time.substring(0, 5)}
+            </span>
+          </td>
+          
           <td style={tdStyle}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontWeight: '700', color: '#1e293b' }}>{appt.patient_name}</span>
@@ -792,16 +817,19 @@ const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId, isCon
           <td style={tdStyle}>{appt.doctor_name}</td>
           <td style={tdStyle}>
             <span style={
-              appt.status === 'In Consultation' ? { ...statusBadgeBlue, backgroundColor: '#f0f9ff', color: '#0284c7' } :
-              appt.status === 'Checked In' ? statusBadgeGreen : statusBadgeBlue
-            }>
+             appt.status === 'In Consultation' 
+             ? { ...statusBadgeBlue, backgroundColor: '#fff7ed', color: '#ea580c' } 
+             : appt.status === 'Checked In' 
+               ? statusBadgeGreen 
+               : statusBadgeBlue }>
               {appt.status}
             </span>
           </td>
           <td style={{ ...tdStyle, position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {isConsulting ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0284c7', fontWeight: '700', fontSize: '13px' }}>
+                /* Updated: Changed color from #0284c7 to #ea580c to match status */
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ea580c', fontWeight: '700', fontSize: '13px' }}>
                   <Clock size={16} /> With Doctor
                 </div>
               ) : appt.status === 'Checked In' ? (

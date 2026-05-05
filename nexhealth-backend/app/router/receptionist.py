@@ -525,3 +525,37 @@ async def finalize_request(appt_id: int, action: FinalizeSchema, db: Session = D
     
     db.commit()
     return {"message": f"Action {action.decision} successful"}
+
+@router.patch("/appointments/{appt_id}/finish")
+def finish_consultation(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
+    """
+    Called when the doctor is done. 
+    1. Turns the status to 'Completed' (Blue).
+    2. Generates a basic invoice for the Billing section.
+    """
+    appt = db.query(models.Appointment).filter(
+        models.Appointment.id == appt_id, 
+        models.Appointment.hospital_id == hosp_id
+    ).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    try:
+        # 1. Update the status
+        appt.status = "Completed"
+        
+        # 2. Trigger the Billing Handshake
+        new_invoice = models.Invoice(
+            patient_id=appt.patient_id,
+            hospital_id=hosp_id,
+            total_amount=500.00,  # Default fee
+            status="Pending"
+        )
+        db.add(new_invoice)
+        db.commit()
+        
+        return {"message": "Consultation finished. Status is now Completed (Blue)."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to finish consultation.")
