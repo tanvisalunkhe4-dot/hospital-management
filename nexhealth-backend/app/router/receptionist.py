@@ -11,10 +11,9 @@ import logging
 import datetime 
 from typing import List
 from sqlalchemy import desc
-STATUS_SCHEDULED = "Scheduled"
-STATUS_CHECKED_IN = "Checked In"
-STATUS_IN_CONSULTATION = "In Consultation"
-# Setup for logging
+from app.router.doctor import STATUS_SCHEDULED, STATUS_CHECKED_IN, STATUS_IN_CONSULTATION, STATUS_COMPLETED
+from app.status import normalize_appointment_status
+# Setup for logging and database operations
 router = APIRouter(prefix="/api/v1/receptionist", tags=["receptionist"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = logging.getLogger(__name__)
@@ -238,9 +237,9 @@ def update_appointment_status(appt_id: int, hosp_id: int, status_update: dict, d
     appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id, models.Appointment.hospital_id == hosp_id).first()
     if not appt:
         raise HTTPException(status_code=404, detail="Appointment not found")
-    appt.status = status_update.get("status", appt.status)
+    appt.status = normalize_appointment_status(status_update.get("status", appt.status)) or appt.status
     db.commit()
-    return {"message": "Status updated"}
+    return {"message": "Status updated", "status": appt.status}
 
 @router.delete("/appointments/{appt_id}")
 def delete_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
@@ -275,6 +274,7 @@ def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_d
         logger.error(f"CHECK-IN ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update check-in status.")
 @router.patch("/appointments/{appt_id}/reschedule")
+
 def reschedule_appointment(
     appt_id: int, 
     hosp_id: int, 

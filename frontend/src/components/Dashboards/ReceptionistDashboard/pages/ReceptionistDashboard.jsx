@@ -652,16 +652,17 @@ const TodayAppointmentsView = ({ appointments, onBack, hosp_id, refresh, onCheck
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [rescheduleAppt, setRescheduleAppt] = useState(null);
 
-  // --- UPDATED FILTERING LOGIC ---
-  // 1. Patients currently with the doctor
-  const inConsultation = appointments.filter(a => a.status === 'In Consultation');
-  // 2. Patients who have arrived and are waiting
-  const waitingRoom = appointments.filter(a => a.status === 'Checked In');
-  // 3. Patients scheduled for later (not arrived, cancelled, or finished)
-  const upcomingToday = appointments.filter(a => 
-    !['Checked In', 'In Consultation', 'Cancelled', 'Completed'].includes(a.status)
-  );
+ // 1. Patients currently with the doctor
+ const inConsultation = appointments.filter(a => a.status === 'In Consultation');
+  
+ // 2. Patients who have arrived and are waiting
+ const waitingRoom = appointments.filter(a => a.status === 'Checked In');
 
+ // 3. Patients scheduled for later
+ const upcomingToday = appointments.filter(a => 
+   !['Checked In', 'In Consultation', 'Cancelled', 'Completed'].includes(a.status)
+ );
+ 
   const handleAction = async (type, appt) => {
     setActiveMenuId(null);
     const baseUrl = `http://localhost:8000/api/v1/receptionist/appointments/${appt.id}`;

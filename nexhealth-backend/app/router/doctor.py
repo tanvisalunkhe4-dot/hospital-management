@@ -108,7 +108,7 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
         )
 
     # 3. If no active session today, proceed to start the new one
-    target_appt.status = "IN_CONSULTATION"
+    target_appt.status = STATUS_IN_CONSULTATION
     db.commit()
     return {"status": "started"}
 

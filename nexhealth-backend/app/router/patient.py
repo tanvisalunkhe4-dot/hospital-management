@@ -483,7 +483,7 @@ def request_cancel_appointment(
     return {"message": "Cancellation request sent to receptionist"}
     
 # --- RESCHEDULE APPOINTMENT ---
-@patient_router.patch("/appointments/{appointment_id}/reschedule")
+@patient_router.patch("/appointments/{appointment_id}/reschedule", response_model=AppointmentResponse)
 def reschedule_appointment(
     appointment_id: int,
     appt_update: AppointmentUpdate,

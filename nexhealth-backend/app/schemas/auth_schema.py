@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Any
 from datetime import datetime, date, time
+from app.status import normalize_appointment_status
 # --- ADD THIS CLASS ---
 class HospitalCreate(BaseModel):
     name: str
@@ -156,6 +157,11 @@ class AppointmentRead(BaseModel):
     appointment_time: Optional[time] = None  # 🟢 ADD THIS
     status: str
     reason: Optional[str] = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v):
+        return normalize_appointment_status(v) or "Scheduled"
 
     class Config:
         from_attributes = True

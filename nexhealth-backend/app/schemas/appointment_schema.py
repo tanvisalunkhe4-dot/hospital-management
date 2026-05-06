@@ -1,6 +1,7 @@
 from pydantic import BaseModel, field_validator
 from datetime import date, datetime, time
 from typing import Optional
+from app.status import normalize_appointment_status
 
 # Base fields shared by all appointment schemas
 class AppointmentBase(BaseModel):
@@ -13,6 +14,11 @@ class AppointmentBase(BaseModel):
     appointment_time: Optional[time] = None
     status: Optional[str] = None
     reason: Optional[str] = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v):
+        return normalize_appointment_status(v)
 
 # Used for creating a NEW appointment (Fields are required here)
 class AppointmentCreate(AppointmentBase):
@@ -37,6 +43,11 @@ class AppointmentResponse(BaseModel):
     status: str # Required in response so frontend always has a value
     reason: Optional[str] = None
     created_at: Optional[datetime] = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v):
+        return normalize_appointment_status(v) or "Scheduled"
 
     @field_validator('appointment_time', mode='before')
     @classmethod
