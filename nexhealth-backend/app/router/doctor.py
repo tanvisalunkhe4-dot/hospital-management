@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
+from sqlalchemy import desc
 from datetime import date
 from app.db import models
 from app.db.session import get_db
@@ -167,3 +168,25 @@ def get_all_records(db: Session = Depends(get_db)):
         }
         for r in results
     ]
+
+@router.get("/patient/{patient_id}/latest-vitals")
+def get_latest_vitals(patient_id: int, db: Session = Depends(get_db)):
+    latest_vital = db.query(models.Vitals)\
+        .filter(models.Vitals.patient_id == patient_id)\
+        .order_by(desc(models.Vitals.recorded_at))\
+        .first()
+    
+    if not latest_vital:
+        return {
+            "blood_pressure": "N/A",
+            "pulse_rate": "--",
+            "temperature": "--",
+            "sp_o2": "--" # Added default for SpO2
+        }
+        
+    return {
+        "blood_pressure": latest_vital.blood_pressure,
+        "pulse_rate": latest_vital.pulse_rate,
+        "temperature": latest_vital.temperature,
+        "sp_o2": latest_vital.sp_o2 or "--" # From your Vitals model
+    }

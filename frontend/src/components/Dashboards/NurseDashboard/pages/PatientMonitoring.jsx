@@ -29,11 +29,16 @@ const PatientMonitoring = () => {
     return () => clearInterval(interval);
   }, [fetchPatientData]);
 
-  const filteredPatients = patients.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.uhid?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  const filteredPatients = patients.filter(p => {
+    // Only show patients with a Checked-In status
+    const isCheckedIn = p.checked_in === true || p.status === 'Checked In'; 
+    
+    // Apply your existing search logic
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.uhid?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return isCheckedIn && matchesSearch;
+  });
   if (loading) {
     return (
       <div style={loaderContainer}>
@@ -81,6 +86,21 @@ const PatientMonitoring = () => {
             </tr>
           </thead>
           <tbody>
+          {filteredPatients.length === 0 ? (
+    <tr>
+      <td colSpan="6" style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
+        <RefreshCw size={32} style={{ margin: '0 auto 10px', opacity: 0.5 }} className="animate-spin-slow" />
+        <p style={{ fontWeight: '600' }}>No active patients checked in for monitoring.</p>
+        <p style={{ fontSize: '12px' }}>New check-ins from the receptionist will appear here automatically.</p>
+      </td>
+    </tr>
+  ) : (
+    filteredPatients.map((patient) => (
+      <tr key={patient.id} style={rowStyle}>
+        {/* ... your existing <td> cells ... */}
+      </tr>
+    ))
+  )}
             {filteredPatients.map((patient) => (
               <tr key={patient.id} style={rowStyle}>
                 <td style={nameColumnStyle}>
@@ -92,11 +112,12 @@ const PatientMonitoring = () => {
                 </td>
                 <td><span style={bedBadge}>{patient.bed_number}</span></td>
                 <td>
-                  <div style={getStatusBadgeStyle(patient.status_type)}>
-                    {patient.status_type === 'critical' && <AlertTriangle size={12} />}
-                    {patient.status?.toUpperCase() || 'REGISTERED'}
-                  </div>
-                </td>
+  <div style={getStatusBadgeStyle(patient.status_type)}>
+    {/* Always show green for checked-in unless they are critical */}
+    {patient.status_type === 'critical' ? <AlertTriangle size={12} /> : <Activity size={12} />}
+    {patient.status?.toUpperCase()}
+  </div>
+</td>
                 <td>
                   <div style={vitalsRow}>
                     <VitalPill icon={<Heart size={14} color="#ef4444"/>} value={patient.vitals?.bp} />

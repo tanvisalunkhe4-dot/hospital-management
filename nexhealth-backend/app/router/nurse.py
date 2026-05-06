@@ -1,24 +1,37 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, and_, func
 from typing import List
 from app.db.session import get_db 
 from app.db import models
 from app.router.deps import get_current_user
+from datetime import datetime
 router = APIRouter(prefix="/api/v1/nurse", tags=["Nurse Operations"])
+
 
 @router.get("/patients-monitoring", response_model=List[dict])
 def get_monitoring_data(db: Session = Depends(get_db)):
-    patients = db.query(models.Patient).all()
+    # 1. Get today's date to filter only current appointments
+    today = datetime.now().date()
+
+    # 2. Query only patients who have a "Checked-In" appointment TODAY
+    active_appointments = db.query(models.Patient, models.Appointment)\
+        .join(models.Appointment, models.Patient.id == models.Appointment.patient_id)\
+        .filter(
+            models.Appointment.status == "Checked In",
+            func.date(models.Appointment.appointment_date) == today
+        ).all()
+
     results = []
     
-    for patient in patients:
+    for patient, appt in active_appointments:
+        # Get the most recent vitals recorded for this patient
         latest_vital = db.query(models.Vitals)\
             .filter(models.Vitals.patient_id == patient.id)\
             .order_by(desc(models.Vitals.recorded_at))\
             .first()
             
-        # Determine status color/priority for the UI
+        # Determine status priority for the UI
         pulse = latest_vital.pulse_rate if latest_vital else 0
         status_type = "normal"
         if pulse > 100 or pulse < 60 and pulse != 0:
@@ -30,9 +43,10 @@ def get_monitoring_data(db: Session = Depends(get_db)):
             "id": patient.id,
             "name": f"{patient.first_name} {patient.last_name}".title(),
             "uhid": patient.uhid or "NX-PENDING",
-            "bed_number": "B-" + str(patient.id).zfill(2), # Placeholder for bed logic
-            "status": patient.status or "Admitted",
+            "bed_number":  "OPD", # Link to the ward assigned at check-in
+            "status": "Checked In", # Matches the receptionist's action
             "status_type": status_type,
+            "checked_in": True, # For frontend filtering
             "vitals": {
                 "bp": latest_vital.blood_pressure if latest_vital else "N/A",
                 "pulse": latest_vital.pulse_rate if latest_vital else "N/A",
@@ -41,7 +55,6 @@ def get_monitoring_data(db: Session = Depends(get_db)):
             }
         })
     return results
-
 
 @router.post("/vitals")
 def create_vitals(
@@ -63,7 +76,7 @@ def create_vitals(
     # 3. Create the Vitals record using the STAFF ID
     new_vital = models.Vitals(
         patient_id=vital_data.get("patient_id"),
-        nurse_id=staff_record.id,  # Use the ID from the staff table, not users table
+        nurse_id=staff_record.id,
         blood_pressure=vital_data.get("blood_pressure"),
         pulse_rate=vital_data.get("pulse_rate"),
         temperature=vital_data.get("temperature"),
@@ -71,11 +84,17 @@ def create_vitals(
         remarks=vital_data.get("notes") 
     )
     
+    appointment = db.query(models.Appointment).filter(
+        models.Appointment.patient_id == vital_data.get("patient_id"),
+        models.Appointment.status == "Checked In"
+    ).first()
+    
+    if appointment:
+        appointment.status = "Vitals Taken" # Or "Ready for Doctor"
+
     db.add(new_vital)
     db.commit()
-    db.refresh(new_vital)
-    return {"message": "Vitals recorded successfully", "id": new_vital.id}
-
+    return {"message": "Vitals recorded and patient ready for doctor"}
 @router.get("/vitals-history/{patient_id}")
 def get_vitals_history(patient_id: int, db: Session = Depends(get_db)):
     # Fetch the last 10-15 records to show trends

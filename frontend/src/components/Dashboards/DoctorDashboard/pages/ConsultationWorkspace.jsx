@@ -1,13 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, MicOff, Save, Thermometer, Heart, Activity, Plus, Trash2 } from 'lucide-react';
-
+import { Mic, MicOff, Save, Thermometer, Heart, Activity, Plus, Trash2, Droplets } from 'lucide-react';
+import axios from 'axios'; 
 const ConsultationWorkspace = ({ patient, onComplete }) => {
   const [isListening, setIsListening] = useState(false);
   const [notes, setNotes] = useState("");
-  const [vitals, setVitals] = useState({ bp: '120/80', pulse: '72', temp: '98.6' });
   const [prescription, setPrescription] = useState([]);
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
+  const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', sp02: '--' });
 
+useEffect(() => {
+  const loadClinicalData = async () => {
+    try {
+      // Use the patient.id passed to the doctor dashboard
+      const response = await axios.get(`http://localhost:8000/api/v1/doctor/patient/${patient.id}/latest-vitals`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+setVitals({
+  bp: response.data.blood_pressure || "N/A",
+  pulse: response.data.pulse_rate || "--",
+  temp: response.data.temperature || "--",
+  spO2: response.data.sp_o2 || "--" // Mapping to the sp_o2 column
+});
+    } catch (error) {
+      console.error("Critical: Could not sync patient vitals", error);
+    }
+  };
+
+  if (patient?.id) {
+    loadClinicalData();
+  }
+}, [patient?.id]);
   // --- AI MOCK LOGIC ---
   // This simulates the AI script capturing a conversation for your demo
   useEffect(() => {
@@ -39,6 +62,27 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
     if (newMed.name) {
       setPrescription([...prescription, { ...newMed, id: Date.now() }]);
       setNewMed({ name: '', dosage: '', frequency: '1-0-1' });
+    }
+  };
+
+  const handleFinalize = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      // 1. Submit clinical data to the backend
+      await axios.post(`http://localhost:8000/api/v1/doctor/finalize-consultation`, {
+        patient_id: patient.id,
+        notes: notes,
+        prescription: prescription,
+        status: "Completed" // This updates the appointment status
+      }, { headers });
+  
+      // 2. Trigger the UI navigation/refresh
+      onComplete();
+    } catch (error) {
+      console.error("Failed to finalize consultation", error);
+      alert("System Sync Error: Could not save clinical record.");
     }
   };
 
@@ -91,7 +135,15 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
           <Thermometer size={20} color="#3b82f6" />
           <div><p style={{ margin: 0, fontSize: '11px', color: '#64748b' }}>Temperature</p><b style={{color: '#1e293b'}}>{vitals.temp} °F</b></div>
         </div>
+        <div style={styles.vitalCard}>
+  <Droplets size={20} color="#3b82f6" />
+  <div>
+    <p style={{ margin: 0, fontSize: '11px', color: '#64748b' }}>Oxygen (SpO2)</p>
+    <b style={{color: '#1e293b'}}>{vitals.spO2} %</b>
+  </div>
       </div>
+      </div>
+      
 
       {/* COLUMN 2: AI SCRIBE PANEL */}
       <div style={styles.card}>
@@ -162,9 +214,12 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
             )}
         </div>
 
-        <button style={{ ...styles.actionBtn(false), width: '100%', marginTop: '20px', justifyContent: 'center' }} onClick={onComplete}>
-          <Save size={18} /> Finalize Consultation
-        </button>
+        <button 
+  style={{ ...styles.actionBtn(false), width: '100%', marginTop: '20px', justifyContent: 'center' }} 
+  onClick={handleFinalize} // CHANGE THIS from onComplete to handleFinalize
+>
+  <Save size={18} /> Finalize Consultation
+</button>
       </div>
 
       <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }`}</style>

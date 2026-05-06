@@ -61,7 +61,11 @@ const VitalsManagement = () => {
       
       await axios.post(`${API_BASE}/vitals`, {
         patient_id: parseInt(patientId),
-        ...vitals
+        blood_pressure: vitals.blood_pressure,
+        pulse_rate: parseInt(vitals.pulse_rate), // Convert to number for DB
+        temperature: parseFloat(vitals.temperature), // Convert to float for DB
+        spo2: parseInt(vitals.spo2), // Mapped to sp_o2 in nurse.py
+        notes: vitals.notes // Mapped to remarks in nurse.py
       }, { headers });
 
       // Clean refresh of history
@@ -168,21 +172,22 @@ const VitalsManagement = () => {
                 </tr>
               </thead>
               <tbody>
-                {history.map((row, i) => (
-                  <tr key={i} style={trStyle}>
-                    <td style={timeCol}>
-                      {new Date(row.recorded_at).toLocaleDateString([], {month:'short', day:'numeric'})}
-                      <div style={{fontSize: '11px', opacity: 0.7}}>
-                        {new Date(row.recorded_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                      </div>
-                    </td>
-                    <td style={valCol}>{row.blood_pressure}</td>
-                    <td style={valCol}>{row.pulse_rate} <span style={unitTag}>bpm</span></td>
-                    <td style={valCol}>{row.temperature}°</td>
-                    <td style={noteCol}>{row.notes || '--'}</td>
-                  </tr>
-                ))}
-              </tbody>
+  {history.map((row, i) => (
+    <tr key={i} style={trStyle}>
+      <td style={timeCol}>
+        {new Date(row.recorded_at).toLocaleDateString([], {month:'short', day:'numeric'})}
+        <div style={{fontSize: '11px', opacity: 0.7}}>
+          {new Date(row.recorded_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+        </div>
+      </td>
+      <td style={valCol}>{row.blood_pressure || '--'}</td>
+      <td style={valCol}>{row.pulse_rate} <span style={unitTag}>bpm</span></td>
+      <td style={valCol}>{row.temperature}°</td>
+      {/* Change row.notes to row.remarks */}
+      <td style={noteCol}>{row.remarks || '--'}</td>
+    </tr>
+  ))}
+</tbody>
             </table>
           </div>
         </div>

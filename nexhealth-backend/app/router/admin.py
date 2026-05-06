@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.schemas import DepartmentOut, DepartmentCreate
 from ..db.session import get_db
 from ..db import models
@@ -22,7 +22,7 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
 from datetime import datetime
 
-
+IST = timezone(timedelta(hours=5, minutes=30))
 def generate_revenue_pdf(stats, dept_stats, admin_name):
     # Ensure directory exists
     os.makedirs("temp_reports", exist_ok=True)
@@ -185,10 +185,11 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
         }
         prefix = role_prefixes.get(data.role, "STF")
         
+        current_year = datetime.now().year
         # We check for ANY staff member in 2026 to ensure the number is always unique
         last_entry = db.query(models.Staff)\
             .filter(
-                models.Staff.staff_id.contains("-2026-"),
+                models.Staff.staff_id.contains(f"-{current_year}-"),
                 models.Staff.hospital_id == data.hospital_id
             )\
             .order_by(models.Staff.id.desc())\
