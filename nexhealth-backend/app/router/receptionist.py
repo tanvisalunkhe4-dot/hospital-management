@@ -80,6 +80,11 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
     if not patient:
         raise HTTPException(status_code=404, detail="Patient record not found.")
 
+        print(f"DEBUG: Received doctor_id: {appt_in.doctor_id} for Patient: {appt_in.patient_id}")
+
+
+
+   
     try:
         # 2. Create the appointment 
         # Note: Ensure 'doctor_name' exists in your models.Appointment. 
@@ -480,6 +485,7 @@ def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
         
     return [
         {
+            "id": doc.id,
             "staff_id": doc.staff_id,
             "full_name": doc.full_name,
             # If specialization doesn't exist, we use a fallback or remove it

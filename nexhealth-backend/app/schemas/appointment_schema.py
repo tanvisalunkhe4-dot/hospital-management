@@ -23,6 +23,7 @@ class AppointmentBase(BaseModel):
 # Used for creating a NEW appointment (Fields are required here)
 class AppointmentCreate(AppointmentBase):
     patient_id: int
+    doctor_id: int
     doctor_name: str # Overriding to make it required for creation
     appointment_date: date
     appointment_time: time

@@ -8,6 +8,7 @@ from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
+STATUS_VITALS_TAKEN = "Vitals Taken"
 STATUS_SCHEDULED = "Scheduled"
 STATUS_CHECKED_IN = "Checked In"
 STATUS_IN_CONSULTATION = "In Consultation"
@@ -39,9 +40,9 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
         .filter(
             models.Appointment.doctor_id == doctor.id,
-            # NEW: Filter by hospital_id so patients from other clinics don't appear
             models.Appointment.hospital_id == doctor.hospital_id,
-            models.Appointment.status == STATUS_CHECKED_IN,
+            # CHANGE: Only show patients who finished Vitals
+            models.Appointment.status == STATUS_VITALS_TAKEN, 
             models.Appointment.appointment_date == date.today(),
         )
         .order_by(models.Appointment.appointment_time.asc())
@@ -95,11 +96,14 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     # 1. Get the appointment the doctor is trying to start
     target_appt = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     
+    if target_appt.status == STATUS_IN_CONSULTATION:
+        return {"status": "already_started"}
     # 2. Check if the doctor ALREADY has a session active TODAY
     active_session = db.query(models.Appointment).filter(
         models.Appointment.doctor_id == target_appt.doctor_id,
         models.Appointment.status == "In Consultation",
-        models.Appointment.appointment_date == date.today() # <--- THE CRITICAL ADDITION
+        models.Appointment.appointment_date == date.today(), # <--- THE CRITICAL ADDITION
+        models.Appointment.id != appointment_id 
     ).first()
 
     if active_session:
@@ -177,11 +181,13 @@ def get_latest_vitals(patient_id: int, db: Session = Depends(get_db)):
         .first()
     
     if not latest_vital:
+       
         return {
-            "blood_pressure": "N/A",
-            "pulse_rate": "--",
-            "temperature": "--",
-            "sp_o2": "--" # Added default for SpO2
+            "blood_pressure": None,
+            "pulse_rate": 0,
+            "temperature": 0.0,
+            "sp_o2": 0,
+            "remarks": "" 
         }
         
     return {

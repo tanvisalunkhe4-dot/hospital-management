@@ -8,29 +8,32 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', sp02: '--' });
 
-useEffect(() => {
-  const loadClinicalData = async () => {
-    try {
-      // Use the patient.id passed to the doctor dashboard
-      const response = await axios.get(`http://localhost:8000/api/v1/doctor/patient/${patient.id}/latest-vitals`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      
-setVitals({
-  bp: response.data.blood_pressure || "N/A",
-  pulse: response.data.pulse_rate || "--",
-  temp: response.data.temperature || "--",
-  spO2: response.data.sp_o2 || "--" // Mapping to the sp_o2 column
-});
-    } catch (error) {
-      console.error("Critical: Could not sync patient vitals", error);
-    }
-  };
 
-  if (patient?.id) {
-    loadClinicalData();
-  }
-}, [patient?.id]);
+  useEffect(() => {
+    const loadClinicalData = async () => {
+      try {
+        // Change patient.id to patient.patient_id to match your doctor.py return
+        const pId = patient.patient_id || patient.id; 
+        const response = await axios.get(`http://localhost:8000/api/v1/doctor/patient/${pId}/latest-vitals`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        
+        setVitals({
+          bp: response.data.blood_pressure || "N/A",
+          pulse: response.data.pulse_rate || "--",
+          temp: response.data.temperature || "--",
+          spO2: response.data.sp_o2 || "--" 
+        });
+      } catch (error) {
+        console.error("Critical: Could not sync patient vitals", error);
+      }
+    };
+  
+    if (patient?.patient_id || patient?.id) {
+      loadClinicalData();
+    }
+  }, [patient]);
+
   // --- AI MOCK LOGIC ---
   // This simulates the AI script capturing a conversation for your demo
   useEffect(() => {
@@ -65,30 +68,52 @@ setVitals({
     }
   };
 
-  const handleFinalize = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      
-      // 1. Submit clinical data to the backend
-      await axios.post(`http://localhost:8000/api/v1/doctor/finalize-consultation`, {
-        patient_id: patient.id,
-        notes: notes,
-        prescription: prescription,
-        status: "Completed" // This updates the appointment status
-      }, { headers });
-  
-      // 2. Trigger the UI navigation/refresh
-      onComplete();
-    } catch (error) {
-      console.error("Failed to finalize consultation", error);
-      alert("System Sync Error: Could not save clinical record.");
-    }
-  };
-
   const removeMed = (id) => {
     setPrescription(prescription.filter(m => m.id !== id));
   };
+
+  const handleFinalize = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // 1. Ensure headers include Content-Type
+      const headers = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json' 
+      };
+      
+      const apptId = patient.appt_id || patient.id;
+  
+      // 2. The empty object {} is necessary for PATCH, 
+      // but we ensure headers are fully defined.
+      await axios.patch(
+        `http://localhost:8000/api/v1/receptionist/appointments/${apptId}/finish`, 
+        {}, 
+        { headers }
+      );
+  
+      // Success flow
+      setNotes("");
+      setPrescription([]);
+      setIsListening(false);
+      setVitals({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
+  
+      alert("Consultation finalized. Patient moved to Billing.");
+      onComplete(); 
+  
+    } catch (error) {
+      // 3. IMPROVED ERROR LOGGING: 
+      // This will tell you EXACTLY what FastAPI is complaining about.
+      if (error.response && error.response.status === 422) {
+        console.error("Validation Error Details:", error.response.data.detail);
+        alert(`Backend Validation Error: ${JSON.stringify(error.response.data.detail)}`);
+      } else {
+        console.error("General Sync Error:", error);
+        alert("System Sync Error: Check your connection or terminal logs.");
+      }
+    }
+  };
+ 
 
   const styles = {
     container: { display: 'grid', gridTemplateColumns: '300px 1fr 350px', gap: '20px', height: 'calc(100vh - 180px)' },
@@ -214,11 +239,21 @@ setVitals({
             )}
         </div>
 
-        <button 
-  style={{ ...styles.actionBtn(false), width: '100%', marginTop: '20px', justifyContent: 'center' }} 
-  onClick={handleFinalize} // CHANGE THIS from onComplete to handleFinalize
+        
+
+{/* Add this at the bottom of COLUMN 3 (Prescription Pad) */}
+<button 
+  style={{ 
+    ...styles.actionBtn(false), 
+    width: '100%', 
+    marginTop: '20px', 
+    justifyContent: 'center',
+    backgroundColor: '#2563eb', // Professional blue for completion
+    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+  }} 
+  onClick={handleFinalize}
 >
-  <Save size={18} /> Finalize Consultation
+  <Save size={18} /> Complete & Call Next Patient
 </button>
       </div>
 

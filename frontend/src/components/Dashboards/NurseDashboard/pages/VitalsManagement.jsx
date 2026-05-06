@@ -68,6 +68,10 @@ const VitalsManagement = () => {
         notes: vitals.notes // Mapped to remarks in nurse.py
       }, { headers });
 
+
+      alert("Vitals synchronized. Patient moved to Doctor's Queue.");
+    navigate('/nurse-dashboard'); // Redirect back to the monitoring list
+    
       // Clean refresh of history
       const hRes = await axios.get(`${API_BASE}/vitals-history/${patientId}`, { headers });
       setHistory(hRes.data);

@@ -105,6 +105,12 @@ useEffect(() => {
   const handleBook = async (e) => {
     e.preventDefault();
 
+
+    if (!appointmentData.doctor_id || isNaN(parseInt(appointmentData.doctor_id))) {
+      alert("Invalid Doctor Selection: Please select a doctor from the suggestion list.");
+      return;
+    }
+    
     // 1. ADVANCED SLOT CHECK (20-Minute Consultation Gap)
     const bufferMinutes = 20;
     const newApptTime = new Date(`${appointmentData.appointment_date}T${appointmentData.appointment_time}`);
@@ -132,14 +138,21 @@ useEffect(() => {
 
     setLoading(true);
     try {
+      // PREPARE DATA: Explicitly convert IDs to integers
+      const payload = {
+        ...appointmentData,
+        doctor_id: parseInt(appointmentData.doctor_id), // 👈 CRITICAL FIX
+        patient_id: parseInt(selectedPatient.id),       // 👈 CRITICAL FIX
+        hospital_id: parseInt(hosp_id),                 // 👈 CRITICAL FIX
+        status: "Scheduled"
+      };
+  
+      console.log("Sending Payload:", payload); // Debug to verify types in console
+  
       const response = await fetch(`http://localhost:8000/api/v1/receptionist/book-appointment?hosp_id=${hosp_id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            ...appointmentData, 
-            patient_id: selectedPatient.id, 
-            hospital_id: parseInt(hosp_id) 
-        })
+        body: JSON.stringify(payload)
       });
       if (response.ok) {
         setIsSuccess(true);
@@ -337,23 +350,28 @@ useEffect(() => {
                 value={appointmentData.doctor_name} 
                 onChange={(e) => {
                   const val = e.target.value;
-                  // Matches the name to find the integer ID
-                  const selectedDoc = doctors.find(dr => `Dr. ${dr.full_name}` === val);
+                  const selectedDoc = doctors.find(dr => 
+                    `Dr. ${dr.full_name}`.trim().toLowerCase() === val.trim().toLowerCase()
+                  );
+                
                   setAppointmentData({
                     ...appointmentData, 
                     doctor_name: val,
+                    // Now selectedDoc.id will exist and be an integer!
                     doctor_id: selectedDoc ? selectedDoc.id : ""
                   });
                 }}
               />
+              
               <datalist id="dr-list">
-                {doctors.map((dr) => (
-                  <option 
-                    key={dr.staff_id} 
-                    value={`Dr. ${dr.full_name}`} 
-                  />
-                ))}
-              </datalist>
+  {doctors.map((dr) => (
+    <option 
+      key={dr.staff_id || dr.id} 
+      value={`Dr. ${dr.full_name}`} 
+    />
+  ))}
+</datalist>
+
               <input type="text" placeholder="Reason (e.g. Fever)" style={inputStyle} value={appointmentData.reason} onChange={(e) => setAppointmentData({...appointmentData, reason: e.target.value})}/>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

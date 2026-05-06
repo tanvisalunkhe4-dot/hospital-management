@@ -4,27 +4,32 @@ import axios from 'axios';
 const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  // 1. Initialize from localStorage so the UI doesn't "pop" or flicker on refresh
+  // 1. Initialize from localStorage
   const [profileImage, setProfileImage] = useState(() => 
     localStorage.getItem('patient_profile_image') || null
   );
+  
+  // Note: Ensure your login component sets 'user_role' in localStorage
   const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'patient');
+
   const fetchPersistentImage = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
    
-    // Logic: Select endpoint based on role
-    const endpoint = userRole === 'admin' 
+    // ✅ FIX 1: Use the roles your backend expects (e.g., 'doctor' usually uses staff endpoint)
+    const isStaff = userRole === 'admin' || userRole === 'doctor' || userRole === 'nurse';
+    
+    const endpoint = isStaff 
       ? 'http://localhost:8000/api/v1/staff/profile' 
       : 'http://localhost:8000/api/v1/patient/profile';
 
     try {
-      const res = await axios.get('http://localhost:8000/api/v1/patient/profile', {
+      // ✅ FIX 2: Use the 'endpoint' variable instead of the hardcoded patient URL
+      const res = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // 🟢 CHANGE THIS LINE: Match your backend key 'profile_url'
-      const imageUrl = res.data.profile_url || res.data.profile_url; 
+      const imageUrl = res.data.profile_url; 
       
       if (imageUrl) {
         setProfileImage(imageUrl);
@@ -33,14 +38,12 @@ export const UserProvider = ({ children }) => {
     } catch (err) {
       console.warn("NexHealth: Profile sync deferred for", userRole);
     }
-  }, [userRole])
+  }, [userRole]);
+
   // 3. Sync on Mount
   useEffect(() => {
     fetchPersistentImage();
   }, [fetchPersistentImage]);
-
-  // 4. Update localStorage only when profileImage actually changes
- 
 
   return (
     <UserContext.Provider value={{ profileImage, setProfileImage }}>
@@ -49,7 +52,6 @@ export const UserProvider = ({ children }) => {
   );
 };
 
-// 5. The Hook
 export const useUser = () => {
   const context = useContext(UserContext);
   if (!context) {

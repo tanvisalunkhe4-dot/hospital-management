@@ -19,16 +19,19 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
 
   const fetchQueue = useCallback(async (showLoader = true) => {
     const staffId = getActiveStaffId();
-    if (!staffId) {
-      setError("Session expired.");
+    const token = localStorage.getItem('token'); // Retrieve token
+    
+    if (!staffId || !token) {
+      setError("Session expired. Please log in again.");
       setLoading(false);
       return;
     }
-
+  
     if (showLoader) setIsRefreshing(true);
     try {
-      // Fetches today's checked-in patients for this doctor and hospital[cite: 7]
-      const response = await fetch(`http://localhost:8000/api/v1/doctor/queue/${staffId}`);
+      const response = await fetch(`http://localhost:8000/api/v1/doctor/queue/${staffId}`, {
+        headers: { 'Authorization': `Bearer ${token}` } // Attach Auth Header
+      });
       if (!response.ok) throw new Error("Failed to load queue.");
       const data = await response.json();
       setQueue(Array.isArray(data) ? data : []);
@@ -52,19 +55,35 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
   }, [fetchQueue]);
 
   const handleStartVisit = async (patient) => {
-    // Safety block: prevent starting a new visit if one is already active in the Dashboard[cite: 7]
     if (isBusy) {
-      alert("Please complete your current consultation before starting a new one.");
+      alert("You have an active session. Please finish the current patient first.");
+      return;
+    }
+  
+    // ✅ SAFETY CHECK: Try all possible ID names (id, appt_id, or appointment_id)
+    const appointmentId = patient.id || patient.appt_id || patient.appointment_id;
+  
+    // If it's still undefined, log the object so you can see the correct key in the console
+    if (!appointmentId) {
+      console.error("ID Mismatch! The patient object looks like this:", patient);
+      alert("Error: Could not find Appointment ID. Check console for details.");
       return;
     }
   
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/doctor/consultation/start/${patient.id}`, {
+      const token = localStorage.getItem('token');
+      
+      // Now this URL will correctly be /start/11 or /start/57 instead of /start/undefined
+      const response = await fetch(`http://localhost:8000/api/v1/doctor/consultation/start/${appointmentId}`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       if (response.ok) {
-        onStartConsultation(patient); // Tell Dashboard to switch to Workspace[cite: 5]
+        onStartConsultation(patient); 
         fetchQueue(false); 
       } else {
         const errorData = await response.json();
@@ -150,13 +169,15 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
           </div>
         ))}
 
-        {queue.length === 0 && (
-          <div style={styles.emptyState}>
-            <Users size={48} color="#cbd5e1" />
-            <h4 style={{ color: '#64748b', marginTop: '12px' }}>Queue is currently empty</h4>
-            <p style={{ fontSize: '13px', color: '#94a3b8' }}>Once a receptionist checks in a patient, they will appear here.</p>
-          </div>
-        )}
+{queue.length === 0 && (
+  <div style={styles.emptyState}>
+    <Users size={48} color="#cbd5e1" />
+    <h4 style={{ color: '#64748b', marginTop: '12px' }}>Waiting Room is Clear</h4>
+    <p style={{ fontSize: '13px', color: '#94a3b8' }}>
+      Patients will appear here once the Nurse has completed their vitals.
+    </p>
+  </div>
+)}
       </div>
     </div>
   );
