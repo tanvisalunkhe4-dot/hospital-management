@@ -9,6 +9,9 @@ import shutil
 import os
 from app.services.scribe import transcribe_audio, generate_medical_summary
 from fastapi import WebSocket, WebSocketDisconnect
+import io
+from faster_whisper import WhisperModel
+from pydub import AudioSegment
 
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
@@ -248,27 +251,64 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
 
 
 
+
+# Load model
+model = WhisperModel("tiny", device="cpu", compute_type="int8")
+
 @router.websocket("/ws/scribe/stream")
 async def websocket_scribe_stream(websocket: WebSocket):
     await websocket.accept()
+    # We keep a 'full_session_buffer' to ensure FFmpeg always has the initial header
+    full_session_buffer = bytearray()
+    last_processed_size = 0
+    
     try:
         while True:
-            # Receive audio chunk from React (as bytes)
-            audio_chunk = await websocket.receive_bytes()
-            
-            # TODO: Process chunk with Faster-Whisper
-            # For real-time, you'd typically buffer these chunks 
-            # and transcribe them in small segments.
-            
-            partial_text = "Recognized speech chunk..." 
-            
-            # Send the recognized text back to the frontend
-            await websocket.send_json({
-                "type": "partial_transcript",
-                "text": partial_text
-            })
+            chunk = await websocket.receive_bytes()
+            full_session_buffer.extend(chunk)
+
+            # Process when we have significant new data (approx 150KB - 200KB)
+            # FFmpeg needs a larger buffer to correctly identify the WebM container
+            if len(full_session_buffer) - last_processed_size > 180000:
+                try:
+                    # Create a file-like object from the buffer
+                    audio_fp = io.BytesIO(full_session_buffer)
+                    
+                    # Force 'webm' format so pydub doesn't have to guess
+                    audio_segment = AudioSegment.from_file(audio_fp, format="webm")
+                    
+                    # Slice the audio to only process the NEW part to avoid repetitions
+                    new_audio = audio_segment[last_processed_size // 100:] # rough estimate
+                    
+                    # Export to WAV in memory
+                    wav_io = io.BytesIO()
+                    audio_segment.export(wav_io, format="wav")
+                    wav_io.seek(0)
+
+                    # Transcribe
+                    segments, _ = model.transcribe(wav_io, beam_size=5)
+                    transcript = " ".join([segment.text for segment in segments])
+
+                    if transcript.strip():
+                        await websocket.send_json({
+                            "type": "partial_transcript",
+                            "text": transcript
+                        })
+                    
+                    # Update tracking - DO NOT clear full_session_buffer
+                    # If you clear it, you lose the WebM header required by FFmpeg
+                    last_processed_size = len(full_session_buffer)
+
+                except Exception as inner_error:
+                    # Often happens if the chunk is cut mid-frame; just wait for next chunk
+                    continue
+
     except WebSocketDisconnect:
-        print("Doctor disconnected from streaming scribe.")
+        print("Doctor disconnected.")
     except Exception as e:
         print(f"Streaming Error: {e}")
-        await websocket.close()
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass

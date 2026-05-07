@@ -264,12 +264,13 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
                 desk_location=data.desk_location
             )
             db.add(new_receptionist)
-        elif data.role in ("Lab Technician", "LabTechnician"):
-            new_lab_technician = models.LabTechnician(
+        elif data.role == "Lab Technician":
+            new_lab_tech = models.LabTechnician(
                 staff_ref_id=new_staff.id,
-                lab_section=data.lab_section
+                # Use data from the schema; default to "General" if not provided
+                lab_section=data.lab_section or "General Diagnostics"
             )
-            db.add(new_lab_technician)
+            db.add(new_lab_tech)
         elif data.role == "Pharmacist":
             new_pharmacist = models.Pharmacist(
                 staff_ref_id=new_staff.id,
@@ -348,10 +349,14 @@ def update_staff(staff_id: int, payload: StaffUpdate, hospital_id: int, db: Sess
         receptionist_record = db.query(models.Receptionist).filter(models.Receptionist.staff_ref_id == staff.id).first()
         if receptionist_record:
             receptionist_record.desk_location = update_data.get('desk_location', receptionist_record.desk_location)
-    elif staff.role in ("Lab Technician", "LabTechnician"):
-        lab_technician_record = db.query(models.LabTechnician).filter(models.LabTechnician.staff_ref_id == staff.id).first()
-        if lab_technician_record:
-            lab_technician_record.lab_section = update_data.get('lab_section', lab_technician_record.lab_section)
+    elif staff.role == "Lab Technician":
+        lab_record = db.query(models.LabTechnician).filter(
+            models.LabTechnician.staff_ref_id == staff.id
+        ).first()
+        if lab_record:
+            # Dynamically update the lab section if it's in the payload
+            lab_record.lab_section = update_data.get('lab_section', lab_record.lab_section)
+    
     elif staff.role == "Pharmacist":
         pharmacist_record = db.query(models.Pharmacist).filter(models.Pharmacist.staff_ref_id == staff.id).first()
         if pharmacist_record:
@@ -395,8 +400,10 @@ def remove_staff(staff_id: int, hospital_id: int, db: Session = Depends(get_db))
         receptionist_profile = db.query(models.Receptionist).filter(models.Receptionist.staff_ref_id == staff_member.id).first()
         if receptionist_profile:
             db.delete(receptionist_profile)
-    elif staff_member.role in ("Lab Technician", "LabTechnician"):
-        lab_profile = db.query(models.LabTechnician).filter(models.LabTechnician.staff_ref_id == staff_member.id).first()
+    elif staff_member.role == "Lab Technician":
+        lab_profile = db.query(models.LabTechnician).filter(
+            models.LabTechnician.staff_ref_id == staff_member.id
+        ).first()
         if lab_profile:
             db.delete(lab_profile)
     elif staff_member.role == "Pharmacist":

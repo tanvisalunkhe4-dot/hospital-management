@@ -30,7 +30,7 @@ useEffect(() => {
   if (textareaRef.current) {
     textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
   }
-}, [notes]); // Runs every time the text updates
+}, [notes]); 
 
 
 useEffect(() => {
@@ -100,8 +100,7 @@ const finalizeNotesWithGemini = async () => {
   setIsProcessing(true);
   try {
       const response = await axios.post(
-          'http://127.0.0.1:8000/api/v1/doctor/consultation/scribe-process-text', // New endpoint for text-only
-          { text: notes },
+          'http://127.0.0.1:8000/api/v1/doctor/consultation/scribe-process-text', 
           { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` } }
       );
       setNotes(response.data.clinical_note);
@@ -225,8 +224,9 @@ const finalizeNotesWithGemini = async () => {
             {patient?.first_name ? patient.first_name[0] : 'P'}
           </div>
           <h3 style={{ margin: 0, color: '#1e293b' }}>{patient?.first_name} {patient?.last_name}</h3>
-          <span style={{ color: '#64748b', fontSize: '13px' }}>PID: #NX-{patient?.id || '00'} | 24Y, Female</span>
-        </div>
+          <span style={{ color: '#64748b', fontSize: '13px' }}>
+  PID: #NX-{patient?.patient_id || patient?.id || '00'} | {patient?.age || 'N/A'}Y, {patient?.gender || 'Unknown'}
+</span>        </div>
 
         <h4 style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', marginBottom: '12px', fontWeight: '800', letterSpacing: '0.5px' }}>Current Vitals</h4>
         <div style={styles.vitalCard}>
