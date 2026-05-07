@@ -26,7 +26,7 @@ const VitalsManagement = () => {
   });
 
   const API_BASE = "http://localhost:8000/api/v1/nurse";
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
 
   const fetchInitialData = useCallback(async () => {
     if (!patientId) return;
@@ -69,9 +69,9 @@ const VitalsManagement = () => {
       }, { headers });
 
 
-      alert("Vitals synchronized. Patient moved to Doctor's Queue.");
+    alert("Vitals synchronized. Patient moved to Doctor's Queue.");
     navigate('/nurse-dashboard'); // Redirect back to the monitoring list
-    
+
       // Clean refresh of history
       const hRes = await axios.get(`${API_BASE}/vitals-history/${patientId}`, { headers });
       setHistory(hRes.data);

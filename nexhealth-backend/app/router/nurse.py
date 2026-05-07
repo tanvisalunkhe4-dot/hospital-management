@@ -95,6 +95,8 @@ def create_vitals(
     db.add(new_vital)
     db.commit()
     return {"message": "Vitals recorded and patient ready for doctor"}
+
+    
 @router.get("/vitals-history/{patient_id}")
 def get_vitals_history(patient_id: int, db: Session = Depends(get_db)):
     # Fetch the last 10-15 records to show trends

@@ -1,13 +1,117 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Save, Thermometer, Heart, Activity, Plus, Trash2, Droplets } from 'lucide-react';
 import axios from 'axios'; 
+
+
 const ConsultationWorkspace = ({ patient, onComplete }) => {
+  const pId = patient?.patient_id || patient?.id;
+  const apptId = patient?.appt_id || patient?.id;
   const [isListening, setIsListening] = useState(false);
   const [notes, setNotes] = useState("");
   const [prescription, setPrescription] = useState([]);
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', sp02: '--' });
+  const recorderRef = useRef(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+// Add these with your other refs/states
+const socketRef = useRef(null);
+const [liveTranscript, setLiveTranscript] = useState("");
+  if (!patient) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+        <h3>Select a patient to begin consultation.</h3>
+      </div>
+    );
+  }
 
+  const textareaRef = useRef(null);
+
+useEffect(() => {
+  if (textareaRef.current) {
+    textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+  }
+}, [notes]); // Runs every time the text updates
+
+
+useEffect(() => {
+  return () => {
+    // Cleanup: Stop mic and socket if doctor leaves the page
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    }
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+  };
+}, []);
+  const toggleScribe = async () => {
+    if (isListening) {
+      if (recorderRef.current) recorderRef.current.stop();
+      // Only close if it's actually open
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.close();
+      }
+      socketRef.current = null; // Clear the ref
+      setIsListening(false);
+  } else {
+        // START RECORDING & STREAMING
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // 1. Initialize WebSocket
+            socketRef.current = new WebSocket("ws://127.0.0.1:8000/api/v1/doctor/ws/scribe/stream");
+
+            socketRef.current.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === "partial_transcript") {
+                    // Update notes in real-time as words come back from backend
+                    setNotes((prev) => prev + " " + data.text);
+                }
+            };
+
+            // 2. Setup MediaRecorder
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            recorderRef.current = mediaRecorder;
+
+            mediaRecorder.ondataavailable = async (e) => {
+                if (e.data.size > 0 && socketRef.current.readyState === WebSocket.OPEN) {
+                    // SEND CHUNK TO BACKEND IMMEDIATELY
+                    socketRef.current.send(e.data);
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+              stream.getTracks().forEach(track => track.stop());
+              setIsListening(false); // Ensure the button UI resets
+              finalizeNotesWithGemini(); // Trigger the summary
+          };
+            // Capture data every 250ms for real-time feel
+            mediaRecorder.start(250); 
+            setIsListening(true);
+        } catch (err) {
+            console.error(err);
+            alert("Microphone access denied or WebSocket failed.");
+        }
+    }
+};
+const finalizeNotesWithGemini = async () => {
+  if (!notes.trim()) return;
+  
+  setIsProcessing(true);
+  try {
+      const response = await axios.post(
+          'http://127.0.0.1:8000/api/v1/doctor/consultation/scribe-process-text', // New endpoint for text-only
+          { text: notes },
+          { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` } }
+      );
+      setNotes(response.data.clinical_note);
+  } catch (error) {
+      console.error("Gemini Finalization Error:", error);
+  } finally {
+      setIsProcessing(false);
+  }
+};
+  
 
   useEffect(() => {
     const loadClinicalData = async () => {
@@ -15,7 +119,7 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
         // Change patient.id to patient.patient_id to match your doctor.py return
         const pId = patient.patient_id || patient.id; 
         const response = await axios.get(`http://localhost:8000/api/v1/doctor/patient/${pId}/latest-vitals`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` }
         });
         
         setVitals({
@@ -34,33 +138,7 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
     }
   }, [patient]);
 
-  // --- AI MOCK LOGIC ---
-  // This simulates the AI script capturing a conversation for your demo
-  useEffect(() => {
-    let interval;
-    if (isListening) {
-      const demoConversation = [
-        "Patient: I've been having a persistent cough for 3 days.",
-        "Doctor: Any fever or chest pain?",
-        "Patient: No fever, but my throat feels very dry.",
-        "Doctor: I'll prescribe some cough syrup and suggest warm saline gargles.",
-        "AI Summary: Upper respiratory congestion, no fever detected."
-      ];
-      
-      let i = 0;
-      interval = setInterval(() => {
-        if (i < demoConversation.length) {
-          setNotes(prev => prev + (prev ? "\n" : "") + demoConversation[i]);
-          i++;
-        } else {
-          clearInterval(interval);
-        }
-      }, 2500); // Adds a new line every 2.5 seconds
-    }
-    return () => clearInterval(interval);
-  }, [isListening]);
-
-  // --- PRESCRIPTION LOGIC ---
+   // --- PRESCRIPTION LOGIC ---
   const addMedicine = () => {
     if (newMed.name) {
       setPrescription([...prescription, { ...newMed, id: Date.now() }]);
@@ -73,10 +151,17 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
   };
 
   const handleFinalize = async () => {
+    const hospId = sessionStorage.getItem('hospital_id');
+    
+    // Critical: Prevent 422 by ensuring ID exists before the call
+    if (!hospId) {
+        alert("Session Expired: Hospital ID not found. Please log in again.");
+        return;
+    }
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
+      // 1. Get the hospital_id we saved during login
       
-      // 1. Ensure headers include Content-Type
       const headers = { 
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json' 
@@ -84,10 +169,9 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
       
       const apptId = patient.appt_id || patient.id;
   
-      // 2. The empty object {} is necessary for PATCH, 
-      // but we ensure headers are fully defined.
+      // 2. Add ?hosp_id= to the end of the URL
       await axios.patch(
-        `http://localhost:8000/api/v1/receptionist/appointments/${apptId}/finish`, 
+        `http://localhost:8000/api/v1/receptionist/appointments/${apptId}/finish?hosp_id=${hospId}`, 
         {}, 
         { headers }
       );
@@ -102,19 +186,16 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
       onComplete(); 
   
     } catch (error) {
-      // 3. IMPROVED ERROR LOGGING: 
-      // This will tell you EXACTLY what FastAPI is complaining about.
       if (error.response && error.response.status === 422) {
         console.error("Validation Error Details:", error.response.data.detail);
-        alert(`Backend Validation Error: ${JSON.stringify(error.response.data.detail)}`);
+        alert(`Backend Validation Error: Check if Hospital ID is missing in SessionStorage.`);
       } else {
         console.error("General Sync Error:", error);
         alert("System Sync Error: Check your connection or terminal logs.");
       }
     }
   };
- 
-
+  
   const styles = {
     container: { display: 'grid', gridTemplateColumns: '300px 1fr 350px', gap: '20px', height: 'calc(100vh - 180px)' },
     card: { background: 'white', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' },
@@ -174,25 +255,49 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
       <div style={styles.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3 style={{ margin: 0, color: '#1e293b' }}>Clinical Notes (AI Scribe)</h3>
-          <button style={styles.actionBtn(isListening)} onClick={() => setIsListening(!isListening)}>
-            {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-            {isListening ? "Stop AI Scribe" : "Start AI Scribe"}
-          </button>
+          <button 
+  style={styles.actionBtn(isListening)} 
+  onClick={toggleScribe}
+  disabled={isProcessing}
+>
+  {isProcessing ? (
+    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+       Processing...
+    </span>
+  ) : (
+    <>
+      {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+      {isListening ? "Stop AI Scribe" : "Start AI Scribe"}
+    </>
+  )}
+</button>
         </div>
 
         <div style={styles.scribePanel}>
-          {isListening && (
-            <div style={{ marginBottom: '10px', color: '#ef4444', fontSize: '12px', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>
-              ● LIVE TRANSCRIPTION ACTIVE...
-            </div>
-          )}
-          <textarea 
-            placeholder="AI Scribe will automatically fill these notes..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            style={{ width: '100%', height: '90%', background: 'transparent', border: 'none', color: '#1e293b', outline: 'none', fontSize: '15px', resize: 'none', lineHeight: '1.6' }}
-          />
-        </div>
+  {isListening && (
+    <div style={{ marginBottom: '10px', color: '#ef4444', fontSize: '12px', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>
+      ● RECORDING CONVERSATION...
+    </div>
+  )}
+  {isProcessing && (
+    <div style={{ color: '#2563eb', fontSize: '12px', fontWeight: 'bold' }}>
+      AI IS GENERATING CLINICAL NOTES...
+    </div>
+  )}
+  <textarea
+  ref={textareaRef} 
+    placeholder={isProcessing ? "Analyzing audio..." : "AI Scribe will automatically fill these notes..."}
+    value={notes}
+    onChange={(e) => setNotes(e.target.value)}
+    disabled={isProcessing}
+    style={{ 
+        width: '100%', height: '90%', background: 'transparent', 
+        border: 'none', color: '#1e293b', outline: 'none', 
+        fontSize: '15px', resize: 'none', lineHeight: '1.6',
+        opacity: isProcessing ? 0.5 : 1
+    }}
+  />
+</div>
       </div>
 
       {/* COLUMN 3: PRESCRIPTION PAD */}

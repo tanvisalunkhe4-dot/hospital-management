@@ -18,7 +18,7 @@ const Overview = () => {
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
-        const token = localStorage.getItem('token'); 
+        const token = sessionStorage.getItem('token'); 
         const response = await axios.get('http://localhost:8000/api/v1/patient/dashboard-summary', {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -37,7 +37,7 @@ const Overview = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       await axios.post('http://localhost:8000/api/v1/patient/update-vitals', vitalsForm, {
         headers: { Authorization: `Bearer ${token}` }
       });

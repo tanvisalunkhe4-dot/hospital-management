@@ -12,11 +12,11 @@ const SecurityManagement = () => {
 
   // Audit Trail Mock Data
   const [liveLogs, setLiveLogs] = useState([]);
-  const role = localStorage.getItem("role") || "Admin";  const [stats, setStats] = useState({ active_sessions: 0, audit_status: 'Syncing...', backup_status: 'Active' });
+  const role = sessionStorage.getItem("role") || "Admin";  const [stats, setStats] = useState({ active_sessions: 0, audit_status: 'Syncing...', backup_status: 'Active' });
 
   const handleToggle = async (settingName, value) => {
     try {
-      const hospitalId = localStorage.getItem("hospital_id") || 1;
+      const hospitalId = sessionStorage.getItem("hospital_id") || 1;
       await axios.put(`http://localhost:8000/api/v1/admin/security/update-config/${hospitalId}`, { 
         [settingName]: value 
       });
@@ -32,7 +32,7 @@ const SecurityManagement = () => {
   
     const fetchSecurityData = async () => {
       try {
-        const hospitalId = localStorage.getItem("hospital_id") || 1;
+        const hospitalId = sessionStorage.getItem("hospital_id") || 1;
         const res = await axios.get(
           `http://localhost:8000/api/v1/admin/security/stats/${hospitalId}?user_role=${role}`
         );

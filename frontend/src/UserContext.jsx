@@ -4,27 +4,34 @@ import axios from 'axios';
 const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  // 1. Initialize from localStorage
+  // 1. Initialize from storage - Check both localStorage and sessionStorage for consistency
   const [profileImage, setProfileImage] = useState(() => 
     localStorage.getItem('patient_profile_image') || null
   );
   
-  // Note: Ensure your login component sets 'user_role' in localStorage
-  const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'patient');
+  // ✅ FIX: Use sessionStorage to match your login logic and default to null to prevent premature API calls
+  const [userRole, setUserRole] = useState(() => {
+    const rawData = sessionStorage.getItem('user_data');
+    if (rawData) {
+      try {
+        return JSON.parse(rawData).role;
+      } catch { return null; }
+    }
+    return null;
+  });
 
   const fetchPersistentImage = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    const token = sessionStorage.getItem('token'); // Use sessionStorage as per your logs
+    if (!token || !userRole) return; // Don't fetch if role isn't identified yet
    
-    // ✅ FIX 1: Use the roles your backend expects (e.g., 'doctor' usually uses staff endpoint)
     const isStaff = userRole === 'admin' || userRole === 'doctor' || userRole === 'nurse';
     
+    // ✅ FIX: Use 127.0.0.1 to avoid the "Connection Refused" issues seen in your terminal
     const endpoint = isStaff 
-      ? 'http://localhost:8000/api/v1/staff/profile' 
-      : 'http://localhost:8000/api/v1/patient/profile';
+      ? 'http://127.0.0.1:8000/api/v1/staff/profile' 
+      : 'http://127.0.0.1:8000/api/v1/patient/profile';
 
     try {
-      // ✅ FIX 2: Use the 'endpoint' variable instead of the hardcoded patient URL
       const res = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -40,7 +47,7 @@ export const UserProvider = ({ children }) => {
     }
   }, [userRole]);
 
-  // 3. Sync on Mount
+  // 3. Sync on Mount and when userRole changes
   useEffect(() => {
     fetchPersistentImage();
   }, [fetchPersistentImage]);

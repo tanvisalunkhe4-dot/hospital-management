@@ -27,7 +27,7 @@ const SystemConfig = () => {
   
   useEffect(() => {
     const loadConfig = async () => {
-      const h_id = localStorage.getItem("hospital_id");
+      const h_id = sessionStorage.getItem("hospital_id");
       if (!h_id) return;
       try {
         const res = await axios.get(`http://localhost:8000/api/v1/admin/config/${h_id}`);
@@ -50,7 +50,7 @@ const SystemConfig = () => {
 // 2. GLOBAL SYNC TO BACKEND
 const handleGlobalSync = async () => {
   setLoading(true);
-  const h_id = localStorage.getItem("hospital_id");
+  const h_id = sessionStorage.getItem("hospital_id");
   try {
     await axios.put(`http://localhost:8000/api/v1/admin/config/${h_id}`, {
       hospital_name: config.hospitalName,

@@ -132,7 +132,7 @@ class Vitals(Base):
     
     # Relationships
     patient = relationship("Patient", back_populates="vitals_history")
-    recorded_by = relationship("Staff", foreign_keys=[nurse_id])
+    recorded_by = relationship("Staff")
 
 class Appointment(Base):
     __tablename__ = "appointments"

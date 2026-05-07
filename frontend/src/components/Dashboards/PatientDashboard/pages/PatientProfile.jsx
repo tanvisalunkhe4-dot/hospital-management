@@ -64,7 +64,7 @@ const PatientProfile = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         if (!token) throw new Error("Authentication token not found.");
         const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -89,7 +89,7 @@ const PatientProfile = () => {
     if (!window.confirm("Confirm deletion of this medical record?")) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       await axios.delete(`http://localhost:8000/api/v1/patient/medical-records/${recordId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -108,7 +108,7 @@ const PatientProfile = () => {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await axios.post(
         'http://localhost:8000/api/v1/patient/upload-document', 
         formData,

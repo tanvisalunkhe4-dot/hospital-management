@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from sqlalchemy import desc
 from datetime import date
 from app.db import models
 from app.db.session import get_db
+import shutil
+import os
+from app.services.scribe import transcribe_audio, generate_medical_summary
+from fastapi import WebSocket, WebSocketDisconnect
+
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
@@ -117,37 +122,40 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "started"}
 
+
 @router.post("/consultation/finish/{appointment_id}")
 def finish_consultation(appointment_id: int, db: Session = Depends(get_db)):
-    """
-    1. Updates status to 'Completed' (Turns badge Blue in Receptionist view)
-    2. Automatically creates a record in the Billing Queue
-    """
+    # 1. Fetch the appointment
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    # Update the status so the Receptionist sees the Blue badge
-    appointment.status = STATUS_COMPLETED
-    
-    # Create the Billing record (Invoice)
-    new_invoice = models.Invoice(
-        patient_id=appointment.patient_id,
-        hospital_id=appointment.hospital_id,
-        doctor_id=appointment.doctor_id,
-        appointment_id=appointment.id,
-        amount=500.00,  # Or calculate based on doctor's consultation fee
-        status="Pending"
-    )
-    
     try:
+        # 2. Update the status so the UI reflects the change (Receptionist view)
+        appointment.status = STATUS_COMPLETED
+        
+        # 3. TEMPORARILY DISABLED: Billing Logic
+        # We comment this out because the 'invoices' table schema is not yet updated
+        """
+        new_invoice = models.Invoice(
+            patient_id=appointment.patient_id,
+            hospital_id=appointment.hospital_id,
+            appointment_id=appointment.id,
+            doctor_id=appointment.doctor_id,
+            total_amount=500.00,
+            status="Pending"
+        )
         db.add(new_invoice)
+        """
+        
         db.commit()
-        return {"status": "success", "message": "Consultation finalized and billed."}
+        return {"status": "success", "message": "Consultation finalized successfully."}
+    
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Transaction failed.")
-        
+        print(f"Error finalizing consultation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to finalize consultation.")
+
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
     """Fetches full clinical history for the Doctor's record archive."""
@@ -196,3 +204,71 @@ def get_latest_vitals(patient_id: int, db: Session = Depends(get_db)):
         "temperature": latest_vital.temperature,
         "sp_o2": latest_vital.sp_o2 or "--" # From your Vitals model
     }
+
+
+@router.post("/consultation/scribe-process")
+async def handle_ai_scribe(file: UploadFile = File(...)):
+    # 1. Save temporary audio file
+    temp_file = f"temp_{file.filename}"
+    try:
+        with open(temp_file, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # 2. Audio -> Text (Whisper)
+        raw_text = transcribe_audio(temp_file)
+        
+        if not raw_text.strip():
+            # Return a friendly message if Whisper finds nothing
+            return {
+                "raw_transcript": "",
+                "clinical_note": "No audio detected. Please ensure your microphone is working."
+            }
+
+        # 3. Text -> Structured AI Summary (Gemini 2.0 Flash)
+        # We MUST await this because generate_medical_summary is now 'async'
+        clinical_summary = await generate_medical_summary(raw_text)
+        
+        return {
+            "raw_transcript": raw_text,
+            "clinical_note": clinical_summary
+        }
+        
+    except Exception as e:
+        print(f"Scribe Router Error: {e}")
+        # We return a 200 with an error message so the UI doesn't crash
+        return {
+            "raw_transcript": "Error during processing",
+            "clinical_note": "AI Summarization failed. Please enter notes manually."
+        }
+    
+    finally:
+        # 4. Clean up the audio file immediately to save disk space
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+
+
+@router.websocket("/ws/scribe/stream")
+async def websocket_scribe_stream(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            # Receive audio chunk from React (as bytes)
+            audio_chunk = await websocket.receive_bytes()
+            
+            # TODO: Process chunk with Faster-Whisper
+            # For real-time, you'd typically buffer these chunks 
+            # and transcribe them in small segments.
+            
+            partial_text = "Recognized speech chunk..." 
+            
+            # Send the recognized text back to the frontend
+            await websocket.send_json({
+                "type": "partial_transcript",
+                "text": partial_text
+            })
+    except WebSocketDisconnect:
+        print("Doctor disconnected from streaming scribe.")
+    except Exception as e:
+        print(f"Streaming Error: {e}")
+        await websocket.close()

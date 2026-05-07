@@ -52,7 +52,7 @@ const DoctorDashboard = ({ onLogout }) => {
   const [records, setRecords] = useState([]);
 
   // --- DYNAMIC USER DATA ---
-  const userData = JSON.parse(localStorage.getItem('user_data'));
+  const userData = JSON.parse(sessionStorage.getItem('user_data'));
   const activeStaffId = userData?.staff_id;
   const doctorName = userData?.full_name || "Doctor";
 

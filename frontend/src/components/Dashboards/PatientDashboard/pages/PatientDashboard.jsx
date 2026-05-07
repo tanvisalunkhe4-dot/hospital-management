@@ -30,7 +30,7 @@ const PatientDashboard = () => {
 
   const getInitialPatientInfo = () => {
     try {
-      const storedUser = JSON.parse(localStorage.getItem('user_data') || '{}');
+      const storedUser = JSON.parse(sessionStorage.getItem('user_data') || '{}');
       return {
         full_name: deriveDisplayName(storedUser) || 'Patient Name',
         id: storedUser.id || '---',
@@ -54,7 +54,7 @@ const PatientDashboard = () => {
   useEffect(() => {
     const fetchPatientHeaderData = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         
         // Safety check: if no token, don't even try the request
         if (!token) {
@@ -80,7 +80,7 @@ const PatientDashboard = () => {
         console.error("Failed to load header data", err);
         // Handle 401 Unauthorized specifically
         if (err.response?.status === 401) {
-          localStorage.removeItem('token'); // Clear invalid token
+          sessionStorage.removeItem('token'); // Clear invalid token
           window.location.href = '/login';
         }
       }

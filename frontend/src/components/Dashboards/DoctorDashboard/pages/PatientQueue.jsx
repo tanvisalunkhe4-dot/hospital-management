@@ -9,7 +9,7 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
 
   // Helper to get ID from local storage
   const getActiveStaffId = () => {
-    const rawData = localStorage.getItem('user_data');
+    const rawData = sessionStorage.getItem('user_data');
     if (!rawData) return null;
     try {
       const userData = JSON.parse(rawData);
@@ -19,7 +19,7 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
 
   const fetchQueue = useCallback(async (showLoader = true) => {
     const staffId = getActiveStaffId();
-    const token = localStorage.getItem('token'); // Retrieve token
+    const token = sessionStorage.getItem('token'); // Retrieve token
     
     if (!staffId || !token) {
       setError("Session expired. Please log in again.");
@@ -29,7 +29,8 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
   
     if (showLoader) setIsRefreshing(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/doctor/queue/${staffId}`, {
+      // Changed localhost to 127.0.0.1 to fix connection refused
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/doctor/queue/${staffId}`, {
         headers: { 'Authorization': `Bearer ${token}` } // Attach Auth Header
       });
       if (!response.ok) throw new Error("Failed to load queue.");
@@ -71,7 +72,7 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
     }
   
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       
       // Now this URL will correctly be /start/11 or /start/57 instead of /start/undefined
       const response = await fetch(`http://localhost:8000/api/v1/doctor/consultation/start/${appointmentId}`, {

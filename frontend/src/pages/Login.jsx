@@ -31,7 +31,7 @@ const Login = ({ onSignupRedirect, onForgotPassword }) => {
     };
 
     try {
-      localStorage.clear();
+      sessionStorage.clear();
 
       const isStaffOrAdmin = ['Admin', 'Staff', 'Doctor'].includes(role);
 
@@ -47,14 +47,14 @@ const Login = ({ onSignupRedirect, onForgotPassword }) => {
 
       const { access_token, user } = response.data;
 
-      localStorage.setItem('token', access_token);
-      localStorage.setItem('user_role', user.role);
+      sessionStorage.setItem('token', access_token);
+      sessionStorage.setItem('user_role', user.role);
 
       if (user.hospital_id) {
-        localStorage.setItem('hospital_id', user.hospital_id);
+        sessionStorage.setItem('hospital_id', user.hospital_id);
       }
 
-      localStorage.setItem('user_data', JSON.stringify(user));
+      sessionStorage.setItem('user_data', JSON.stringify(user));
 
       const normalizedRole = user.role.replace(" ", "");
 

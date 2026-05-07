@@ -10,7 +10,7 @@ const PatientMonitoring = () => {
 
   const fetchPatientData = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token'); // Get your JWT token
+      const token = sessionStorage.getItem('token'); // Get your JWT token
       const response = await axios.get('http://localhost:8000/api/v1/nurse/patients-monitoring', {
         headers: { 'Authorization': `Bearer ${token}` }
       });

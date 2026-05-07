@@ -14,12 +14,12 @@ import Billing from './Billing';
 
 const ReceptionistDashboard = () => {
   // --- DYNAMIC CREDENTIALS LOGIC ---
-  const rawData = localStorage.getItem('user_data');
+  const rawData = sessionStorage.getItem('user_data');
   const userData = rawData ? JSON.parse(rawData) : {};
   
   const activeName = userData.full_name || 'Unknown Staff'; 
   const activeStaffId = userData.staff_id || userData.id || 'N/A'; 
-  const hospId = userData.hospital_id || localStorage.getItem('hospital_id') || 1;
+  const hospId = userData.hospital_id || sessionStorage.getItem('hospital_id') || 1;
 
   const [currentView, setCurrentView] = useState('overview');
   const [stats, setStats] = useState({ totalPatients: 0, appointmentsToday: 0 });
@@ -118,7 +118,7 @@ const ReceptionistDashboard = () => {
           ))}
         </nav>
 
-        <button onClick={() => { localStorage.clear(); window.location.href='/login'; }} style={logoutBtn}>
+        <button onClick={() => { sessionStorage.clear(); window.location.href='/login'; }} style={logoutBtn}>
           <LogOut size={18} /> Sign Out
         </button>
       </aside>

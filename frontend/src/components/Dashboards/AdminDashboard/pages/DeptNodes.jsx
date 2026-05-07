@@ -48,7 +48,7 @@ const DeptNodes = ({
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    const hospitalId = localStorage.getItem("hospital_id");
+    const hospitalId = sessionStorage.getItem("hospital_id");
     const isEditing = !!formData.id;
 
     const payload = {

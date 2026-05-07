@@ -282,7 +282,7 @@ const StaffRegistry = ({
   
 
   const onSaveStaff = async (formData) => {
-    const storedId = localStorage.getItem("hospital_id");
+    const storedId = sessionStorage.getItem("hospital_id");
     const currentHospitalId = storedId ? parseInt(storedId) : null;    
 
     if (!currentHospitalId) {

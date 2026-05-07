@@ -58,8 +58,8 @@ const [filterStatus, setFilterStatus] = useState('All');
 
   const loadData = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      const hospId = localStorage.getItem('hospital_id') || 1;
+      const token = sessionStorage.getItem('token');
+      const hospId = sessionStorage.getItem('hospital_id') || 1;
       
       if (!token) {
         console.error("No authentication token found.");
@@ -107,7 +107,7 @@ const [filterStatus, setFilterStatus] = useState('All');
   const handleCancel = async (apptId) => {
     if (window.confirm("Send cancellation request to the receptionist?")) {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         // We use PATCH to change the status to 'Cancellation Requested'
         await axios.patch(`http://localhost:8000/api/v1/patient/appointments/${apptId}/request-cancel`, {}, {
           headers: { Authorization: `Bearer ${token}` }
@@ -138,7 +138,7 @@ const openReschedule = (appt) => {
 const handleBooking = async (e) => {
   e.preventDefault();
   try {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const payload = {
       hospital_id: 1,
       doctor_name: doctors.find(d => d.staff_id == formData.doctor_id)?.full_name || selectedAppt?.doctor_name,

@@ -17,7 +17,8 @@ class InvoiceCreate(BaseModel):
 
 class InvoiceResponse(BaseModel):
     id: int
-    invoice_number: str
+    # Change from str to Optional[str] to handle null values in DB
+    invoice_number: Optional[str] = None 
     patient_id: int
     hospital_id: int
     total_amount: float

@@ -29,7 +29,7 @@ const PatientRegistration = ({ onBack }) => {
     setStatus({ loading: true, msg: '', type: '' });
 
     // Grab hospital_id from the logged-in user session
-    const userData = JSON.parse(localStorage.getItem('user_data'));
+    const userData = JSON.parse(sessionStorage.getItem('user_data'));
     const currentHospitalId = userData?.hospital_id || 1; 
 
     const payload = {
@@ -71,8 +71,8 @@ const PatientRegistration = ({ onBack }) => {
   useEffect(() => {
     const fetchDoctors = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const hospId = localStorage.getItem('hospital_id') || 1;
+        const token = sessionStorage.getItem('token');
+        const hospId = sessionStorage.getItem('hospital_id') || 1;
         
         const res = await axios.get(`http://localhost:8000/api/v1/receptionist/doctors/${hospId}`, {
           headers: { Authorization: `Bearer ${token}` }

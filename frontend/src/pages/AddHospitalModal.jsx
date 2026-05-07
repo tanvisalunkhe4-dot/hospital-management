@@ -19,7 +19,7 @@ const AddHospital = ({ onSuccess, onCancel }) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       // Ensure the payload matches your 'new_hosp' mapping
       await axios.post('http://127.0.0.1:8000/api/v1/superadmin/hospitals/register', hospitalData, {
         headers: { Authorization: `Bearer ${token}` }

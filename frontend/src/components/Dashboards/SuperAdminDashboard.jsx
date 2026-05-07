@@ -215,7 +215,7 @@ const HospitalDetailsCard = ({ hospital, onClose, onUpdate }) => {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       await axios.put(`http://127.0.0.1:8000/api/v1/superadmin/hospitals/${hospital.id}`, formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -334,7 +334,7 @@ const AddHospital = ({ onSuccess, onCancel }) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       await new Promise(resolve => setTimeout(resolve, 800));
       await axios.post('http://127.0.0.1:8000/api/v1/superadmin/hospitals/register', hospitalData, {
         headers: { Authorization: `Bearer ${token}` }
@@ -430,7 +430,7 @@ const SuperAdminDashboard = () => {
   const fetchHospitals = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await axios.get('http://127.0.0.1:8000/api/v1/superadmin/hospitals', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -446,7 +446,7 @@ const SuperAdminDashboard = () => {
   const handleDelete = async (id, name) => {
     if (window.confirm(`Decommission ${name}? This revokes all node access.`)) {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         await axios.delete(`http://127.0.0.1:8000/api/v1/superadmin/hospitals/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -483,7 +483,7 @@ const SuperAdminDashboard = () => {
     <Activity size={18} /> Analytics
   </div>
 </nav>
-        <button onClick={() => { localStorage.clear(); window.location.href='/login'; }} style={logoutBtn}>
+        <button onClick={() => { sessionStorage.clear(); window.location.href='/login'; }} style={logoutBtn}>
           <LogOut size={18} /> Terminate
         </button>
       </aside>

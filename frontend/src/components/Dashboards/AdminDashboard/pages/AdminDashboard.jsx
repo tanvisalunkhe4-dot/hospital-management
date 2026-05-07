@@ -18,7 +18,7 @@ import SecurityManagement from "./SecurityManagement";
 import AdminHeader from "../components/Header";
 const AdminDashboard = () => {
 
-  const [hospitalId, setHospitalId] = useState(localStorage.getItem("hospital_id"));
+  const [hospitalId, setHospitalId] = useState(sessionStorage.getItem("hospital_id"));
   const [activeTab, setActiveTab] = useState("Dashboard"); 
   const [staff, setStaff] = useState([]);
   const [depts, setDepts] = useState([]);
@@ -35,8 +35,8 @@ const AdminDashboard = () => {
 
   const handleSignOut = () => {
     // 1. Wipe all local data
-    // localStorage.clear() is safer than removeItem if you have multiple tokens
-    localStorage.clear(); 
+    // sessionStorage..clear() is safer than removeItem if you have multiple tokens
+   sessionStorage.clear(); 
     
     // 2. Reset React state immediately 
     // This prevents the "Noble" data from being visible for even a second
@@ -55,7 +55,7 @@ const AdminDashboard = () => {
     password: "",
     role: "Doctor",
     dept_id: "",
-    hospital_id: localStorage.getItem("hospital_id")
+    hospital_id: sessionStorage.getItem("hospital_id")
     };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -63,7 +63,7 @@ const AdminDashboard = () => {
   // ================= FETCH =================
   // THIS IS THE ONLY ONE YOU NEED
   const fetchData = async () => {
-    const storedId = localStorage.getItem("hospital_id");
+    const storedId = sessionStorage.getItem("hospital_id");
     if (!storedId) return;
 
     setLoading(true);
@@ -87,7 +87,7 @@ const AdminDashboard = () => {
   useEffect(() => {
 
     // Pull fresh ID from storage to compare
-  const currentId = localStorage.getItem("hospital_id");
+  const currentId = sessionStorage.getItem("hospital_id");
   
   // Force clean slate
     setStaff([]); 
@@ -120,7 +120,7 @@ const AdminDashboard = () => {
   };
 
   const handleDelete = async (id) => {
-    const storedId = localStorage.getItem("hospital_id");
+    const storedId = sessionStorage.getItem("hospital_id");
     if (!window.confirm("Are you sure you want to decommission this personnel node?")) return;
   
     try {
@@ -141,7 +141,7 @@ const AdminDashboard = () => {
     // Ensure the hospital_id is preserved and matches the current session
     setFormData({
       ...member,
-      hospital_id: localStorage.getItem("hospital_id")
+      hospital_id: sessionStorage.getItem("hospital_id")
     });
     setIsModalOpen(true);
   };
@@ -196,7 +196,7 @@ const AdminDashboard = () => {
       <main style={mainContentStyle}>
       <AdminHeader
   title={activeTab === "Dashboard" ? "Admin Dashboard" : activeTab}
-  subtitle={`Hospital ID: ${localStorage.getItem("hospital_id") || "N/A"}`}
+  subtitle={`Hospital ID: ${sessionStorage.getItem("hospital_id") || "N/A"}`}
   fallbackRole="Admin"
 />
 
