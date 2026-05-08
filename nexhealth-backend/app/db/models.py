@@ -202,6 +202,7 @@ class Staff(Base):
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     salary = Column(Float)
     qualification = Column(String)
+    is_active = Column(Boolean, default=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # One-to-One Relationships to specialized profiles
     user = relationship("User", back_populates="staff_profile")   

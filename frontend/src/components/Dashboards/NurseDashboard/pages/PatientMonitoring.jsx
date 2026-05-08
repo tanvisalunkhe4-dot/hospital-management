@@ -219,4 +219,4 @@ const timeStyle = { padding: '20px 24px', color: '#64748b', fontSize: '13px', fo
 const actionButtonStyle = { padding: '8px 18px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' };
 const loaderContainer = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80vh', gap: '15px' };
 
-export default PatientMonitoring;
+export default PatientMonitoring; 

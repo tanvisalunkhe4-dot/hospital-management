@@ -68,7 +68,10 @@ def create_vitals(
 
     # 2. Find the Staff record for this User
     # We look in the 'staff' table (seen in image_017ec5.jpg) where user_id matches
-    staff_record = db.query(models.Staff).filter(models.Staff.user_id == current_user.id).first()
+    staff_record = db.query(models.Staff).filter(
+        models.Staff.user_id == current_user.id,
+        models.Staff.is_active == True
+    ).first()
 
     if not staff_record:
         raise HTTPException(status_code=400, detail="User is not registered as official staff")

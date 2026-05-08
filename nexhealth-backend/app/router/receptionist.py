@@ -82,6 +82,15 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
 
         print(f"DEBUG: Received doctor_id: {appt_in.doctor_id} for Patient: {appt_in.patient_id}")
 
+    # 1.5 Verify the doctor is active (soft-delete aware)
+    doctor = db.query(models.Staff).filter(
+        models.Staff.id == appt_in.doctor_id,
+        models.Staff.hospital_id == hosp_id,
+        models.Staff.is_active == True
+    ).first()
+    if not doctor:
+        raise HTTPException(status_code=400, detail="Selected doctor is not available (inactive or invalid).")
+
 
 
    
@@ -477,7 +486,8 @@ def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
     """
     doctors = db.query(models.Staff).filter(
         models.Staff.hospital_id == hosp_id,
-        models.Staff.role.ilike("Doctor")
+        models.Staff.role.ilike("Doctor"),
+        models.Staff.is_active == True
     ).all()
     
     if not doctors:
@@ -521,7 +531,9 @@ def approve_appointment_request(
 
 @router.patch("/appointments/{appt_id}/finalize")
 async def finalize_request(appt_id: int, action: FinalizeSchema, db: Session = Depends(get_db)):
-    appointment = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
     
     if action.decision == "approve_cancel":
         appointment.status = "Cancelled"

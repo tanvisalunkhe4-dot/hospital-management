@@ -83,7 +83,7 @@ class StaffUpdate(BaseModel):
     desk_location: Optional[str] = None
     lab_section: Optional[str] = None
     pharmacy_license: Optional[str] = None
-
+    is_active: Optional[bool] = None
 # app/schemas/auth_schema.py
 class StaffResponse(BaseModel):
     id: int

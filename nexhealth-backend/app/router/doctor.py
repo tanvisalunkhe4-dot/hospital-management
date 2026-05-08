@@ -21,7 +21,10 @@ STATUS_COMPLETED = "Completed"
 
 def resolve_staff_record(staff_id: str, db: Session) -> models.Staff:
     """Helper to find internal database ID using the public staff_id."""
-    staff = db.query(models.Staff).filter(models.Staff.staff_id == staff_id).first()
+    staff = db.query(models.Staff).filter(
+        models.Staff.staff_id == staff_id,
+        models.Staff.is_active == True
+    ).first()
     if not staff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

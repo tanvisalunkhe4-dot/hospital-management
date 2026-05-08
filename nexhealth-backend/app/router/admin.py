@@ -121,7 +121,10 @@ async def delete_department(dept_id: int, db: Session = Depends(get_db)):
 
     # 2. Check for active staff nodes to prevent Foreign Key errors
     # This prevents the crash at the database level
-    active_staff = db.query(models.Staff).filter(models.Staff.dept_id == dept_id).first()
+    active_staff = db.query(models.Staff).filter(
+        models.Staff.dept_id == dept_id,
+        models.Staff.is_active == True
+    ).first()
     if active_staff:
         raise HTTPException(
             status_code=400, 
@@ -302,7 +305,8 @@ def register_staff(data: StaffCreate, db: Session = Depends(get_db)):
 def get_staff_list(hospital_id: int, db: Session = Depends(get_db)):
     # Explicitly ensure hospital_id is used as an int in the filter
     staff_members = db.query(models.Staff).filter(
-        models.Staff.hospital_id == int(hospital_id)
+        models.Staff.hospital_id == int(hospital_id),
+        models.Staff.is_active == True
     ).all()
     
     print(f"DEBUG: Fetching staff for Hospital ID: {hospital_id}")
@@ -382,31 +386,13 @@ def remove_staff(staff_id: int, hospital_id: int, db: Session = Depends(get_db))
         # 404 is better for security so they don't know if the ID exists at another hospital
         raise HTTPException(status_code=404, detail="Staff node not found in your facility")
     
-    # Remove specialized profile first to avoid FK constraint issues.
-    if staff_member.role == "Doctor":
-        doc_profile = db.query(models.Doctor).filter(models.Doctor.staff_ref_id == staff_member.id).first()
-        if doc_profile:
-            db.delete(doc_profile)
-    elif staff_member.role == "Nurse":
-        nurse_profile = db.query(models.Nurse).filter(models.Nurse.staff_ref_id == staff_member.id).first()
-        if nurse_profile:
-            db.delete(nurse_profile)
-    elif staff_member.role == "Receptionist":
-        receptionist_profile = db.query(models.Receptionist).filter(models.Receptionist.staff_ref_id == staff_member.id).first()
-        if receptionist_profile:
-            db.delete(receptionist_profile)
-    elif staff_member.role in ("Lab Technician", "LabTechnician"):
-        lab_profile = db.query(models.LabTechnician).filter(models.LabTechnician.staff_ref_id == staff_member.id).first()
-        if lab_profile:
-            db.delete(lab_profile)
-    elif staff_member.role == "Pharmacist":
-        pharmacist_profile = db.query(models.Pharmacist).filter(models.Pharmacist.staff_ref_id == staff_member.id).first()
-        if pharmacist_profile:
-            db.delete(pharmacist_profile)
+    # Soft delete: mark staff (and linked user) as inactive instead of deleting rows
+    staff_member.is_active = False
+    if staff_member.user is not None:
+        staff_member.user.is_active = False
 
-    db.delete(staff_member)
     db.commit()
-    return {"message": "Staff node removed safely"}
+    return {"message": "Staff node deactivated (soft deleted) safely"}
 
 @router.get("/analytics")
 def get_hospital_analytics(days: int = 30, db: Session = Depends(get_db)):
@@ -446,9 +432,10 @@ def get_security_stats(hospital_id: int, user_role: str = Query(...), db: Sessio
         raise HTTPException(status_code=403, detail="Unauthorized Access")
 
     try:
-        # 1. Count Staff
+        # 1. Count active Staff only
         active_count = db.query(models.Staff).filter(
-            models.Staff.hospital_id == hospital_id
+            models.Staff.hospital_id == hospital_id,
+            models.Staff.is_active == True
         ).count()
         
         # 2. Check Revenue
@@ -494,7 +481,7 @@ def update_config(hospital_id: int, config: SecurityUpdateSchema, db: Session = 
 @router.get("/dashboard/summary")
 def get_dashboard_summary(db: Session = Depends(get_db)):
     # 1. Get counts for the Stat Cards
-    staff_count = db.query(models.Staff).count()
+    staff_count = db.query(models.Staff).filter(models.Staff.is_active == True).count()
     dept_count = db.query(models.Department).count()
     
     # 2. Get the 5 most recent logs for the Local Node Feed

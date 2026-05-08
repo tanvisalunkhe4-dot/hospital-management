@@ -396,25 +396,118 @@ const StaffRegistry = ({
               </tr>
             </thead>
             <tbody>
-              {filteredStaff.map((member) => (
-                <tr key={member.id} style={trStyle}>
-                  <td style={tdStyle}>
-                    <div style={nameText}>{member.full_name}</div>
-                    <div style={subText}><Mail size={12} /> {member.email}</div>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={hfrBadge}>{member.role?.toUpperCase().slice(0, 3)}-{member.id || "NEW"}</span>
-                  </td>
-                  <td style={tdStyle}><div style={statusWrapper}><span style={statusDot}></span>Connected</div></td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
-                    <div style={actionGroup}>
-                      <button style={editIconBtn} onClick={() => { setEditingMember(member); setIsModalOpen(true); }}><Edit size={16} /></button>
-                      <button style={deleteIconBtn} onClick={() => handleDelete(member.id)}><Trash2 size={16} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            {filteredStaff.map((member) => (
+  <tr 
+    key={member.id} 
+    style={{
+      ...trStyle,
+      backgroundColor: member.is_active ? "transparent" : "#fbfcfd",
+      transition: "all 0.3s ease",
+      /* Green line removed from here */
+      borderLeft: "none" 
+    }}
+  >
+    <td style={tdStyle}>
+      <div style={{...nameText, color: member.is_active ? "#1e293b" : "#94a3b8"}}>{member.full_name}</div>
+      <div style={subText}><Mail size={12} /> {member.email}</div>
+    </td>
+    <td style={tdStyle}>
+      <span style={{
+        ...hfrBadge, 
+        filter: member.is_active ? "none" : "grayscale(1)",
+        opacity: member.is_active ? 1 : 0.6,
+        background: member.is_active ? "rgba(16, 185, 129, 0.05)" : "#f1f5f9",
+        color: member.is_active ? "#10b981" : "#94a3b8",
+        border: member.is_active ? "1px solid rgba(16, 185, 129, 0.1)" : "1px solid #e2e8f0"
+      }}>
+        {member.role?.toUpperCase().slice(0, 3)}-{member.id || "NEW"}
+      </span>
+    </td>
+    <td style={tdStyle}>
+      <div style={statusWrapper}>
+        {member.is_active ? (
+          /* GLOW STATUS - NO BORDER LINE */
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            background: 'rgba(16, 185, 129, 0.1)', 
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            color: '#059669',
+            fontSize: '10px',
+            fontWeight: '800',
+            letterSpacing: '0.05em'
+          }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              boxShadow: '0 0 8px #10b981', /* The premium glow */
+            }}></span>
+            ACTIVE
+          </div>
+        ) : (
+          /* ARCHIVED STATUS */
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            color: '#94a3b8',
+            fontSize: '10px',
+            fontWeight: '700',
+            letterSpacing: '0.05em'
+          }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: '#cbd5e1'
+            }}></span>
+            ARCHIVED
+          </div>
+        )}
+      </div>
+    </td>
+    <td style={{ ...tdStyle, textAlign: "right" }}>
+      <div 
+        style={{ 
+          ...actionGroup, 
+          opacity: member.is_active ? 1 : 0.5
+        }}
+      >
+        <button 
+          style={editIconBtn} 
+          onClick={() => { setEditingMember(member); setIsModalOpen(true); }}
+          title="Modify Personnel"
+        >
+          <Edit size={16} />
+        </button>
+        <button 
+          style={{
+            ...deleteIconBtn,
+            display: member.is_active ? 'block' : 'none' 
+          }} 
+          onClick={() => {
+            if (window.confirm("Deactivate Personnel? Medical history will be preserved.")) {
+              handleDelete(member.id);
+            }
+          }}
+          title="Decommission Node"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </td>
+  </tr>
+))}
+</tbody>
           </table>
         </div>
 
