@@ -58,6 +58,15 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
   }, [fetchQueue]);
 
   const handleStartVisit = async (patient) => {
+
+    const isThisPatientActive = activePatientData && 
+    (activePatientData.patient_id === patient.patient_id);
+
+  if (isThisPatientActive) {
+    onStartConsultation(patient);
+    return;
+  }
+
     if (isBusy) {
       alert("You have an active session. Please finish the current patient first.");
       return;

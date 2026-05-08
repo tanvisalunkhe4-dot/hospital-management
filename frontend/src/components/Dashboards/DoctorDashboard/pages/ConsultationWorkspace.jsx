@@ -7,7 +7,9 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
   const pId = patient?.patient_id || patient?.id;
   const apptId = patient?.appt_id || patient?.id;
   const [isListening, setIsListening] = useState(false);
-  const [notes, setNotes] = useState("");
+// Change these at the top of your component
+const [rawTranscript, setRawTranscript] = useState(""); 
+const [clinicalSummary, setClinicalSummary] = useState("");
   const [prescription, setPrescription] = useState([]);
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', sp02: '--' });
@@ -15,7 +17,6 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
   const [isProcessing, setIsProcessing] = useState(false);
 // Add these with your other refs/states
 const socketRef = useRef(null);
-const [liveTranscript, setLiveTranscript] = useState("");
   if (!patient) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
@@ -26,11 +27,12 @@ const [liveTranscript, setLiveTranscript] = useState("");
 
   const textareaRef = useRef(null);
 
+// Update this near the top of your component
 useEffect(() => {
   if (textareaRef.current) {
     textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
   }
-}, [notes]); 
+}, [rawTranscript]); // Changed from 'notes' to 'rawTranscript'
 
 
 useEffect(() => {
@@ -44,73 +46,100 @@ useEffect(() => {
     }
   };
 }, []);
-  const toggleScribe = async () => {
-    if (isListening) {
-      if (recorderRef.current) recorderRef.current.stop();
-      // Only close if it's actually open
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-          socketRef.current.close();
-      }
-      socketRef.current = null; // Clear the ref
-      setIsListening(false);
+
+
+// Add these to your state declarations
+const [liveTranscript, setLiveTranscript] = useState("");
+
+const toggleScribe = async () => {
+  if (isListening) {
+    if (recorderRef.current) recorderRef.current.stop();
+    if (socketRef.current) socketRef.current.close();
+    setIsListening(false);
   } else {
-        // START RECORDING & STREAMING
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // 1. Initialize WebSocket
-            socketRef.current = new WebSocket("ws://127.0.0.1:8000/api/v1/doctor/ws/scribe/stream");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      socketRef.current = new WebSocket("ws://127.0.0.1:8000/api/v1/doctor/ws/scribe/stream");
+      
+      // Don't clear notes yet, just prepare liveTranscript
+      setLiveTranscript("Listening...");
 
-            socketRef.current.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === "partial_transcript") {
-                    // Update notes in real-time as words come back from backend
-                    setNotes((prev) => prev + " " + data.text);
-                }
-            };
-
-            // 2. Setup MediaRecorder
-            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-            recorderRef.current = mediaRecorder;
-
-            mediaRecorder.ondataavailable = async (e) => {
-                if (e.data.size > 0 && socketRef.current.readyState === WebSocket.OPEN) {
-                    // SEND CHUNK TO BACKEND IMMEDIATELY
-                    socketRef.current.send(e.data);
-                }
-            };
-            
-            mediaRecorder.onstop = () => {
-              stream.getTracks().forEach(track => track.stop());
-              setIsListening(false); // Ensure the button UI resets
-              finalizeNotesWithGemini(); // Trigger the summary
-          };
-            // Capture data every 250ms for real-time feel
-            mediaRecorder.start(250); 
-            setIsListening(true);
-        } catch (err) {
-            console.error(err);
-            alert("Microphone access denied or WebSocket failed.");
+      // Inside toggleScribe
+      socketRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === "partial_transcript") {
+          const incoming = data.text.trim();
+          setLiveTranscript(incoming);
+          
+          setRawTranscript((prev) => {
+            if (!prev.trim()) return incoming;
+            if (prev.endsWith(incoming)) return prev;
+            return prev.trim() + " " + incoming;
+          }); 
         }
+      };
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      recorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
+          socketRef.current.send(e.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => { // Make this async
+        stream.getTracks().forEach(track => track.stop());
+        setIsListening(false);
+        
+        // ADD THIS: Small delay to ensure the last WebSocket message 
+        // is fully committed to the rawTranscript state
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        finalizeNotesWithGemini(); 
+      };
+
+      mediaRecorder.start(1000); // 1 second chunks for stability
+      setIsListening(true);
+    } catch (err) {
+      alert("Mic error.");
     }
+  }
 };
+
+
 const finalizeNotesWithGemini = async () => {
-  if (!notes.trim()) return;
-  
+  console.log("Sending to AI Scribe:", rawTranscript);
+  if (!rawTranscript.trim()) return;
+
   setIsProcessing(true);
+  setLiveTranscript(""); 
+  
   try {
       const response = await axios.post(
           'http://127.0.0.1:8000/api/v1/doctor/consultation/scribe-process-text', 
+          { raw_text: rawTranscript }, 
           { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` } }
       );
-      setNotes(response.data.clinical_note);
+      
+      console.log("AI Response Received:", response.data);
+
+      // 1. Check if the response actually contains the note
+      if (response.data.clinical_note) {
+          
+          // 2. If it's a Rate Limit error, alert the user
+          if (response.data.clinical_note.includes("Rate Limit")) {
+              alert("The AI is currently busy. Please wait 30 seconds and try again.");
+          } else {
+              // 3. SUCCESS: Update the UI with the actual summary
+              setClinicalSummary(response.data.clinical_note);
+          }
+      }
   } catch (error) {
-      console.error("Gemini Finalization Error:", error);
+      console.error("Scribe Error:", error);
   } finally {
       setIsProcessing(false);
   }
 };
-  
+
 
   useEffect(() => {
     const loadClinicalData = async () => {
@@ -151,58 +180,53 @@ const finalizeNotesWithGemini = async () => {
 
   const handleFinalize = async () => {
     const hospId = sessionStorage.getItem('hospital_id');
-    
-    // Critical: Prevent 422 by ensuring ID exists before the call
     if (!hospId) {
-        alert("Session Expired: Hospital ID not found. Please log in again.");
+        alert("Session Expired: Please log in again.");
         return;
     }
+    
     try {
       const token = sessionStorage.getItem('token');
-      // 1. Get the hospital_id we saved during login
-      
-      const headers = { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json' 
-      };
-      
+      const headers = { 'Authorization': `Bearer ${token}` };
       const apptId = patient.appt_id || patient.id;
   
-      // 2. Add ?hosp_id= to the end of the URL
-      await axios.patch(
-        `http://localhost:8000/api/v1/receptionist/appointments/${apptId}/finish?hosp_id=${hospId}`, 
-        {}, 
+      // Now sending the data payload to the backend
+      await axios.post(
+        `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`, 
+        {
+          summary: clinicalSummary,   // The SOAP note from Gemini
+          prescriptions: prescription // The list of medicines from your state
+        }, 
         { headers }
       );
   
-      // Success flow
-      setNotes("");
+      // Important: Clear all Scribe states before moving to the next patient
+      setRawTranscript("");
+      setClinicalSummary("");
       setPrescription([]);
-      setIsListening(false);
-      setVitals({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
-  
-      alert("Consultation finalized. Patient moved to Billing.");
+      
       onComplete(); 
-  
     } catch (error) {
-      if (error.response && error.response.status === 422) {
-        console.error("Validation Error Details:", error.response.data.detail);
-        alert(`Backend Validation Error: Check if Hospital ID is missing in SessionStorage.`);
-      } else {
-        console.error("General Sync Error:", error);
-        alert("System Sync Error: Check your connection or terminal logs.");
-      }
+      console.error("Finalize Error:", error);
+      alert("Could not finish consultation. Check if the server is running.");
     }
-  };
-  
+};
   const styles = {
     container: { display: 'grid', gridTemplateColumns: '300px 1fr 350px', gap: '20px', height: 'calc(100vh - 180px)' },
     card: { background: 'white', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' },
     vitalCard: { padding: '15px', borderRadius: '12px', backgroundColor: '#f8fafc', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid #e2e8f0' },
     scribePanel: { 
-        flex: 1, backgroundColor: '#fff', borderRadius: '16px', color: '#1e293b', padding: '20px', 
-        fontFamily: 'monospace', position: 'relative', overflowY: 'auto', border: '1px solid #e2e8f0' 
-    },
+      flex: 1, 
+      backgroundColor: '#ffffff', 
+      borderRadius: '16px', 
+      color: '#1e293b', 
+      padding: '24px', 
+      fontFamily: '"Inter", sans-serif', // Cleaner font
+      position: 'relative', 
+      overflowY: 'auto', 
+      border: '1px solid #e2e8f0',
+      lineHeight: '1.6'
+  },
     medItem: {
         padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', marginBottom: '10px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0'
@@ -251,54 +275,51 @@ const finalizeNotesWithGemini = async () => {
       </div>
       
 
-      {/* COLUMN 2: AI SCRIBE PANEL */}
-      <div style={styles.card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ margin: 0, color: '#1e293b' }}>Clinical Notes (AI Scribe)</h3>
-          <button 
-  style={styles.actionBtn(isListening)} 
-  onClick={toggleScribe}
-  disabled={isProcessing}
->
-  {isProcessing ? (
-    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-       Processing...
-    </span>
-  ) : (
-    <>
-      {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-      {isListening ? "Stop AI Scribe" : "Start AI Scribe"}
-    </>
-  )}
-</button>
-        </div>
+ {/* COLUMN 2: AI SCRIBE PANEL */}
+<div style={styles.card}>
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+    <h3 style={{ margin: 0, color: '#1e293b' }}>AI Scribe Workspace</h3>
+    <button style={styles.actionBtn(isListening)} onClick={toggleScribe} disabled={isProcessing}>
+      {isProcessing ? "Processing..." : (isListening ? "Stop AI Scribe" : "Start AI Scribe")}
+    </button>
+  </div>
 
-        <div style={styles.scribePanel}>
-  {isListening && (
-    <div style={{ marginBottom: '10px', color: '#ef4444', fontSize: '12px', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>
-      ● RECORDING CONVERSATION...
-    </div>
-  )}
-  {isProcessing && (
-    <div style={{ color: '#2563eb', fontSize: '12px', fontWeight: 'bold' }}>
-      AI IS GENERATING CLINICAL NOTES...
-    </div>
-  )}
-  <textarea
-  ref={textareaRef} 
-    placeholder={isProcessing ? "Analyzing audio..." : "AI Scribe will automatically fill these notes..."}
-    value={notes}
-    onChange={(e) => setNotes(e.target.value)}
-    disabled={isProcessing}
-    style={{ 
-        width: '100%', height: '90%', background: 'transparent', 
-        border: 'none', color: '#1e293b', outline: 'none', 
-        fontSize: '15px', resize: 'none', lineHeight: '1.6',
-        opacity: isProcessing ? 0.5 : 1
-    }}
-  />
-</div>
+  <div style={{ display: 'flex', gap: '20px', height: '100%', overflow: 'hidden' }}>
+    
+    {/* PART 1: FULL COMMUNICATION */}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid #e2e8f0', paddingRight: '15px' }}>
+      <h4 style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', fontWeight: '800' }}>Full Conversation</h4>
+      <div style={{ 
+        flex: 1, overflowY: 'auto', fontSize: '14px', color: '#475569', 
+        backgroundColor: '#f8fafc', padding: '15px', borderRadius: '12px',
+        lineHeight: '1.6', border: '1px solid #f1f5f9'
+      }}>
+        {rawTranscript || <span style={{color: '#94a3b8'}}>Waiting for audio...</span>}
+        {isListening && (
+          <p style={{ color: '#ef4444', fontWeight: '600', marginTop: '10px' }}>
+            ● LIVE: {liveTranscript}
+          </p>
+        )}
       </div>
+    </div>
+
+    {/* PART 2: CLINICAL SUMMARY */}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <h4 style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', fontWeight: '800' }}>Clinical Summary (SOAP)</h4>
+      <textarea
+        placeholder="Summary will appear here after stopping the scribe..."
+        value={clinicalSummary}
+        onChange={(e) => setClinicalSummary(e.target.value)}
+        disabled={isProcessing}
+        style={{ 
+          flex: 1, width: '100%', background: 'transparent', border: 'none', 
+          color: '#1e293b', outline: 'none', fontSize: '15px', 
+          resize: 'none', lineHeight: '1.6', fontFamily: 'inherit'
+        }}
+      />
+    </div>
+  </div>
+</div>
 
       {/* COLUMN 3: PRESCRIPTION PAD */}
       <div style={styles.card}>

@@ -1,21 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
 from sqlalchemy import desc
+from typing import List, Dict, Any
 from datetime import date
-from app.db import models
-from app.db.session import get_db
 import shutil
 import os
-from app.services.scribe import transcribe_audio, generate_medical_summary
-from fastapi import WebSocket, WebSocketDisconnect
 import io
+from pydantic import BaseModel
+# Internal Imports
+from app.db import models
+from app.db.session import get_db
+from app.services.scribe import transcribe_audio, generate_medical_summary
+
+# AI & Audio Processing
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
 
-
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
+class ScribeTextRequest(BaseModel):
+    raw_text: str
 
+class FinalizeConsultationRequest(BaseModel):
+    summary: str
+    prescriptions: List[Dict[str, Any]]
+    hospital_id: int
 STATUS_VITALS_TAKEN = "Vitals Taken"
 STATUS_SCHEDULED = "Scheduled"
 STATUS_CHECKED_IN = "Checked In"
@@ -99,6 +107,7 @@ def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
         }
     return None
 
+
 @router.post("/consultation/start/{appointment_id}")
 def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     # 1. Get the appointment the doctor is trying to start
@@ -127,37 +136,50 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/consultation/finish/{appointment_id}")
-def finish_consultation(appointment_id: int, db: Session = Depends(get_db)):
-    # 1. Fetch the appointment
+def finish_consultation(
+    appointment_id: int, 
+    data: FinalizeConsultationRequest, 
+    db: Session = Depends(get_db)
+):
     appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
     try:
-        # 2. Update the status so the UI reflects the change (Receptionist view)
-        appointment.status = STATUS_COMPLETED
-        
-        # 3. TEMPORARILY DISABLED: Billing Logic
-        # We comment this out because the 'invoices' table schema is not yet updated
-        """
-        new_invoice = models.Invoice(
+        # Create the Medical Record
+        new_record = models.MedicalRecord(
             patient_id=appointment.patient_id,
-            hospital_id=appointment.hospital_id,
-            appointment_id=appointment.id,
             doctor_id=appointment.doctor_id,
-            total_amount=500.00,
-            status="Pending"
+            appointment_id=appointment.id,
+            hospital_id=appointment.hospital_id, # This pulls from the DB record
+            clinical_notes=data.summary,         # Map summary to clinical_notes
+            diagnosis="Consultation Summary",    # Default or extract from summary
+            record_type="Prescription",
+            created_at=date.today()
         )
-        db.add(new_invoice)
-        """
-        
+        db.add(new_record)
+        db.flush() 
+
+        # Save prescriptions
+        for med in data.prescriptions:
+            new_prescription = models.Prescription(
+                medical_record_id=new_record.id,
+                medicine_name=med.get('name'),
+                dosage=med.get('dosage'),
+                frequency=med.get('frequency'),
+                duration="As per advice"
+            )
+            db.add(new_prescription)
+
+        appointment.status = STATUS_COMPLETED
         db.commit()
-        return {"status": "success", "message": "Consultation finalized successfully."}
+        return {"status": "success", "message": "Consultation finalized."}
     
     except Exception as e:
         db.rollback()
-        print(f"Error finalizing consultation: {e}")
-        raise HTTPException(status_code=500, detail="Failed to finalize consultation.")
+        print(f"CRITICAL ERROR: {e}")
+        # This will show the exact missing field in your terminal
+        raise HTTPException(status_code=500, detail=f"Finalization failed: {str(e)}")
 
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
@@ -250,65 +272,82 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
             os.remove(temp_file)
 
 
+# --- AI Scribe Logic (Streaming & Finalization) ---
 
-
-# Load model
-model = WhisperModel("tiny", device="cpu", compute_type="int8")
+model = WhisperModel("base", device="cpu", compute_type="int8")
 
 @router.websocket("/ws/scribe/stream")
 async def websocket_scribe_stream(websocket: WebSocket):
     await websocket.accept()
-    # We keep a 'full_session_buffer' to ensure FFmpeg always has the initial header
-    full_session_buffer = bytearray()
-    last_processed_size = 0
+    
+    # Store the EBML header from the very first packet
+    initial_header = None
+    # Current working buffer for the chunk
+    current_chunk = bytearray()
     
     try:
         while True:
             chunk = await websocket.receive_bytes()
-            full_session_buffer.extend(chunk)
+            
+            # 1. Capture the header from the first packet ever received
+            if initial_header is None:
+                initial_header = chunk
+            
+            current_chunk.extend(chunk)
 
-            # Process when we have significant new data (approx 150KB - 200KB)
-            # FFmpeg needs a larger buffer to correctly identify the WebM container
-            if len(full_session_buffer) - last_processed_size > 180000:
+            # 2. Process when we have ~0.5MB of new data
+            if len(current_chunk) > 500000: 
                 try:
-                    # Create a file-like object from the buffer
-                    audio_fp = io.BytesIO(full_session_buffer)
+                    # 3. CRITICAL FIX: Prepend the initial header to the current chunk
+                    # This tells FFmpeg: "This is a WebM file with X codec"
+                    processing_buffer = initial_header + current_chunk
                     
-                    # Force 'webm' format so pydub doesn't have to guess
+                    audio_fp = io.BytesIO(processing_buffer)
+                    
+                    # pydub will now find the EBML header and won't crash
                     audio_segment = AudioSegment.from_file(audio_fp, format="webm")
                     
-                    # Slice the audio to only process the NEW part to avoid repetitions
-                    new_audio = audio_segment[last_processed_size // 100:] # rough estimate
-                    
-                    # Export to WAV in memory
+                    # Convert to WAV for Whisper
                     wav_io = io.BytesIO()
                     audio_segment.export(wav_io, format="wav")
                     wav_io.seek(0)
 
                     # Transcribe
-                    segments, _ = model.transcribe(wav_io, beam_size=5)
-                    transcript = " ".join([segment.text for segment in segments])
+                    segments, _ = model.transcribe(
+                        wav_io, 
+                        beam_size=5,
+                        vad_filter=True,
+                        initial_prompt="A medical consultation regarding patient symptoms and diagnosis."
+                    )
+                    
+                    transcript = " ".join([segment.text for segment in segments]).strip()
 
-                    if transcript.strip():
+                    if transcript:
                         await websocket.send_json({
                             "type": "partial_transcript",
                             "text": transcript
                         })
+                        
+                        # 4. Clear the chunk but keep the header for the next round
+                        current_chunk = bytearray()
                     
-                    # Update tracking - DO NOT clear full_session_buffer
-                    # If you clear it, you lose the WebM header required by FFmpeg
-                    last_processed_size = len(full_session_buffer)
-
-                except Exception as inner_error:
-                    # Often happens if the chunk is cut mid-frame; just wait for next chunk
+                except Exception as e:
+                    # If it's a mid-frame cut, we just keep the data and wait for more
+                    print(f"Slice decoding skipped (waiting for more data): {e}")
                     continue
 
     except WebSocketDisconnect:
-        print("Doctor disconnected.")
+        print("Scribe WebSocket disconnected.")
+
+
+
+@router.post("/consultation/scribe-process-text")
+async def process_scribe_text(request: ScribeTextRequest):
+    if not request.raw_text.strip():
+        raise HTTPException(status_code=400, detail="No transcript data provided.")
+    try:
+        clinical_summary = await generate_medical_summary(request.raw_text)
+        return {"clinical_note": clinical_summary}
     except Exception as e:
-        print(f"Streaming Error: {e}")
-    finally:
-        try:
-            await websocket.close()
-        except:
-            pass
+        print(f"Gemini Processing Error: {e}")
+        return {"clinical_note": request.raw_text}

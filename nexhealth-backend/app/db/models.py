@@ -161,13 +161,14 @@ class MedicalRecord(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     diagnosis = Column(Text, nullable=True)
     clinical_notes = Column(Text, nullable=True)
-
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     appointment_id = Column(Integer, ForeignKey("appointments.id"))
     record_type = Column(String) # e.g., "Prescription", "Lab Report"
     issued_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     file_url = Column(String) # Link to the file storage
     description = Column(String, nullable=True)
 
+    prescriptions = relationship("Prescription", back_populates="medical_record", cascade="all, delete-orphan")
     patient = relationship("Patient", back_populates="medical_records")
     doctor = relationship("Doctor", back_populates="medical_records")
 
@@ -409,11 +410,12 @@ class Invoice(Base):
     invoice_number = Column(String, unique=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
-    total_amount = Column(Float, default=0.0)
+    total_amount = Column(Float, default=0.0) 
     status = Column(String, default="Pending")
     payment_method = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
+    doctor_id = Column(Integer, ForeignKey("staff.id"), nullable=True) 
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
     patient = relationship("Patient", back_populates="invoices")
     hospital = relationship("Hospital", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice")
@@ -426,3 +428,23 @@ class InvoiceItem(Base):
     unit_price = Column(Float)
     subtotal = Column(Float)
     invoice = relationship("Invoice", back_populates="items")
+
+
+
+class Prescription(Base):
+    __tablename__ = "prescriptions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    medical_record_id = Column(Integer, ForeignKey("medical_records.id"))
+    
+    # Medication Details
+    medicine_name = Column(String, nullable=False)
+    dosage = Column(String, nullable=True)     # e.g., "500mg"
+    frequency = Column(String, nullable=True)  # e.g., "1-0-1" or "Twice a day"
+    duration = Column(String, nullable=True)   # e.g., "5 days"
+    instructions = Column(Text, nullable=True) # e.g., "Take after food"
+    
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationship back to the clinical note
+    medical_record = relationship("MedicalRecord", back_populates="prescriptions")
