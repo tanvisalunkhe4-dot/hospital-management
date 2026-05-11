@@ -7,6 +7,8 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+
+  const activePatientData = JSON.parse(localStorage.getItem('active_consultation') || 'null');
   // Helper to get ID from local storage
   const getActiveStaffId = () => {
     const rawData = sessionStorage.getItem('user_data');
@@ -56,6 +58,15 @@ const PatientQueue = ({ onStartConsultation, isBusy }) => {
   }, [fetchQueue]);
 
   const handleStartVisit = async (patient) => {
+
+    const isThisPatientActive = activePatientData && 
+    (activePatientData.patient_id === patient.patient_id);
+
+  if (isThisPatientActive) {
+    onStartConsultation(patient);
+    return;
+  }
+
     if (isBusy) {
       alert("You have an active session. Please finish the current patient first.");
       return;

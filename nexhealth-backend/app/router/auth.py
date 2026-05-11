@@ -222,7 +222,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     # --- 1. HOSPITAL VALIDATION ---
     # Triggered for hospital-linked workforce roles
-    if payload.role in ['Admin', 'Staff', 'Receptionist', 'Nurse', 'Doctor']:
+    if payload.role in ['Admin', 'Staff', 'Receptionist', 'Nurse', 'Doctor', "Lab Technician"]:
         if not payload.hospital_id:
             raise HTTPException(status_code=400, detail="Hospital ID required")
 
@@ -297,8 +297,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     
     # --- 4. ROLE PERMISSIONS GUARD ---
     # Ensure the user is logging in with the correct role selected in the UI
-    if payload.role in ["Staff", "Receptionist", "Nurse", "Doctor"]:
-        if user.role not in ["Staff", "Receptionist", "Nurse", "Doctor"]:
+    if payload.role in ["Staff", "Receptionist", "Nurse", "Doctor", "Lab Technician"]:
+        if user.role not in ["Staff", "Receptionist", "Nurse", "Doctor","Lab Technician"]:
             raise HTTPException(status_code=403, detail="Access denied: Invalid staff role")
     
     elif user.role != payload.role:

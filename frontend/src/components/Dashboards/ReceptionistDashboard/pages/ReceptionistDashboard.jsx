@@ -822,6 +822,8 @@ const AppointmentTable = ({ data, onAction, activeMenuId, setActiveMenuId, isCon
              ? { ...statusBadgeBlue, backgroundColor: '#fff7ed', color: '#ea580c' } 
              : appt.status === 'Checked In' 
                ? statusBadgeGreen 
+               : appt.status === 'Scheduled' // Add this check
+                 ? statusBadgeWarning
                : statusBadgeBlue }>
               {appt.status}
             </span>
@@ -1089,5 +1091,15 @@ const avatarStyle = {
   borderRadius: "50%",
   objectFit: "cover",
   border: "2px solid #e2e8f0"
+};
+
+const statusBadgeWarning = { 
+  padding: '4px 8px', 
+  backgroundColor: '#fffbeb', // Light yellow background
+  color: '#d97706',           // Amber/Dark yellow text
+  borderRadius: '6px', 
+  fontSize: '12px', 
+  fontWeight: '700',
+  border: '1px solid #fde68a'
 };
 export default ReceptionistDashboard;
