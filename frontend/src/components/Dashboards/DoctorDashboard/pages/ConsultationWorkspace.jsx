@@ -3,9 +3,12 @@ import { Mic, MicOff, Save, Thermometer, Heart, Activity, Plus, Trash2, Droplets
 import axios from 'axios'; 
 
 
-const ConsultationWorkspace = ({ patient, onComplete }) => {
+const ConsultationWorkspace = ({ patient, onComplete, onRequestTest }) => {
   const pId = patient?.patient_id || patient?.id;
-  const apptId = patient?.appt_id || patient?.id;
+  const apptId =
+  patient?.appointment_id ||
+  patient?.appt_id ||
+  patient?.id;
   const [isListening, setIsListening] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -15,7 +18,7 @@ const [rawTranscript, setRawTranscript] = useState("");
 const [clinicalSummary, setClinicalSummary] = useState("");
   const [prescription, setPrescription] = useState([]);
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
-  const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', sp02: '--' });
+  const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
   const recorderRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const searchTimeoutRef = useRef(null); // ADD THIS LINE
@@ -210,40 +213,52 @@ useEffect(() => {
     setPrescription(prescription.filter(m => m.id !== id));
   };
 
+
   const handleFinalize = async () => {
-    const hospId = sessionStorage.getItem('hospital_id');
-    if (!hospId) {
-        alert("Session Expired: Please log in again.");
-        return;
+
+    console.log("PATIENT:", patient);
+console.log("APPOINTMENT ID:", apptId);
+  
+    if (!apptId) {
+      alert("Error: Missing Appointment ID.");
+      return;
     }
-    
+  
+    setIsProcessing(true);
+  
     try {
       const token = sessionStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const apptId = patient.appt_id || patient.id;
+      const hospitalId = sessionStorage.getItem('hospital_id');
   
-      // Now sending the data payload to the backend
       await axios.post(
-        `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`, 
+        `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`,
         {
-          hospital_id: hospId,
-          summary: clinicalSummary,   // The SOAP note from Gemini
-          prescriptions: prescription // The list of medicines from your state
-        }, 
-        { headers }
+          hospital_id: parseInt(hospitalId),
+          summary: clinicalSummary,
+          prescriptions: prescription
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
       );
   
-      // Important: Clear all Scribe states before moving to the next patient
-      setRawTranscript("");
-      setClinicalSummary("");
-      setPrescription([]);
-      
-      onComplete(); 
+      onComplete();
+  
     } catch (error) {
-      console.error("Finalize Error:", error);
-      alert("Could not finish consultation. Check if the server is running.");
+      console.error("Submission failed:", error.response);
+  
+      const msg =
+        error.response?.data?.detail ||
+        "Check your network connection.";
+  
+      alert(`Error ${error.response?.status}: ${msg}`);
+  
+    } finally {
+      setIsProcessing(false);
     }
-};
+  };
   const styles = {
     container: { display: 'grid', gridTemplateColumns: '300px 1fr 350px', gap: '20px', height: 'calc(100vh - 180px)' },
     card: { background: 'white', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' },
@@ -357,7 +372,29 @@ useEffect(() => {
       {/* COLUMN 3: PRESCRIPTION PAD */}
 <div style={styles.card}>
   <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Digital Prescription</h3>
-  
+  <button 
+          onClick={onRequestTest}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '12px',
+            border: '2px dashed #3b82f6',
+            backgroundColor: '#eff6ff',
+            color: '#2563eb',
+            fontWeight: '700',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            marginBottom: '20px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+        >
+          <Plus size={18} /> Request Lab Test
+        </button>
   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', position: 'relative' }}>
     
     {/* SEARCHABLE MEDICINE INPUT */}

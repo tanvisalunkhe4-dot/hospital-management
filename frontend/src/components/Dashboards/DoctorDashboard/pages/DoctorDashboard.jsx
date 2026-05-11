@@ -9,7 +9,7 @@ import DoctorHeader from "../components/DoctorHeader";
 import DoctorOverview from "./DoctorOverview";
 import PatientQueue from "./PatientQueue";
 import ConsultationWorkspace from "./ConsultationWorkspace";
-
+import LabReports from "./LabReports";
 // A small reusable table component for Records/Reports
 const DataView = ({ title, icon, data, columns }) => (
   <div style={viewContainerStyle}>
@@ -89,40 +89,43 @@ const DoctorDashboard = ({ onLogout }) => {
   checkActiveSession();
 }, [activeStaffId]); // Trigger when the doctor ID is available[cite: 5]
 
-  const handleStartConsultation = (patient) => {
-    setSelectedPatient(patient);
-    setActiveTab('consultation');
+const handleStartConsultation = (patient) => {
+  // Normalize the object so every component knows exactly what keys to use
+  const normalizedPatient = {
+    ...patient,
+  
+    // Patient ID
+    patient_id: patient.patient_id || patient.id,
+  
+    // Appointment ID
+    appt_id: patient.appt_id || patient.appointment_id,
+  
+    first_name:
+      patient.first_name ||
+      patient.patient_name?.split(' ')[0] ||
+      "Patient",
+  
+    last_name:
+      patient.last_name ||
+      patient.patient_name?.split(' ')[1] ||
+      ""
+  };
+  setSelectedPatient(normalizedPatient);
+  setActiveTab('consultation');
+};
+
+  const handleRequestTestNavigation = () => {
+    setActiveTab('reports');
   };
 
-  /**
-   * Logical Bridge: Finalizes the consultation in the database,
-   * creates a billing record, and unlocks the doctor's status.[cite: 8]
-   */
-  const handleCompleteConsultation = async () => {
-    if (!selectedPatient) return;
-
-    try {
-      // 1. Trigger the backend to update status to 'Completed' and create an Invoice[cite: 8]
-      const response = await fetch(`http://localhost:8000/api/v1/doctor/consultation/finish/${selectedPatient.id}`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        // 2. Clear local state to 'unlock' the doctor for the next patient[cite: 5]
-        setSelectedPatient(null);
-        
-        // 3. Automatically return to the queue view[cite: 5]
-        setActiveTab('queue');
-        
-        console.log("Consultation finalized and moved to billing queue.");
-      } else {
-        const errorData = await response.json();
-        alert(errorData.detail || "Could not finalize consultation.");
-      }
-    } catch (err) {
-      console.error("Network error during finalization:", err);
-      alert("Failed to connect to the server. Check if the backend is running.");
-    }
+  const handleCompleteConsultation = () => {
+    // Consultation already completed inside ConsultationWorkspace.jsx
+  
+    setSelectedPatient(null);
+  
+    setActiveTab('queue');
+  
+    console.log("Consultation completed successfully.");
   };
 
   return (
@@ -165,12 +168,12 @@ const DoctorDashboard = ({ onLogout }) => {
             )}
             
             {activeTab === 'consultation' && (
-              <ConsultationWorkspace 
-                patient={selectedPatient} 
-                onComplete={handleCompleteConsultation} // Logic to finish and unlock[cite: 4, 8]
-              />
-            )}
-            
+  <ConsultationWorkspace 
+    patient={selectedPatient} 
+    onComplete={handleCompleteConsultation} 
+    onRequestTest={handleRequestTestNavigation}
+  />
+)}       
             {activeTab === 'records' && (
               <DataView 
                 title="Electronic Medical Records" 
@@ -179,14 +182,26 @@ const DoctorDashboard = ({ onLogout }) => {
                 columns={["Record ID", "Patient Name", "Visit Date", "Diagnosis"]}
               />
             )}
-
-            {activeTab === 'reports' && (
-              <div style={placeholderStyle}>
-                <Activity size={40} style={{ marginBottom: '10px', opacity: 0.5 }} />
-                <h4 style={{ margin: 0 }}>Lab Reports Integration</h4>
-                <p style={{ fontSize: '14px' }}>This module is currently under development.</p>
-              </div>
-            )}
+           {activeTab === 'reports' && (
+    // Check if a patient is selected, otherwise show a friendly message
+    selectedPatient ? (
+      <LabReports patient={selectedPatient} />
+    ) : (
+      <div style={viewContainerStyle}>
+        <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
+          <Activity size={48} style={{ marginBottom: '16px', opacity: 0.2 }} />
+          <h3>No Active Patient</h3>
+          <p>Please select a patient from the queue to view their specific lab reports.</p>
+          <button 
+            onClick={() => setActiveTab('queue')}
+            style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+          >
+            Go to Patient Queue
+          </button>
+        </div>
+      </div>
+    )
+  )}
           </div>
         </div>
       </main>
