@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Dict, Any
@@ -7,16 +7,28 @@ import shutil
 import os
 import io
 from pydantic import BaseModel
+
 # Internal Imports
+from app.constants import (
+    STATUS_VITALS_TAKEN, 
+    STATUS_SCHEDULED, 
+    STATUS_CHECKED_IN, 
+    STATUS_IN_CONSULTATION, 
+    STATUS_COMPLETED
+)
+from app.core.auth import get_current_user  # Ensure this matches the name in core/auth.py
 from app.db import models
 from app.db.session import get_db
 from app.services.scribe import transcribe_audio, generate_medical_summary
+from app.db.models import MedicineCatalog
 
 # AI & Audio Processing
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
+
+# REMOVED local STATUS definitions to use the ones imported above
 class ScribeTextRequest(BaseModel):
     raw_text: str
 
@@ -138,51 +150,70 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     return {"status": "started"}
 
 
+
 @router.post("/consultation/finish/{appointment_id}")
-def finish_consultation(
+async def finish_consultation(
     appointment_id: int, 
     data: FinalizeConsultationRequest, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # This dependency ensures only logged-in users can finalize
+    current_user: models.User = Depends(get_current_user) 
 ):
-    appointment = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
+    # 1. Fetch the appointment
+    appointment = db.query(models.Appointment).filter(
+        models.Appointment.id == appointment_id
+    ).first()
+    
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
     try:
-        # Create the Medical Record
+        # 2. Create the Medical Record
+        # We use current_user.id to ensure the record is linked to the 
+        # actual doctor who is logged in (ID 72), solving the FK error.
         new_record = models.MedicalRecord(
             patient_id=appointment.patient_id,
-            doctor_id=appointment.doctor_id,
+            doctor_id=current_user.id,        
             appointment_id=appointment.id,
-            hospital_id=appointment.hospital_id, # This pulls from the DB record
-            clinical_notes=data.summary,         # Map summary to clinical_notes
-            diagnosis="Consultation Summary",    # Default or extract from summary
+            hospital_id=appointment.hospital_id,
+            clinical_notes=data.summary,         
+            diagnosis="Consultation Summary",    
             record_type="Prescription",
             created_at=date.today()
         )
         db.add(new_record)
-        db.flush() 
+        db.flush() # This pushes to DB to get new_record.id without committing
 
-        # Save prescriptions
+        # 3. Save prescriptions
         for med in data.prescriptions:
             new_prescription = models.Prescription(
                 medical_record_id=new_record.id,
                 medicine_name=med.get('name'),
                 dosage=med.get('dosage'),
                 frequency=med.get('frequency'),
-                duration="As per advice"
+                duration=med.get('duration', "As per advice")
             )
             db.add(new_prescription)
 
+        # 4. Finalize the appointment status
         appointment.status = STATUS_COMPLETED
+        
+        # 5. Atomic Commit
         db.commit()
-        return {"status": "success", "message": "Consultation finalized."}
+        
+        return {
+            "status": "success", 
+            "message": "Consultation finalized successfully.",
+            "record_id": new_record.id
+        }
     
     except Exception as e:
         db.rollback()
-        print(f"CRITICAL ERROR: {e}")
-        # This will show the exact missing field in your terminal
-        raise HTTPException(status_code=500, detail=f"Finalization failed: {str(e)}")
+        print(f"CRITICAL SYSTEM ERROR: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Database update failed. Please check server logs."
+        )
 
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
@@ -342,7 +373,17 @@ async def websocket_scribe_stream(websocket: WebSocket):
     except WebSocketDisconnect:
         print("Scribe WebSocket disconnected.")
 
-
+@router.get("/search-medicines")
+def search_medicines(
+    q: str = Query(..., min_length=2), 
+    db: Session = Depends(get_db)
+):
+    # This query searches the catalog and returns the top 10 matches
+    results = db.query(MedicineCatalog).filter(
+        MedicineCatalog.name.ilike(f"%{q}%")
+    ).limit(10).all()
+    
+    return results
 
 @router.post("/consultation/scribe-process-text")
 async def process_scribe_text(request: ScribeTextRequest):

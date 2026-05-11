@@ -11,7 +11,7 @@ import logging
 import datetime 
 from typing import List
 from sqlalchemy import desc
-from app.router.doctor import STATUS_SCHEDULED, STATUS_CHECKED_IN, STATUS_IN_CONSULTATION, STATUS_COMPLETED
+from app.constants import STATUS_SCHEDULED, STATUS_CHECKED_IN, STATUS_IN_CONSULTATION, STATUS_COMPLETED
 from app.status import normalize_appointment_status
 # Setup for logging and database operations
 router = APIRouter(prefix="/api/v1/receptionist", tags=["receptionist"])

@@ -4,6 +4,7 @@ from sqlalchemy.sql.functions import now
 from sqlalchemy import event
 from app.db.session import Base
 from datetime import datetime, timezone
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Date, Time
 class Revenue(Base):
     __tablename__ = "revenue"
@@ -437,15 +438,41 @@ class Prescription(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"))
+    hospital_id = Column(Integer, ForeignKey("hospitals.id")) # Important for multi-tenant
     
-    # Medication Details
     medicine_name = Column(String, nullable=False)
-    dosage = Column(String, nullable=True)     # e.g., "500mg"
-    frequency = Column(String, nullable=True)  # e.g., "1-0-1" or "Twice a day"
-    duration = Column(String, nullable=True)   # e.g., "5 days"
-    instructions = Column(Text, nullable=True) # e.g., "Take after food"
+    dosage = Column(String, nullable=True)     
+    frequency = Column(String, nullable=True)  
+    duration = Column(String, nullable=True)   
+    instructions = Column(Text, nullable=True) 
+    route = Column(String, default="Oral")     # Added: e.g., Oral, Topical, IV
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # Relationship back to the clinical note
     medical_record = relationship("MedicalRecord", back_populates="prescriptions")
+
+class MedicineCatalog(Base):
+    __tablename__ = "medicine_catalog"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, nullable=False) # e.g., "Augmentin"
+    strength = Column(String, nullable=True)          # e.g., "625mg"
+    form = Column(String, nullable=True)              # e.g., "Tablet"
+    salt_composition = Column(Text, nullable=True)    # e.g., "Amoxycillin + Clavulanic Acid"
+    manufacturer = Column(String, nullable=True)
+
+
+
+class PrescriptionTemplate(Base):
+    __tablename__ = "prescription_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    template_name = Column(String, nullable=False) # e.g., "Standard Fever Kit"
+    doctor_id = Column(Integer, ForeignKey("doctors.id"))
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+    
+    # Store medicines as JSON so we don't need a complex mapping for templates
+    # Structure: [{"name": "Para", "dosage": "500mg", "freq": "1-0-1"}, ...]
+    medicines_json = Column(JSONB, nullable=False) 
+    
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    doctor = relationship("Doctor")

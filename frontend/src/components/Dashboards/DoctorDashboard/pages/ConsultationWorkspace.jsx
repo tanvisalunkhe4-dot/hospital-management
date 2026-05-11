@@ -7,6 +7,9 @@ const ConsultationWorkspace = ({ patient, onComplete }) => {
   const pId = patient?.patient_id || patient?.id;
   const apptId = patient?.appt_id || patient?.id;
   const [isListening, setIsListening] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSearch, setIsLoadingSearch] = useState(false);
 // Change these at the top of your component
 const [rawTranscript, setRawTranscript] = useState(""); 
 const [clinicalSummary, setClinicalSummary] = useState("");
@@ -15,6 +18,7 @@ const [clinicalSummary, setClinicalSummary] = useState("");
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', sp02: '--' });
   const recorderRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const searchTimeoutRef = useRef(null); // ADD THIS LINE
 // Add these with your other refs/states
 const socketRef = useRef(null);
   if (!patient) {
@@ -47,8 +51,29 @@ useEffect(() => {
   };
 }, []);
 
+const searchMedicines = async (query) => {
+  setNewMed({ ...newMed, name: query });
+  
+  if (query.length < 2) {
+    setSuggestions([]);
+    return;
+  }
 
-// Add these to your state declarations
+  setIsLoadingSearch(true);
+  try {
+    const token = sessionStorage.getItem('token');
+    const response = await axios.get(`http://localhost:8000/api/v1/doctor/search-medicines?q=${query}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setSuggestions(response.data);
+    setShowSuggestions(true);
+  } catch (error) {
+    console.error("Search error:", error);
+  } finally {
+    setIsLoadingSearch(false);
+  }
+};
+
 const [liveTranscript, setLiveTranscript] = useState("");
 
 const toggleScribe = async () => {
@@ -140,7 +165,14 @@ const finalizeNotesWithGemini = async () => {
   }
 };
 
-
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    // If the click is not on the search input, hide suggestions
+    if (showSuggestions) setShowSuggestions(false);
+  };
+  window.addEventListener('click', handleClickOutside);
+  return () => window.removeEventListener('click', handleClickOutside);
+}, [showSuggestions]);
   useEffect(() => {
     const loadClinicalData = async () => {
       try {
@@ -194,6 +226,7 @@ const finalizeNotesWithGemini = async () => {
       await axios.post(
         `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`, 
         {
+          hospital_id: hospId,
           summary: clinicalSummary,   // The SOAP note from Gemini
           prescriptions: prescription // The list of medicines from your state
         }, 
@@ -322,28 +355,113 @@ const finalizeNotesWithGemini = async () => {
 </div>
 
       {/* COLUMN 3: PRESCRIPTION PAD */}
-      <div style={styles.card}>
-        <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Digital Prescription</h3>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-          <input 
-            style={styles.input} 
-            placeholder="Medication Name" 
-            value={newMed.name} 
-            onChange={(e) => setNewMed({...newMed, name: e.target.value})} 
-          />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input 
-              style={{ ...styles.input, flex: 1 }} 
-              placeholder="Dosage (e.g. 500mg)" 
-              value={newMed.dosage} 
-              onChange={(e) => setNewMed({...newMed, dosage: e.target.value})} 
-            />
-            <button onClick={addMedicine} style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 12px', cursor: 'pointer' }}>
-              <Plus size={20} />
-            </button>
-          </div>
+<div style={styles.card}>
+  <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Digital Prescription</h3>
+  
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', position: 'relative' }}>
+    
+    {/* SEARCHABLE MEDICINE INPUT */}
+    <div style={{ position: 'relative' }}>
+      <input 
+        style={{ ...styles.input, width: '100%' }} 
+        placeholder="Search Medicine (e.g. Calpol)" 
+        value={newMed.name} 
+        onChange={(e) => {
+          const val = e.target.value;
+          setNewMed({...newMed, name: val});
+          
+          // DEBOUNCE LOGIC: Wait 300ms after typing stops before searching
+          if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+          
+          if (val.length > 1) {
+            searchTimeoutRef.current = setTimeout(async () => {
+              setIsLoadingSearch(true);
+              try {
+                const token = sessionStorage.getItem('token');
+                const res = await axios.get(`http://localhost:8000/api/v1/doctor/search-medicines?q=${val}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                setSuggestions(res.data);
+                setShowSuggestions(true);
+              } catch (err) {
+                console.error("Search failed", err);
+              } finally {
+                setIsLoadingSearch(false);
+              }
+            }, 300);
+          } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
+          }
+        }} 
+      />
+
+      {/* SUGGESTION DROPDOWN */}
+      {showSuggestions && suggestions.length > 0 && (
+  <div style={{
+    position: 'absolute', 
+    top: '100%', 
+    left: 0, 
+    right: 0,
+    backgroundColor: 'white', 
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px', 
+    zIndex: 9999, // INCREASE THIS to 9999
+    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+    maxHeight: '250px', 
+    overflowY: 'auto'
+  }}>
+          {suggestions.map((item, idx) => (
+            <div 
+              key={idx}
+              onClick={() => {
+                setNewMed({
+                  name: item.name,
+                  dosage: item.strength || '', 
+                  frequency: '1-0-1',
+                  manufacturer: item.manufacturer // Helpful for the final record
+                });
+                setShowSuggestions(false);
+              }}
+              style={{
+                padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9',
+                fontSize: '13px', transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            >
+              <div style={{ fontWeight: '700', color: '#1e293b' }}>{item.name}</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                {item.salt_composition} • <span style={{ color: '#10b981' }}>{item.manufacturer}</span>
+              </div>
+            </div>
+          ))}
         </div>
+      )}
+    </div>
+    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+  <select 
+    style={{ ...styles.input, flex: 1 }}
+    value={newMed.frequency}
+    onChange={(e) => setNewMed({...newMed, frequency: e.target.value})}
+  >
+    <option value="1-0-1">1-0-1 (Twice Daily)</option>
+    <option value="1-1-1">1-1-1 (Thrice Daily)</option>
+    <option value="1-0-0">1-0-0 (Morning Only)</option>
+    <option value="0-0-1">0-0-1 (Night Only)</option>
+    <option value="SOS">SOS (As Needed)</option>
+  </select>
+  
+  <button 
+    onClick={addMedicine} 
+    style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer' }}
+  >
+    <Plus size={20} />
+  </button>
+</div>
+  </div>
+
+  {/* REST OF YOUR PRESCRIPTION LIST CODE ... */}
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
             {prescription.length === 0 ? (
@@ -355,6 +473,7 @@ const finalizeNotesWithGemini = async () => {
                 <div key={med.id} style={styles.medItem}>
                   <div>
                     <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>{med.name}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: '#10b981', fontStyle: 'italic' }}>{med.salt_composition}</p>
                     <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>{med.dosage} • {med.frequency}</p>
                   </div>
                   <button onClick={() => removeMed(med.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
@@ -369,17 +488,11 @@ const finalizeNotesWithGemini = async () => {
 
 {/* Add this at the bottom of COLUMN 3 (Prescription Pad) */}
 <button 
-  style={{ 
-    ...styles.actionBtn(false), 
-    width: '100%', 
-    marginTop: '20px', 
-    justifyContent: 'center',
-    backgroundColor: '#2563eb', // Professional blue for completion
-    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
-  }} 
+  style={{ ...styles.actionBtn(false), width: '100%', marginTop: '20px', justifyContent: 'center', backgroundColor: isProcessing ? '#94a3b8' : '#2563eb' }} 
   onClick={handleFinalize}
+  disabled={isProcessing}
 >
-  <Save size={18} /> Complete & Call Next Patient
+  {isProcessing ? "Saving Record..." : <><Save size={18} /> Complete & Call Next Patient</>}
 </button>
       </div>
 
