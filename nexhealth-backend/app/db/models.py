@@ -128,7 +128,7 @@ class Vitals(Base):
     weight = Column(Float, nullable=True)           # Current weight
     
     # --- Metadata ---
-    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    recorded_at = Column(DateTime, default=lambda: datetime.now(IST))
     remarks = Column(Text, nullable=True) # e.g., "Patient was resting"
     
     # Relationships

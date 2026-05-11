@@ -179,11 +179,19 @@ const VitalsManagement = () => {
   {history.map((row, i) => (
     <tr key={i} style={trStyle}>
       <td style={timeCol}>
-        {new Date(row.recorded_at).toLocaleDateString([], {month:'short', day:'numeric'})}
-        <div style={{fontSize: '11px', opacity: 0.7}}>
-          {new Date(row.recorded_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-        </div>
-      </td>
+      {new Date(row.recorded_at).toLocaleDateString('en-IN', {
+    month: 'short', 
+    day: 'numeric'
+  })}
+  <div style={{ fontSize: '11px', opacity: 0.7 }}>
+    {/* Format Time for India (e.g., 10:30 am) */}
+    {new Date(row.recorded_at).toLocaleTimeString('en-IN', {
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true
+    })}
+  </div>
+</td>
       <td style={valCol}>{row.blood_pressure || '--'}</td>
       <td style={valCol}>{row.pulse_rate} <span style={unitTag}>bpm</span></td>
       <td style={valCol}>{row.temperature}°</td>

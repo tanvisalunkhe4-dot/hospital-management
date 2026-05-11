@@ -420,7 +420,7 @@ const StaffRegistry = ({
         color: member.is_active ? "#10b981" : "#94a3b8",
         border: member.is_active ? "1px solid rgba(16, 185, 129, 0.1)" : "1px solid #e2e8f0"
       }}>
-        {member.role?.toUpperCase().slice(0, 3)}-{member.id || "NEW"}
+        {member.staff_id || `NEW-${member.id}`}
       </span>
     </td>
     <td style={tdStyle}>
