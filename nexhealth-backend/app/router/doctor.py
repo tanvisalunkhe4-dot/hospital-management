@@ -82,7 +82,7 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
 
     return [
         {
-            "id": r.appt_id,
+            "appt_id": r.appt_id,
             "patient_id": r.patient_id,
             "patient_name": r.patient_name,
             "reason": r.reason,
@@ -115,7 +115,8 @@ def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
     
     if active_row:
         return {
-            "id": active_row.id,
+            
+            "appt_id": active_row.id,
             "patient_id": active_row.patient_id,
             "patient_name": active_row.patient_name,
             "reason": active_row.reason
@@ -153,67 +154,82 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
 
 @router.post("/consultation/finish/{appointment_id}")
 async def finish_consultation(
-    appointment_id: int, 
-    data: FinalizeConsultationRequest, 
+    appointment_id: int,
+    data: FinalizeConsultationRequest,
     db: Session = Depends(get_db),
-    # This dependency ensures only logged-in users can finalize
-    current_user: models.User = Depends(get_current_user) 
+    current_user: models.User = Depends(get_current_user)
 ):
-    # 1. Fetch the appointment
+
+    print("========== AUTH DEBUG ==========")
+    print("TYPE:", type(current_user))
+    print("CURRENT USER:", current_user)
+
+    try:
+        print("EMAIL:", current_user.email)
+    except Exception as e:
+        print("EMAIL ACCESS ERROR:", str(e))
+
+    print("================================")
+
+    # STEP 1: Find doctor profile using logged-in email
+    doctor = db.query(models.Staff).filter(
+        models.Staff.email.ilike(current_user.email)
+    ).first()
+
+    if not doctor:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No doctor profile found for email: {current_user.email}"
+        )
+
+    # STEP 2: Fetch appointment ONLY by appointment ID
     appointment = db.query(models.Appointment).filter(
         models.Appointment.id == appointment_id
     ).first()
-    
+
     if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Appointment {appointment_id} not found"
+        )
+
+    # DEBUG PRINTS
+    print("========== DEBUG ==========")
+    print("Logged User Email:", current_user.email)
+    print("Doctor ID:", doctor.id)
+    print("Appointment Doctor ID:", appointment.doctor_id)
+    print("===========================")
+
+    # STEP 3: Check ownership manually
+    if appointment.doctor_id != doctor.id:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "This appointment is not assigned to the logged-in doctor",
+                "logged_doctor_id": doctor.id,
+                "appointment_doctor_id": appointment.doctor_id
+            }
+        )
 
     try:
-        # 2. Create the Medical Record
-        # We use current_user.id to ensure the record is linked to the 
-        # actual doctor who is logged in (ID 72), solving the FK error.
-        new_record = models.MedicalRecord(
-            patient_id=appointment.patient_id,
-            doctor_id=current_user.id,        
-            appointment_id=appointment.id,
-            hospital_id=appointment.hospital_id,
-            clinical_notes=data.summary,         
-            diagnosis="Consultation Summary",    
-            record_type="Prescription",
-            created_at=date.today()
-        )
-        db.add(new_record)
-        db.flush() # This pushes to DB to get new_record.id without committing
-
-        # 3. Save prescriptions
-        for med in data.prescriptions:
-            new_prescription = models.Prescription(
-                medical_record_id=new_record.id,
-                medicine_name=med.get('name'),
-                dosage=med.get('dosage'),
-                frequency=med.get('frequency'),
-                duration=med.get('duration', "As per advice")
-            )
-            db.add(new_prescription)
-
-        # 4. Finalize the appointment status
+        # STEP 4: Complete consultation
         appointment.status = STATUS_COMPLETED
-        
-        # 5. Atomic Commit
+
         db.commit()
-        
+
         return {
-            "status": "success", 
-            "message": "Consultation finalized successfully.",
-            "record_id": new_record.id
+            "status": "success",
+            "message": "Consultation completed successfully"
         }
-    
+
     except Exception as e:
         db.rollback()
-        print(f"CRITICAL SYSTEM ERROR: {e}")
+
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Database update failed. Please check server logs."
+            status_code=500,
+            detail=str(e)
         )
+
 
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
@@ -395,3 +411,74 @@ async def process_scribe_text(request: ScribeTextRequest):
     except Exception as e:
         print(f"Gemini Processing Error: {e}")
         return {"clinical_note": request.raw_text}
+
+
+@router.post("/lab-requests")
+async def create_lab_request(data: dict, db: Session = Depends(get_db)):
+    # 1. Print data to see what is missing in your terminal
+    print(f"DEBUG: Incoming Data -> {data}")
+
+    if not data.get("patient_id") or not data.get("hospital_id"):
+        raise HTTPException(status_code=400, detail="Missing Patient or Hospital ID")
+
+    new_request = models.LabRequest(
+        hospital_id=data.get("hospital_id"),
+        patient_id=data.get("patient_id"),
+        # Use .get(key, default) to prevent crashes on optional fields
+        appointment_id=data.get("appointment_id"),
+        doctor_id=data.get("doctor_id"),
+        test_name=data.get("test_name"),
+        category=data.get("category"),
+        status="Pending",
+        priority=data.get("priority", "Normal")
+    )
+    
+    try:
+        db.add(new_request)
+        db.commit()
+        db.refresh(new_request)
+        return {"status": "success", "message": "Request sent to Lab", "request_id": new_request.id}
+    except Exception as e:
+        db.rollback()
+        # 2. Print the actual SQL error so you don't have to guess
+        print(f"SQL ERROR: {str(e)}") 
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/lab-test-catalog")
+def get_lab_catalog(db: Session = Depends(get_db)):
+    # Returns the live list of tests for your "Nexus" UI selection
+    tests = db.query(models.LabTestCatalog).filter(models.LabTestCatalog.is_active == True).all()
+    return tests
+@router.get("/patient/{patient_id}/lab-reports")
+def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches history of lab requests joined with patient details for identification.
+    """
+    # Use a JOIN to get the patient's name along with the lab request data
+    results = (
+        db.query(
+            models.LabRequest,
+            (models.Patient.first_name + " " + models.Patient.last_name).label("patient_name")
+        )
+        .join(models.Patient, models.LabRequest.patient_id == models.Patient.id)
+        .filter(models.LabRequest.patient_id == patient_id)
+        .order_by(desc(models.LabRequest.requested_at))
+        .all()
+    )
+
+    # Flatten the result so the frontend receives a clean list of objects
+    reports = []
+    for request, p_name in results:
+        report_data = {
+            "id": request.id,
+            "test_name": request.test_name,
+            "category": request.category,
+            "status": request.status,
+            "requested_at": request.requested_at,
+            "patient_name": p_name, # Critical for identification
+            "priority": request.priority
+        }
+        reports.append(report_data)
+    
+    return reports

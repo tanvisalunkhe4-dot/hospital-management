@@ -30,13 +30,46 @@ def decode_access_token(token: str):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
     payload = decode_access_token(token)
-    email: str = payload.get("sub")
-    if email is None:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-    
-    user = db.query(models.User).filter(models.User.email == email).first()
+
+    sub = payload.get("sub")
+
+    print("TOKEN SUB:", sub)
+
+    # Validate token payload
+    if sub is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token payload"
+        )
+
+    user = None
+
+    # CASE 1: Token contains numeric user ID
+    if str(sub).isdigit():
+        user = db.query(models.User).filter(
+            models.User.id == int(sub)
+        ).first()
+
+    # CASE 2: Token contains email
+    else:
+        email = str(sub).strip().lower()
+
+        user = db.query(models.User).filter(
+            models.User.email.ilike(email)
+        ).first()
+
+    print("FOUND USER:", user)
+
+    # Final validation
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
     return user
