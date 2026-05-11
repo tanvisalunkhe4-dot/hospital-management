@@ -56,6 +56,15 @@ class StaffCreate(BaseModel):
     salary: float
     qualification: str
     
+
+    extension_number: Optional[str] = None
+    assigned_terminal_id: Optional[str] = None
+    languages_known: Optional[str] = None
+    billing_access_level: int = 1  # Matches your SQL parameter default
+    official_mobile: Optional[str] = None
+    home_address: Optional[str] = None
+    desk_location: Optional[str] = None # Already there, but keep it
+
     # Specialized Metadata (Optional depending on role)
     specialization: Optional[str] = None
     license_no: Optional[str] = None
@@ -84,6 +93,10 @@ class StaffUpdate(BaseModel):
     lab_section: Optional[str] = None
     pharmacy_license: Optional[str] = None
     is_active: Optional[bool] = None
+    extension_number: Optional[str] = None
+    billing_access_level: Optional[int] = None
+    official_mobile: Optional[str] = None
+    home_address: Optional[str] = None
 # app/schemas/auth_schema.py
 class StaffResponse(BaseModel):
     id: int
