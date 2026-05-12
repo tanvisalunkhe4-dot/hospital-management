@@ -321,7 +321,80 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
+@router.post("/consultation/finish/{appointment_id}")
+async def finish_consultation(
+    appointment_id: int,
+    data: FinalizeConsultationRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # 1. Resolve Staff record
+    staff_record = db.query(models.Staff).filter(
+        models.Staff.email.ilike(current_user.email)
+    ).first()
 
+    if not staff_record:
+        raise HTTPException(status_code=404, detail="Staff profile not found")
+
+    # 2. Resolve specific Doctor Profile for MedicalRecord FK
+    doctor_profile = db.query(models.Doctor).filter(
+        models.Doctor.staff_ref_id == staff_record.id
+    ).first()
+
+    if not doctor_profile:
+        raise HTTPException(status_code=404, detail="Doctor profile not found")
+
+    # 3. Fetch Appointment
+    appointment = db.query(models.Appointment).filter(
+        models.Appointment.id == appointment_id
+    ).first()
+
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    # 4. Security Check
+    if appointment.doctor_id != staff_record.id:
+        raise HTTPException(status_code=403, detail="Unauthorized: Not your appointment")
+
+    try:
+        # 5. Save the Medical Record
+        new_record = models.MedicalRecord(
+            patient_id=appointment.patient_id,
+            doctor_id=doctor_profile.id,
+            appointment_id=appointment_id,
+            hospital_id=data.hospital_id,
+            diagnosis=data.summary,
+            treatment_plan="See Prescription"
+        )
+        db.add(new_record)
+        
+        # 6. Flush to get the record ID for prescriptions
+        db.flush() 
+
+        # 7. Save Prescriptions
+        for med in data.prescriptions:
+            new_prescription = models.Prescription(
+                medical_record_id=new_record.id,
+                hospital_id=data.hospital_id,
+                medicine_name=med.get("name") or med.get("medicine_name"),
+                dosage=med.get("dosage"),
+                frequency=med.get("frequency"),
+                duration=med.get("duration", "5 Days"),
+                instructions=med.get("instructions", ""),
+                route=med.get("route", "Oral")
+            )
+            db.add(new_prescription)
+
+        # 8. Update Status for Pharmacy Queue
+        appointment.status = "Pending-Pharmacy"
+        
+        db.commit()
+        return {"status": "success", "message": "Consultation sent to Pharmacy"}
+
+    except Exception as e:
+        db.rollback()
+        print(f"FINALIZE ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 # --- AI Scribe Logic (Streaming & Finalization) ---
 
 model = WhisperModel("base", device="cpu", compute_type="int8")

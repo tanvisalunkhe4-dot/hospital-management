@@ -50,7 +50,10 @@ const DoctorDashboard = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [records, setRecords] = useState([]);
-
+  const [prescription, setPrescription] = useState([]);
+const [clinicalSummary, setClinicalSummary] = useState("");
+const [rawTranscript, setRawTranscript] = useState("");
+const [prescribedTests, setPrescribedTests] = useState([]);
   // --- DYNAMIC USER DATA ---
   const userData = JSON.parse(sessionStorage.getItem('user_data'));
   const activeStaffId = userData?.staff_id;
@@ -119,12 +122,12 @@ const handleStartConsultation = (patient) => {
   };
 
   const handleCompleteConsultation = () => {
-    // Consultation already completed inside ConsultationWorkspace.jsx
-  
     setSelectedPatient(null);
-  
+    setPrescribedTests([]); 
+    setPrescription([]);      // NEW: Clear medications
+    setClinicalSummary("");   // NEW: Clear summary
+    setRawTranscript("");     // NEW: Clear transcript
     setActiveTab('queue');
-  
     console.log("Consultation completed successfully.");
   };
 
@@ -166,14 +169,24 @@ const handleStartConsultation = (patient) => {
                 isBusy={!!selectedPatient} // Prevents double-starting visits[cite: 7]
               />
             )}
-            
             {activeTab === 'consultation' && (
   <ConsultationWorkspace 
     patient={selectedPatient} 
     onComplete={handleCompleteConsultation} 
     onRequestTest={handleRequestTestNavigation}
+    prescribedTests={prescribedTests}
+    
+    // NEW PROPS: Pass the lifted state
+    prescription={prescription}
+    setPrescription={setPrescription}
+    clinicalSummary={clinicalSummary}
+    setClinicalSummary={setClinicalSummary}
+    rawTranscript={rawTranscript}
+    setRawTranscript={setRawTranscript}
   />
-)}       
+)}
+           
+       
             {activeTab === 'records' && (
               <DataView 
                 title="Electronic Medical Records" 
@@ -183,10 +196,19 @@ const handleStartConsultation = (patient) => {
               />
             )}
            {activeTab === 'reports' && (
-    // Check if a patient is selected, otherwise show a friendly message
-    selectedPatient ? (
-      <LabReports patient={selectedPatient} />
-    ) : (
+  selectedPatient ? (
+    <LabReports 
+      patient={selectedPatient} 
+      onBack={(newTests) => {
+        // This ensures we keep old tests and add the new ones, removing any duplicates
+        setPrescribedTests(prev => {
+          const combined = [...prev, ...newTests];
+          return [...new Set(combined)]; // ES6 trick to keep only unique values
+        });
+        setActiveTab('consultation'); 
+      }} 
+    />
+  ) : (
       <div style={viewContainerStyle}>
         <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
           <Activity size={48} style={{ marginBottom: '16px', opacity: 0.2 }} />

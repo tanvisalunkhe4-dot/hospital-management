@@ -162,6 +162,7 @@ class MedicalRecord(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     diagnosis = Column(Text, nullable=True)
     clinical_notes = Column(Text, nullable=True)
+    treatment_plan = Column(Text, nullable=True)
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     appointment_id = Column(Integer, ForeignKey("appointments.id"))
     record_type = Column(String) # e.g., "Prescription", "Lab Report"
