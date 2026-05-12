@@ -17,10 +17,8 @@ const ConsultationWorkspace = ({
   setRawTranscript 
 }) => {
     const pId = patient?.patient_id || patient?.id;
-  const apptId =
-  patient?.appointment_id ||
-  patient?.appt_id ||
-  patient?.id;
+  
+  const apptId = patient?.appointment_id || patient?.appt_id || patient?.id;
   const [isListening, setIsListening] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -242,6 +240,8 @@ console.log("APPOINTMENT ID:", apptId);
         `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`,
         {
           hospital_id: parseInt(hospitalId),
+          appointment_id: apptId,
+          patient_id: pId,
           summary: clinicalSummary,
           prescriptions: prescription,
           lab_tests: prescribedTests,

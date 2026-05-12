@@ -442,6 +442,8 @@ class Prescription(Base):
     hospital_id = Column(Integer, ForeignKey("hospitals.id")) # Important for multi-tenant
     
     medicine_name = Column(String, nullable=False)
+    price = Column(Float, default=0.0) 
+    is_available = Column(Boolean, default=True)
     dosage = Column(String, nullable=True)     
     frequency = Column(String, nullable=True)  
     duration = Column(String, nullable=True)   
@@ -460,6 +462,10 @@ class MedicineCatalog(Base):
     form = Column(String, nullable=True)              # e.g., "Tablet"
     salt_composition = Column(Text, nullable=True)    # e.g., "Amoxycillin + Clavulanic Acid"
     manufacturer = Column(String, nullable=True)
+    price = Column(Float, default=0.0)
+    category = Column(String, nullable=True)
+    is_available =  Column(Boolean, default =True)
+
 
 
 
@@ -489,6 +495,7 @@ class LabRequest(Base):
     
     # Test Details
     test_name = Column(String, nullable=False) # e.g., "Complete Blood Count"
+    price_at_request = Column(Float, default=0.0)
     category = Column(String, nullable=True)  # e.g., "Hematology"
     priority = Column(String, default="Normal") # e.g., "Urgent", "Stat"
     

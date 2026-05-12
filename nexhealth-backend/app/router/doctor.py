@@ -36,6 +36,9 @@ class FinalizeConsultationRequest(BaseModel):
     summary: str
     prescriptions: List[Dict[str, Any]]
     hospital_id: int
+    appointment_id: int  # <--- ADD THIS
+    lab_tests: List[str]
+
 STATUS_VITALS_TAKEN = "Vitals Taken"
 STATUS_SCHEDULED = "Scheduled"
 STATUS_CHECKED_IN = "Checked In"
@@ -151,84 +154,6 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
     return {"status": "started"}
 
 
-
-@router.post("/consultation/finish/{appointment_id}")
-async def finish_consultation(
-    appointment_id: int,
-    data: FinalizeConsultationRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-
-    print("========== AUTH DEBUG ==========")
-    print("TYPE:", type(current_user))
-    print("CURRENT USER:", current_user)
-
-    try:
-        print("EMAIL:", current_user.email)
-    except Exception as e:
-        print("EMAIL ACCESS ERROR:", str(e))
-
-    print("================================")
-
-    # STEP 1: Find doctor profile using logged-in email
-    doctor = db.query(models.Staff).filter(
-        models.Staff.email.ilike(current_user.email)
-    ).first()
-
-    if not doctor:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No doctor profile found for email: {current_user.email}"
-        )
-
-    # STEP 2: Fetch appointment ONLY by appointment ID
-    appointment = db.query(models.Appointment).filter(
-        models.Appointment.id == appointment_id
-    ).first()
-
-    if not appointment:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Appointment {appointment_id} not found"
-        )
-
-    # DEBUG PRINTS
-    print("========== DEBUG ==========")
-    print("Logged User Email:", current_user.email)
-    print("Doctor ID:", doctor.id)
-    print("Appointment Doctor ID:", appointment.doctor_id)
-    print("===========================")
-
-    # STEP 3: Check ownership manually
-    if appointment.doctor_id != doctor.id:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "message": "This appointment is not assigned to the logged-in doctor",
-                "logged_doctor_id": doctor.id,
-                "appointment_doctor_id": appointment.doctor_id
-            }
-        )
-
-    try:
-        # STEP 4: Complete consultation
-        appointment.status = STATUS_COMPLETED
-
-        db.commit()
-
-        return {
-            "status": "success",
-            "message": "Consultation completed successfully"
-        }
-
-    except Exception as e:
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
 
 
 @router.get("/medical-records/all")
@@ -385,6 +310,23 @@ async def finish_consultation(
             )
             db.add(new_prescription)
 
+            for test_name in data.lab_tests:
+            # Fetch price from catalog so billing works
+              test_info = db.query(models.LabTestCatalog).filter(
+                models.LabTestCatalog.test_name == test_name
+            ).first()
+            
+            new_lab_request = models.LabRequest(
+                hospital_id=data.hospital_id,
+                patient_id=appointment.patient_id,
+                appointment_id=appointment_id, # <--- THIS FIXES THE NULL ISSUE
+                doctor_id=staff_record.id,
+                test_name=test_name,
+                price_at_request=test_info.base_price if test_info else 0.0,
+                status="Pending"
+            )
+            db.add(new_lab_request)
+
         # 8. Update Status for Pharmacy Queue
         appointment.status = "Pending-Pharmacy"
         
@@ -488,19 +430,29 @@ async def process_scribe_text(request: ScribeTextRequest):
 
 @router.post("/lab-requests")
 async def create_lab_request(data: dict, db: Session = Depends(get_db)):
-    # 1. Print data to see what is missing in your terminal
     print(f"DEBUG: Incoming Data -> {data}")
 
     if not data.get("patient_id") or not data.get("hospital_id"):
         raise HTTPException(status_code=400, detail="Missing Patient or Hospital ID")
 
+    # 1. FETCH BASE PRICE FROM CATALOG
+    # This ensures the 'price_at_request' isn't 0 when the receptionist bills the patient
+    test_info = db.query(models.LabTestCatalog).filter(
+        models.LabTestCatalog.test_name == data.get("test_name")
+    ).first()
+    
+    initial_price = test_info.base_price if test_info else 0.0
+
+    # 2. CREATE THE REQUEST
     new_request = models.LabRequest(
         hospital_id=data.get("hospital_id"),
         patient_id=data.get("patient_id"),
-        # Use .get(key, default) to prevent crashes on optional fields
-        appointment_id=data.get("appointment_id"),
+        # CRITICAL: Ensure your doctor's frontend is sending the 'appointment_id'
+        appointment_id=data.get("appointment_id"), 
         doctor_id=data.get("doctor_id"),
         test_name=data.get("test_name"),
+        # Link the price now so it's locked in for billing
+        price_at_request=initial_price, 
         category=data.get("category"),
         status="Pending",
         priority=data.get("priority", "Normal")
@@ -510,13 +462,15 @@ async def create_lab_request(data: dict, db: Session = Depends(get_db)):
         db.add(new_request)
         db.commit()
         db.refresh(new_request)
-        return {"status": "success", "message": "Request sent to Lab", "request_id": new_request.id}
+        return {
+            "status": "success", 
+            "message": f"Request for {new_request.test_name} sent to Lab", 
+            "request_id": new_request.id
+        }
     except Exception as e:
         db.rollback()
-        # 2. Print the actual SQL error so you don't have to guess
         print(f"SQL ERROR: {str(e)}") 
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=500, detail="Database error occurred")
 
 @router.get("/lab-test-catalog")
 def get_lab_catalog(db: Session = Depends(get_db)):

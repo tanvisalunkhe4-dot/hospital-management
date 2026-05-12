@@ -11,6 +11,7 @@ class InvoiceItemBase(BaseModel):
 class InvoiceCreate(BaseModel):
     patient_id: int
     hospital_id: int
+    appointment_id: Optional[int] = None # This allows the frontend to pass the ID
     items: List[InvoiceItemBase]
     discount: float = 0.0
     tax_rate: float = 0.05 # Default 5% GST
