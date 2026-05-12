@@ -156,11 +156,16 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     # 2. GATEKEEPER LOGIC: Check if Receptionist already registered this patient
     receptionist_record = None
     if payload.role == "Patient":
+        # We use 'or_' to check if the identifier matches either the phone OR the email
+        from sqlalchemy import or_ 
+        
         receptionist_record = db.query(models.Patient).filter(
-            models.Patient.phone_number == payload.identifier.strip(),
+            or_(
+                models.Patient.phone_number == payload.identifier.strip(),
+                models.Patient.email == payload.identifier.strip().lower()
+            ),
             models.Patient.user_id == None
         ).first()
-
         if not receptionist_record:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, 
@@ -191,7 +196,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
         role=payload.role,
         staff_id=new_staff_id, 
         hashed_password=get_password_hash(payload.password),
-        hospital_id=linked_db_id,
+        hospital_id=linked_db_id if payload.role == "Patient" else linked_db_id,
         is_active=True 
     )
 

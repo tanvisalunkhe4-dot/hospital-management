@@ -432,7 +432,6 @@ class InvoiceItem(Base):
     invoice = relationship("Invoice", back_populates="items")
 
 
-
 class Prescription(Base):
     __tablename__ = "prescriptions"
     
@@ -459,9 +458,10 @@ class MedicineCatalog(Base):
     form = Column(String, nullable=True)              # e.g., "Tablet"
     salt_composition = Column(Text, nullable=True)    # e.g., "Amoxycillin + Clavulanic Acid"
     manufacturer = Column(String, nullable=True)
-
-
-
+    price = Column(Float, default=0.0)
+    category = Column(String, nullable=True)
+    is_available = Column(Boolean, default=True)
+    
 class PrescriptionTemplate(Base):
     __tablename__ = "prescription_templates"
     id = Column(Integer, primary_key=True, index=True)
@@ -476,42 +476,3 @@ class PrescriptionTemplate(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     doctor = relationship("Doctor")
-
-class LabRequest(Base):
-    __tablename__ = "lab_requests"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
-    patient_id = Column(Integer, ForeignKey("patients.id"))
-    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
-    doctor_id = Column(Integer, ForeignKey("staff.id")) # The doctor who requested it
-    
-    # Test Details
-    test_name = Column(String, nullable=False) # e.g., "Complete Blood Count"
-    category = Column(String, nullable=True)  # e.g., "Hematology"
-    priority = Column(String, default="Normal") # e.g., "Urgent", "Stat"
-    
-    # Status Management for Lab Dashboard
-    status = Column(String, default="Pending") # Pending, In-Progress, Completed, Cancelled
-    
-    # Results linkage
-    result_summary = Column(Text, nullable=True)
-    result_file_url = Column(String, nullable=True) # Link to the PDF report
-    
-    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    completed_at = Column(DateTime, nullable=True)
-
-    # Relationships
-    patient = relationship("Patient")
-    hospital = relationship("Hospital")
-    doctor = relationship("Staff")
-
-class LabTestCatalog(Base):
-    __tablename__ = "lab_test_catalog"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    test_name = Column(String, unique=True, index=True)
-    category = Column(String) # Radiology, Pathology, etc.
-    base_price = Column(Float, default=0.0)
-    is_active = Column(Boolean, default=True)
-    description = Column(Text, nullable=True)

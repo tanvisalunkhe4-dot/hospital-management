@@ -1,38 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Added for navigation
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   Calendar, Activity, ClipboardList, Clock, 
   ArrowUpRight, AlertCircle, CheckCircle2,
-  MessageSquare, Zap, Heart, Droplets
+  MessageSquare, Zap, Heart, Droplets, X, ChevronRight, TrendingUp
 } from 'lucide-react';
 
 const Overview = () => {
-  const navigate = useNavigate(); // Hook for button actions
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [vitalsForm, setVitalsForm] = useState({ heart_rate: '', blood_pressure: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchPatientData = async () => {
+    try {
+      const token = sessionStorage.getItem('token'); 
+      const response = await axios.get('http://localhost:8000/api/v1/patient/dashboard-summary', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setData(response.data);
+    } catch (error) {
+      console.error("Dashboard sync error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchPatientData = async () => {
-      try {
-        const token = sessionStorage.getItem('token'); 
-        const response = await axios.get('http://localhost:8000/api/v1/patient/dashboard-summary', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setData(response.data);
-      } catch (error) {
-        console.error("Dashboard sync error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchPatientData();
   }, []);
 
-  // Handler for Vitals Submission
   const handleVitalsSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -43,15 +43,15 @@ const Overview = () => {
       });
       setIsModalOpen(false);
       setVitalsForm({ heart_rate: '', blood_pressure: '' });
-      fetchPatientData(); // Refresh data to show new vitals
+      fetchPatientData();
       alert("Vitals updated successfully!");
     } catch (error) {
-      console.error("Error updating vitals:", error);
-      alert("Failed to update vitals. Please try again.");
+      alert("Failed to update vitals.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
   const stats = [
     { label: 'Next Appointment', value: data?.next_appointment || 'None Scheduled', icon: Calendar, color: '#059669', bg: '#f0fdf4', path: '/patient-dashboard/appointments' },
     { label: 'Blood Group', value: data?.blood_group || '--', icon: Droplets, color: '#dc2626', bg: '#fef2f2', path: '/patient-dashboard/profile' },
@@ -59,7 +59,12 @@ const Overview = () => {
     { label: 'Last Visit', value: data?.last_visit || 'No Record', icon: Clock, color: '#d97706', bg: '#fffbeb', path: '/patient-dashboard/appointments' },
   ];
 
-  if (loading) return <div style={styles.loader}>Initializing Clinical Workspace...</div>;
+  if (loading) return (
+    <div style={styles.loaderContainer}>
+      <div style={styles.spinner}></div>
+      <p style={styles.loaderText}>Synchronizing Clinical Data...</p>
+    </div>
+  );
 
   return (
     <div style={styles.container}>
@@ -69,7 +74,7 @@ const Overview = () => {
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
             <div style={styles.modalHeader}>
-              <h3 style={styles.cardTitle}>Manual Vitals Entry</h3>
+              <h3 style={styles.cardTitle}>Manual Health Update</h3>
               <button onClick={() => setIsModalOpen(false)} style={styles.closeBtn}><X size={20}/></button>
             </div>
             <form onSubmit={handleVitalsSubmit} style={styles.vitalsForm}>
@@ -96,7 +101,7 @@ const Overview = () => {
                 />
               </div>
               <button type="submit" style={styles.submitBtn} disabled={isSubmitting}>
-                {isSubmitting ? 'Syncing...' : 'Update Vitals'}
+                {isSubmitting ? 'Syncing...' : 'Update Health Matrix'}
               </button>
             </form>
           </div>
@@ -107,20 +112,16 @@ const Overview = () => {
       <header style={styles.header}>
         <div>
           <h1 style={styles.welcomeMsg}>
-            Welcome back, <span style={{color: '#059669'}}>{data?.name || 'Patient'}</span>
+            Health <span style={{color: '#059669'}}>Overview</span>
           </h1>
-          <p style={styles.subtitle}>Real-time clinical status and health synchronization.</p>
+          <p style={styles.subtitle}>Welcome back, {data?.name?.split(' ')[0] || 'Patient'}. All systems are operational.</p>
         </div>
         <div style={styles.headerActions}>
            <div style={styles.uhidCapsule}>
               <span style={styles.uhidLabel}>UHID</span>
               <span style={styles.uhidValue}>{data?.uhid || '---'}</span>
            </div>
-           {/* Functional Book Appointment Button */}
-           <button 
-            style={styles.primaryBtn} 
-            onClick={() => navigate('/patient-dashboard/appointments')}
-           >
+           <button style={styles.primaryBtn} onClick={() => navigate('/patient-dashboard/appointments')}>
              <Calendar size={18}/> 
              <span>Book Appointment</span>
            </button>
@@ -131,10 +132,10 @@ const Overview = () => {
       {!data?.is_profile_complete && (
         <div style={styles.alertCard}>
           <div style={styles.alertContent}>
-            <div style={styles.alertIcon}><AlertCircle color="#059669" /></div>
+            <div style={styles.alertIcon}><AlertCircle color="#059669" size={24} /></div>
             <div>
-              <h4 style={styles.alertTitle}>Security & Identity Verification</h4>
-              <p style={styles.alertText}>Verify your clinical profile to enable automated record synchronization.</p>
+              <h4 style={styles.alertTitle}>Identity Verification Required</h4>
+              <p style={styles.alertText}>Verify your clinical profile to enable secure, automated record synchronization.</p>
             </div>
           </div>
           <button style={styles.outlineBtn} onClick={() => navigate('/patient-dashboard/profile')}>
@@ -143,25 +144,32 @@ const Overview = () => {
         </div>
       )}
 
-      {/* Quick Actions Bar */}
-      <div style={styles.quickActionSection}>
-        <div style={styles.quickActionGrid}>
-          <button style={styles.actionBtn} onClick={() => navigate('/patient-dashboard/telehealth')}>
-            <div style={styles.actionIcon}><Zap size={18}/></div>
-            <span>Immediate Consult</span>
-          </button>
-          <button style={styles.actionBtn} onClick={() => navigate('/patient-dashboard/messages')}>
-            <div style={{...styles.actionIcon, backgroundColor: '#eff6ff', color: '#2563eb'}}><MessageSquare size={18}/></div>
-            <span>Message Doctor</span>
-          </button>
-          <button style={styles.actionBtn} onClick={() => navigate('/patient-dashboard/records')}>
-            <div style={{...styles.actionIcon, backgroundColor: '#fef2f2', color: '#dc2626'}}><Heart size={18}/></div>
-            <span>Vitals Entry</span>
-          </button>
-        </div>
+      {/* Quick Action Bento Row */}
+      <div style={styles.quickActionGrid}>
+        <button style={styles.actionBtn} onClick={() => navigate('/patient-dashboard/telehealth')}>
+          <div style={styles.actionIcon}><Zap size={20}/></div>
+          <div style={styles.actionText}>
+            <span style={styles.actionTitle}>Immediate Consult</span>
+            <span style={styles.actionSub}>24/7 Digital Care</span>
+          </div>
+        </button>
+        <button style={styles.actionBtn} onClick={() => navigate('/patient-dashboard/messages')}>
+          <div style={{...styles.actionIcon, backgroundColor: '#eff6ff', color: '#2563eb'}}><MessageSquare size={20}/></div>
+          <div style={styles.actionText}>
+            <span style={styles.actionTitle}>Message Specialist</span>
+            <span style={styles.actionSub}>Secure Channel</span>
+          </div>
+        </button>
+        <button style={styles.actionBtn} onClick={() => setIsModalOpen(true)}>
+          <div style={{...styles.actionIcon, backgroundColor: '#fef2f2', color: '#dc2626'}}><Activity size={20}/></div>
+          <div style={styles.actionText}>
+            <span style={styles.actionTitle}>Log Health Data</span>
+            <span style={styles.actionSub}>Vitals Entry</span>
+          </div>
+        </button>
       </div>
 
-      {/* Performance Stats Grid - Clickable Cards */}
+      {/* Metrics Row */}
       <div style={styles.statsGrid}>
         {stats.map((stat, i) => (
           <div key={i} style={styles.statCard} onClick={() => navigate(stat.path)}>
@@ -176,14 +184,14 @@ const Overview = () => {
         ))}
       </div>
 
-      {/* Main Information Grid */}
+      {/* Main Grid: Vitals & Logs */}
       <div style={styles.mainGrid}>
         <div style={styles.columnStack}>
-          {/* Vitals Monitor */}
+          {/* Vitals Node */}
           <div style={styles.glassCard}>
             <div style={styles.cardHeader}>
-              <h3 style={styles.cardTitle}>Live Vitals Monitor</h3>
-              <span style={styles.liveBadge}>LAST SYNC: JUST NOW</span>
+              <h3 style={styles.cardTitle}>Live Clinical Metrics</h3>
+              <span style={styles.liveBadge}>● LIVE SYNC</span>
             </div>
             <div style={styles.vitalsRow}>
               <div style={styles.vitalMetric}>
@@ -192,7 +200,7 @@ const Overview = () => {
                   <span style={styles.vitalValue}>{data?.vitals?.heart_rate || '72'}</span>
                   <span style={styles.vitalUnit}>BPM</span>
                 </div>
-                <div style={styles.trendStable}>Optimal</div>
+                <div style={styles.trendLabel}><TrendingUp size={14}/> Stable</div>
               </div>
               <div style={styles.vitalMetric}>
                 <span style={styles.vitalLabel}>Blood Pressure</span>
@@ -200,22 +208,27 @@ const Overview = () => {
                   <span style={styles.vitalValue}>{data?.vitals?.blood_pressure || '120/80'}</span>
                   <span style={styles.vitalUnit}>mmHg</span>
                 </div>
-                <div style={styles.trendStable}>Normal</div>
+                <div style={styles.trendLabel}><CheckCircle2 size={14}/> Normal</div>
               </div>
             </div>
           </div>
 
-          {/* Activity Log */}
+          {/* Activity Timeline */}
           <div style={styles.glassCard}>
             <div style={styles.cardHeader}>
-              <h3 style={styles.cardTitle}>Clinical Activity Log</h3>
+              <h3 style={styles.cardTitle}>Clinical Activity Timeline</h3>
             </div>
-            <div style={styles.feedList}>
+            <div style={styles.timelineContainer}>
               {data?.activities?.length > 0 ? data.activities.map((act, idx) => (
-                <div key={idx} style={styles.feedItem}>
-                  <CheckCircle2 size={14} color="#059669" />
-                  <span style={styles.timeStyle}>{act.time}</span>
-                  <p style={styles.feedText}>{act.description}</p>
+                <div key={idx} style={styles.timelineItem}>
+                  <div style={styles.timelineMarker}>
+                    <div style={styles.timelineDot}></div>
+                    {idx !== data.activities.length - 1 && <div style={styles.timelineLine}></div>}
+                  </div>
+                  <div style={styles.timelineContent}>
+                    <span style={styles.timeStyle}>{act.time}</span>
+                    <p style={styles.feedText}>{act.description}</p>
+                  </div>
                 </div>
               )) : (
                 <p style={styles.emptyText}>No recent activities recorded.</p>
@@ -225,9 +238,12 @@ const Overview = () => {
         </div>
 
         <div style={styles.columnStack}>
-          {/* Medications */}
+          {/* Active Medications */}
           <div style={styles.glassCard}>
-            <h3 style={styles.cardTitle}>Active Prescriptions</h3>
+            <div style={styles.cardHeader}>
+              <h3 style={styles.cardTitle}>Active Prescriptions</h3>
+              <ChevronRight size={18} color="#94a3b8" />
+            </div>
             <div style={styles.medList}>
               {data?.medications?.length > 0 ? data.medications.map((med, idx) => (
                 <div key={idx} style={styles.medItem}>
@@ -235,22 +251,21 @@ const Overview = () => {
                     <p style={styles.medName}>{med.name}</p>
                     <p style={styles.medDose}>{med.dosage}</p>
                   </div>
-                  <Clock size={16} color="#94a3b8" />
+                  <div style={styles.medIcon}><Clock size={16} /></div>
                 </div>
               )) : (
-                <p style={styles.emptyText}>No active medications.</p>
+                <p style={styles.emptyText}>No active medications found.</p>
               )}
             </div>
           </div>
 
-          {/* Health Insights */}
-          <div style={styles.glassCard}>
-            <h3 style={styles.cardTitle}>Wellness Intelligence</h3>
-            <div style={styles.insightBox}>
-               <p style={styles.insightText}>
-                 <b>Hydration Goal:</b> Consuming 3L of water daily optimizes renal filtration and enhances metabolic skin health.
-               </p>
-            </div>
+          {/* Health Insights Card */}
+          <div style={{...styles.glassCard, background: 'linear-gradient(135deg, #059669 0%, #064e3b 100%)', color: '#fff', border: 'none'}}>
+            <h3 style={{...styles.cardTitle, color: '#fff'}}>Wellness Intelligence</h3>
+            <p style={styles.insightText}>
+              Consuming <b>3.0L of water</b> today will optimize your metabolic skin health and renal filtration during your current medication cycle.
+            </p>
+            <div style={styles.insightBadge}>AI GENERATED INSIGHT</div>
           </div>
         </div>
       </div>
@@ -258,75 +273,91 @@ const Overview = () => {
   );
 };
 
-/* ================== PROFESSIONAL STYLES ================== */
+/* ================== AESTHETIC STYLES ================== */
 const styles = {
-  container: { maxWidth: '1440px', margin: '0 auto', padding: '40px 24px', backgroundColor: '#f8fafc', minHeight: '100vh' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px' },
-  welcomeMsg: { fontSize: '32px', fontWeight: '800', color: '#1e293b', margin: 0, letterSpacing: '-0.5px' },
-  subtitle: { color: '#64748b', fontSize: '15px', marginTop: '6px' },
-  headerActions: { display: 'flex', gap: '16px', alignItems: 'center' },
-  uhidCapsule: { display: 'flex', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' },
-  uhidLabel: { backgroundColor: '#f8fafc', padding: '10px 14px', fontSize: '11px', fontWeight: '800', color: '#94a3b8', borderRight: '1px solid #e2e8f0' },
-  uhidValue: { padding: '10px 14px', fontSize: '13px', fontWeight: '700', color: '#1e293b' },
-  primaryBtn: { backgroundColor: '#059669', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' },
+  container: { maxWidth: '1400px', margin: '0 auto', padding: '20px 0', backgroundColor: '#f8fafc' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' },
+  welcomeMsg: { fontSize: '28px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' },
+  subtitle: { color: '#64748b', fontSize: '14px', marginTop: '4px' },
+  headerActions: { display: 'flex', gap: '12px' },
+  uhidCapsule: { display: 'flex', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' },
+  uhidLabel: { backgroundColor: '#f1f5f9', padding: '8px 12px', fontSize: '11px', fontWeight: '700', color: '#64748b' },
+  uhidValue: { padding: '8px 12px', fontSize: '12px', fontWeight: '700', color: '#0f172a' },
+  primaryBtn: { backgroundColor: '#0f172a', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
   
-  // NEW MODAL STYLES
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' },
-  modalContent: { backgroundColor: '#fff', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '450px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' },
-  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  closeBtn: { background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' },
-  vitalsForm: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  inputLabel: { fontSize: '14px', fontWeight: '700', color: '#475569' },
-  textInput: { padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outlineColor: '#059669' },
-  submitBtn: { backgroundColor: '#059669', color: '#fff', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' },
-  alertCard: { backgroundColor: '#f0fdf4', border: '1px solid #d1fae5', borderRadius: '20px', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' },
-  alertContent: { display: 'flex', gap: '20px', alignItems: 'center' },
-  alertIcon: { backgroundColor: '#fff', padding: '12px', borderRadius: '14px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
-  alertTitle: { margin: 0, color: '#064e3b', fontWeight: '800', fontSize: '16px' },
-  alertText: { margin: '4px 0 0', fontSize: '14px', color: '#065f46', opacity: 0.8 },
-  outlineBtn: { backgroundColor: '#059669', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
+  // MODAL
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 },
+  modalContent: { backgroundColor: '#fff', padding: '32px', borderRadius: '24px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '24px' },
+  closeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' },
+  vitalsForm: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  inputGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  inputLabel: { fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' },
+  textInput: { padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', outlineColor: '#059669' },
+  submitBtn: { backgroundColor: '#059669', color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' },
 
-  quickActionSection: { marginBottom: '32px' },
-  quickActionGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' },
-  actionBtn: { backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' },
-  actionIcon: { width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#f0fdf4', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  // ALERT
+  alertCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '20px', marginBottom: '24px' },
+  alertContent: { display: 'flex', gap: '16px', alignItems: 'center' },
+  alertIcon: { backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '12px' },
+  alertTitle: { margin: 0, fontSize: '15px', fontWeight: '700', color: '#0f172a' },
+  alertText: { margin: 0, fontSize: '13px', color: '#64748b' },
+  outlineBtn: { backgroundColor: '#f0fdf4', color: '#059669', border: 'none', padding: '10px 16px', borderRadius: '10px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' },
 
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px', marginBottom: '32px' },
-  statCard: { backgroundColor: '#fff', padding: '28px', borderRadius: '24px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '20px', cursor: 'pointer', transition: 'transform 0.2s ease' },
-  iconBox: { width: '60px', height: '60px', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  statLabel: { fontSize: '12px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', margin: 0, letterSpacing: '0.5px' },
-  statValue: { fontSize: '22px', fontWeight: '800', color: '#1e293b', margin: '4px 0 0 0' },
+  // QUICK ACTION BENTO
+  quickActionGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' },
+  actionBtn: { display: 'flex', alignItems: 'center', gap: '16px', padding: '20px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '20px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s ease' },
+  actionIcon: { width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#f0fdf4', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  actionTitle: { display: 'block', fontWeight: '700', color: '#0f172a', fontSize: '14px' },
+  actionSub: { fontSize: '12px', color: '#94a3b8' },
 
-  mainGrid: { display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '32px' },
-  columnStack: { display: 'flex', flexDirection: 'column', gap: '32px' },
-  glassCard: { backgroundColor: '#fff', borderRadius: '28px', border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' },
+  // STATS
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '32px' },
+  statCard: { backgroundColor: '#fff', padding: '20px', borderRadius: '24px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer' },
+  iconBox: { width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  statLabel: { fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', margin: 0 },
+  statValue: { fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: '2px 0 0' },
+
+  // MAIN GRID
+  mainGrid: { display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '24px' },
+  columnStack: { display: 'flex', flexDirection: 'column', gap: '24px' },
+  glassCard: { backgroundColor: '#fff', padding: '28px', borderRadius: '28px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  cardTitle: { fontSize: '19px', fontWeight: '800', color: '#1e293b', margin: 0 },
-  liveBadge: { fontSize: '10px', fontWeight: '800', color: '#059669', backgroundColor: '#d1fae5', padding: '5px 12px', borderRadius: '8px', letterSpacing: '0.5px' },
+  cardTitle: { fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: 0 },
+  liveBadge: { fontSize: '9px', fontWeight: '800', color: '#059669', backgroundColor: '#d1fae5', padding: '4px 10px', borderRadius: '8px' },
 
-  vitalsRow: { display: 'flex', gap: '20px' },
+  // VITALS
+  vitalsRow: { display: 'flex', gap: '16px' },
   vitalMetric: { flex: 1, padding: '24px', backgroundColor: '#f8fafc', borderRadius: '20px', border: '1px solid #f1f5f9' },
-  vitalLabel: { fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' },
-  vitalValueGroup: { display: 'flex', alignItems: 'baseline', gap: '6px', margin: '10px 0' },
-  vitalValue: { fontSize: '28px', fontWeight: '800', color: '#1e293b' },
-  vitalUnit: { fontSize: '13px', color: '#94a3b8', fontWeight: '600' },
-  trendStable: { fontSize: '12px', color: '#059669', fontWeight: '700' },
+  vitalLabel: { fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase' },
+  vitalValue: { fontSize: '28px', fontWeight: '800', color: '#0f172a' },
+  vitalUnit: { fontSize: '12px', color: '#94a3b8', marginLeft: '4px' },
+  trendLabel: { fontSize: '11px', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' },
 
-  medList: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  medItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px', backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px solid #f1f5f9' },
-  medName: { margin: 0, fontSize: '15px', fontWeight: '700', color: '#334155' },
-  medDose: { margin: '2px 0 0 0', fontSize: '13px', color: '#64748b' },
+  // TIMELINE
+  timelineContainer: { display: 'flex', flexDirection: 'column' },
+  timelineItem: { display: 'flex', gap: '16px' },
+  timelineMarker: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  timelineDot: { width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#059669', border: '2px solid #d1fae5' },
+  timelineLine: { width: '2px', flex: 1, backgroundColor: '#f1f5f9', margin: '4px 0' },
+  timeStyle: { fontSize: '11px', fontWeight: '700', color: '#94a3b8' },
+  feedText: { fontSize: '13px', color: '#475569', margin: '4px 0 24px 0', lineHeight: '1.4' },
 
-  feedList: { display: 'flex', flexDirection: 'column', gap: '18px' },
-  feedItem: { display: 'flex', alignItems: 'center', gap: '16px' },
-  timeStyle: { color: '#94a3b8', fontWeight: '700', fontSize: '12px', minWidth: '65px' },
-  feedText: { margin: 0, color: '#475569', fontSize: '14px', fontWeight: '500' },
-  emptyText: { color: '#94a3b8', fontSize: '14px', fontStyle: 'italic' },
-  
-  insightBox: { padding: '24px', backgroundColor: '#f0fdf4', borderRadius: '20px', borderLeft: '5px solid #059669' },
-  insightText: { margin: 0, fontSize: '15px', color: '#166534', lineHeight: '1.6', fontWeight: '500' },
-  loader: { display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#059669', fontWeight: '700', fontSize: '18px' }
+  // MEDS
+  medList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  medItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '16px' },
+  medName: { fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: 0 },
+  medDose: { fontSize: '12px', color: '#64748b', margin: '2px 0 0' },
+  medIcon: { color: '#cbd5e1' },
+
+  // INSIGHTS
+  insightText: { fontSize: '14px', lineHeight: '1.7', opacity: 0.95, marginTop: '16px' },
+  insightBadge: { fontSize: '10px', fontWeight: '800', backgroundColor: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px', display: 'inline-block', marginTop: '20px' },
+
+  // LOADER
+  loaderContainer: { height: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+  spinner: { width: '40px', height: '40px', border: '4px solid #f1f5f9', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite' },
+  loaderText: { marginTop: '16px', color: '#64748b', fontWeight: '600' }
 };
 
 export default Overview;

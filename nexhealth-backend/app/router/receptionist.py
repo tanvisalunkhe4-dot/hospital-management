@@ -22,10 +22,6 @@ logger = logging.getLogger(__name__)
 # --- PATIENT REGISTRATION ---
 @router.post("/register-patient", response_model=patient_schema.PatientResponse, status_code=status.HTTP_201_CREATED)
 def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Depends(get_db)):
-    """
-    Registers a new patient record ONLY. 
-    The User account is created later by the patient during signup.
-    """
     # 1. Check if the patient already exists in the Patient table (by phone)
     existing_patient = db.query(models.Patient).filter(
         models.Patient.phone_number == patient_in.phone_number
@@ -39,23 +35,21 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         )
 
     try:
-        processed_abha_id = patient_in.abha_id if patient_in.abha_id and patient_in.abha_id.strip() != "" else None
+        processed_abha_id = patient_in.abha_id.strip() if patient_in.abha_id and patient_in.abha_id.strip() != "" else None
 
-        # 2. Create ONLY the Patient record. user_id stays NULL.
-        new_patient = models.Patient(
-            user_id=None,  # This is the "Bridge" point for later
-            hospital_id=patient_in.hospital_id,
-            first_name=patient_in.first_name,
-            last_name=patient_in.last_name,
-            phone_number=patient_in.phone_number,
-            date_of_birth=patient_in.date_of_birth,
-            gender=patient_in.gender,
-            address=patient_in.address,
-            abha_id=processed_abha_id,
-            visit_type=patient_in.visit_type,
-            doctor_name=patient_in.doctor_name,
-            status="Registered"
-        )
+        # --- UPDATED LOGIC ---
+        # We use **patient_in.dict() to catch ALL fields (including email) automatically
+        patient_data = patient_in.dict(exclude_unset=True)
+        
+        # Override specific logic fields
+        patient_data.update({
+            "user_id": None, 
+            "abha_id": processed_abha_id,
+            "status": "Registered"
+        })
+
+        new_patient = models.Patient(**patient_data)
+        
         db.add(new_patient)
         db.commit()
         db.refresh(new_patient)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
 from datetime import datetime, time, date
 
@@ -13,7 +13,7 @@ class PatientBase(BaseModel):
     date_of_birth: Optional[date] = None # Using str to match HTML date input
     gender: Optional[str] = None
     address: Optional[str] = None
-    
+    email: Optional[EmailStr] = None
     # Clinical
     blood_group: Optional[str] = None
     weight: Optional[float] = None
@@ -28,13 +28,17 @@ class PatientBase(BaseModel):
     insurance_provider: Optional[str] = None
     policy_number: Optional[str] = None
     email: Optional[EmailStr] = None
-
-
     # Legacy fields
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone_number: Optional[str] = None
     hospital_id: Optional[int] = None
+
+    @validator("email", "weight", "height", "abha_id", pre=True)
+    def allow_empty_strings_as_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 class PatientCreate(PatientBase):
     email: Optional[EmailStr] = None
