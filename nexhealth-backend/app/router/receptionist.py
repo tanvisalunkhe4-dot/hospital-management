@@ -322,48 +322,60 @@ def reschedule_appointment(
         
 # --- INVOICE & BILLING ACTIONS ---
 
+
 @router.post("/invoices/generate", response_model=invoice_schema.InvoiceResponse)
 def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Depends(get_db)):
     try:
-        # 1. Fetch patient details first to ensure they exist and to get the name for the response
+        # 1. Verify Patient
         patient = db.query(models.Patient).filter(models.Patient.id == invoice_in.patient_id).first()
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
 
+        # 2. Numbering Logic
         last_invoice = db.query(models.Invoice).order_by(models.Invoice.id.desc()).first()
         next_id = (last_invoice.id + 1) if last_invoice else 1
         inv_number = f"INV-{datetime.date.today().year}-{next_id:04d}"
 
-        subtotal = sum(item.unit_price * item.quantity for item in invoice_in.items)
-        tax = subtotal * invoice_in.tax_rate
-        final_total = (subtotal + tax) - invoice_in.discount
+        # 3. Calculation Logic
+        subtotal = sum(item.unit_price * (item.quantity or 1) for item in invoice_in.items)
+        # Apply tax and discount to the total_amount directly
+        final_total = (subtotal * (1 + (invoice_in.tax_rate or 0.05))) - (invoice_in.discount or 0)
 
+        # 4. Create Main Invoice
         new_invoice = models.Invoice(
             invoice_number=inv_number,
             patient_id=invoice_in.patient_id,
             hospital_id=invoice_in.hospital_id,
             total_amount=final_total,
-            tax_amount=tax,
-            discount=invoice_in.discount,
             status="Pending"
         )
         db.add(new_invoice)
         db.flush() 
 
+        # 5. Create Invoice Items
         for item in invoice_in.items:
             db_item = models.InvoiceItem(
                 invoice_id=new_invoice.id,
                 service_name=item.service_name,
-                quantity=item.quantity,
                 unit_price=item.unit_price,
-                subtotal=item.unit_price * item.quantity
+                subtotal=item.unit_price * (item.quantity or 1)
             )
             db.add(db_item)
+
+        # 6. Queue Cleanup (Using safe getattr)
+        appt_id = getattr(invoice_in, 'appointment_id', None)
+        if appt_id:
+            # Update Appointment status to remove from "Ready for Billing"
+            db.query(models.Appointment).filter(models.Appointment.id == appt_id).update({"status": "Completed"})
+            
+            # Update Lab Requests to Billed
+            db.query(models.LabRequest).filter(
+                models.LabRequest.appointment_id == appt_id
+            ).update({"status": "Billed"}, synchronize_session=False)
 
         db.commit()
         db.refresh(new_invoice)
 
-        # 2. Construct the response dictionary to include the required 'patient_name'
         return {
             "id": new_invoice.id,
             "invoice_number": new_invoice.invoice_number,
@@ -371,29 +383,24 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
             "patient_name": f"{patient.first_name} {patient.last_name}",
             "hospital_id": new_invoice.hospital_id,
             "total_amount": new_invoice.total_amount,
-            "tax_amount": new_invoice.tax_amount,
-            "discount": new_invoice.discount,
             "status": new_invoice.status,
             "created_at": new_invoice.created_at,
-            # If your schema also expects the items, include them here:
             "items": new_invoice.items 
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         db.rollback()
-        logger.error(f"INVOICE ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate invoice.")
-        
+        print(f"INVOICE ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+
+
 @router.get("/invoices/all", response_model=List[invoice_schema.InvoiceResponse])
 def get_all_invoices(hosp_id: int, db: Session = Depends(get_db)):
-    # Join with Patient table to fetch the 'first_name' and 'last_name'
     results = db.query(
         models.Invoice.id,
         models.Invoice.invoice_number,
         models.Invoice.patient_id,
-        # Concatenating first and last name from the Patient model
         (models.Patient.first_name + " " + models.Patient.last_name).label("patient_name"),
         models.Invoice.total_amount,
         models.Invoice.status,
@@ -428,7 +435,6 @@ def mark_invoice_as_paid(invoice_id: int, hosp_id: int, db: Session = Depends(ge
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Payment processing failed.")
-
 
 @router.patch("/patients/{patient_id}", response_model=PatientResponse)
 def update_patient_profile(
@@ -557,17 +563,89 @@ def finish_consultation(appt_id: int, hosp_id: int, db: Session = Depends(get_db
         # 1. Update the status
         appt.status = "Completed"
         
-        # 2. Trigger the Billing Handshake
-        new_invoice = models.Invoice(
-            patient_id=appt.patient_id,
-            hospital_id=hosp_id,
-            total_amount=500.00,  # Default fee
-            status="Pending"
-        )
-        db.add(new_invoice)
+        
         db.commit()
         
         return {"message": "Consultation finished. Status is now Completed (Blue)."}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to finish consultation.")
+
+
+@router.get("/billing/queue/{hosp_id}")
+def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches all patients whose status is 'Pending-Billing'.
+    These are patients who have finished with the Doctor and Pharmacist.
+    """
+    results = db.query(models.Appointment, models.Patient).join(
+        models.Patient, models.Appointment.patient_id == models.Patient.id
+    ).filter(
+        models.Appointment.hospital_id == hosp_id,
+        models.Appointment.status == "Pending-Billing"  # Key status from Pharmacy
+    ).all()
+
+    return [
+        {
+            "id": appt.id,
+            "patient_id": patient.id,
+            "patient_name": f"{patient.first_name} {patient.last_name}",
+            "status": appt.status,
+            "appointment_date": appt.appointment_date,
+            "invoice_number": "NEW", # Placeholder until generated
+            "total_amount": 0 # Will be calculated by the prepare-invoice endpoint
+        } for appt, patient in results
+    ]
+
+@router.get("/billing/prepare/{appt_id}")
+def prepare_invoice(appt_id: int, db: Session = Depends(get_db)): # Removed 'async'
+    appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    items = [{
+        "service_name": "Consultation Fee", 
+        "unit_price": 500.0, 
+        "type": "Consultation"
+    }]
+    
+    # 1. Pharmacy Items
+    prescriptions = db.query(models.Prescription).join(models.MedicalRecord).filter(
+        models.MedicalRecord.appointment_id == appt_id
+    ).all()
+
+    for p in prescriptions:
+        items.append({
+            "service_name": p.medicine_name,
+            "unit_price": p.price if p.price else 0.0,
+            "type": "Pharmacy"
+        })
+
+    # 2. Lab/Radiology Items
+    # We join LabTestCatalog to ensure we get a price even if price_at_request was missed
+    lab_requests = db.query(
+        models.LabRequest, 
+        models.LabTestCatalog.base_price
+    ).outerjoin(
+        models.LabTestCatalog, 
+        models.LabRequest.test_name == models.LabTestCatalog.test_name
+    ).filter(
+        models.LabRequest.appointment_id == appt_id
+    ).all()
+
+    for request, catalog_price in lab_requests:
+        # Check price in request first, then catalog
+        final_price = request.price_at_request if request.price_at_request else catalog_price
+        
+        items.append({
+            "service_name": request.test_name,
+            "unit_price": final_price if final_price else 0.0,
+            "type": "Laboratory" 
+        })
+
+    return {
+        "appt_id": appt.id,
+        "patient_id": appt.patient_id,
+        "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
+        "items": items
+    }

@@ -1,45 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Receipt, Clock, CheckCircle, 
-  Download, ArrowLeft, X, CreditCard 
+  Download, ArrowLeft, X, CreditCard, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Added initialFilter prop to catch the navigation from the Dashboard card
 const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) => {
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  
-  // State to track which filter is active: 'All', 'Pending', or 'Paid'
-  // Initialized with initialFilter so clicking "Pending Bills" works immediately
+  const [selectedApptId, setSelectedApptId] = useState(null);
   const [filterStatus, setFilterStatus] = useState(initialFilter);
-
-  // Sync state if prop changes while component is mounted
+  const [billingQueue, setBillingQueue] = useState([]);
   useEffect(() => {
     setFilterStatus(initialFilter);
   }, [initialFilter]);
 
-  // Logic: Sum ONLY paid invoices for Total Collections
   const totalRevenue = invoices
     .filter(inv => inv.status === 'Paid')
     .reduce((acc, inv) => acc + (inv.total_amount || 0), 0);
     
   const pendingCount = invoices.filter(i => i.status === 'Pending').length;
 
-  // Optimized Double-Filtering Logic (Card Filter + Search Bar)
   const filteredInvoices = invoices.filter(inv => {
-    const invNum = inv.invoice_number ? inv.invoice_number.toLowerCase() : "";
-    const pName = inv.patient_name ? inv.patient_name.toLowerCase() : "";
-    const pId = inv.patient_id ? inv.patient_id.toString() : "";
-    
-    // Checks if search term matches Invoice #, Patient Name, OR Patient ID
+    const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
-      invNum.includes(searchTerm.toLowerCase()) || 
-      pName.includes(searchTerm.toLowerCase()) || 
-      pId.includes(searchTerm);
+      (inv.invoice_number?.toLowerCase() || "").includes(searchLower) || 
+      (inv.patient_name?.toLowerCase() || "").includes(searchLower) || 
+      (inv.patient_id?.toString() || "").includes(searchTerm);
   
     const matchesStatus = filterStatus === "All" || inv.status === filterStatus;
-  
     return matchesSearch && matchesStatus;
   });
 
@@ -53,136 +42,212 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
       console.error("Payment update failed:", err);
     }
   };
+  useEffect(() => {
+    fetch(`http://localhost:8000/api/v1/receptionist/billing/queue/${hosp_id}`)
+      .then(res => res.json())
+      .then(data => setBillingQueue(data))
+      .catch(err => console.error("Queue fetch failed:", err));
+  }, [hosp_id, invoices]); // Refetch when invoices change
 
-  // --- PDF/PRINT RECEIPT LOGIC ---
+
   const handleDownloadInvoice = (invoice) => {
     const printWindow = window.open('', '_blank');
     
+    // We assume subtotal is the same as total if specific tax/discount isn't stored
+    const subtotal = invoice.total_amount;
+    const taxRate = 0.05; // 5% example
+    const taxAmount = subtotal * taxRate;
+    const grandTotal = subtotal + taxAmount;
+
     const receiptHtml = `
       <html>
         <head>
-          <title>Receipt - ${invoice.invoice_number}</title>
+          <title>Invoice - ${invoice.invoice_number}</title>
           <style>
-            body { font-family: 'Segoe UI', sans-serif; padding: 40px; color: #1e293b; }
-            .header { text-align: center; border-bottom: 2px solid #10b981; padding-bottom: 20px; margin-bottom: 30px; }
-            .hospital-name { font-size: 24px; font-weight: 800; margin: 0; }
-            .details-container { display: flex; justify-content: space-between; margin-bottom: 30px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th { text-align: left; background: #f8fafc; padding: 12px; font-size: 12px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
-            td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-            .total-section { text-align: right; margin-top: 20px; font-size: 18px; font-weight: 800; color: #059669; }
-            .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-            @media print { @page { margin: 0; } body { margin: 1.6cm; } }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+            body { font-family: 'Inter', sans-serif; padding: 50px; color: #1e293b; line-height: 1.5; }
+            
+            /* Header Styling */
+            .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 4px solid #10b981; padding-bottom: 30px; margin-bottom: 40px; }
+            .hospital-info h1 { margin: 0; font-size: 28px; font-weight: 800; color: #0f172a; }
+            .hospital-info p { margin: 4px 0; color: #64748b; font-size: 13px; }
+            .invoice-title { text-align: right; }
+            .invoice-title h2 { margin: 0; font-size: 32px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: -1px; }
+            
+            /* Info Grid */
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+            .info-box h3 { font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+            .info-box p { margin: 4px 0; font-size: 14px; font-weight: 600; }
+
+            /* Table Styling */
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #f8fafc; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 14px; text-align: left; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 14px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+
+            /* Totals Section */
+            .totals-container { display: flex; justify-content: flex-end; margin-top: 30px; }
+            .totals-table { width: 300px; }
+            .totals-table tr td { border: none; padding: 8px 0; }
+            .grand-total { border-top: 2px solid #10b981 !important; padding-top: 15px !important; }
+            .grand-total-label { font-size: 18px; font-weight: 800; color: #0f172a; }
+            .grand-total-value { font-size: 22px; font-weight: 900; color: #10b981; }
+
+            /* Footer */
+            .footer { margin-top: 80px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+            .footer p { font-size: 12px; color: #94a3b8; margin: 5px 0; }
+            @media print { body { padding: 20px; } .no-print { display: none; } }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="hospital-name">Nex<span style="color:#10b981">Health</span></div>
-            <p style="margin:5px 0; color:#64748b;">Official Payment Receipt</p>
-          </div>
-          <div class="details-container">
-            <div>
-              <p><strong>Invoice:</strong> ${invoice.invoice_number}</p>
-              <p><strong>Date:</strong> ${new Date(invoice.created_at).toLocaleDateString()}</p>
+          <div class="invoice-header">
+            <div class="hospital-info">
+              <h1>Nex<span style="color:#10b981">Health</span></h1>
+              <p>Multispeciality Hospital & Care Center</p>
+              <p>Pune, Maharashtra, India</p>
+              <p>Contact: +91 98765 43210</p>
             </div>
-            <div style="text-align: right;">
-              <p><strong>Patient:</strong> ${invoice.patient_name} (#${invoice.patient_id})</p>
-              <p><strong>Status:</strong> ${invoice.status}</p>
+            <div class="invoice-title">
+              <h2>Medical Invoice</h2>
+              <p style="font-weight: 700; color: #1e293b; margin: 5px 0;"># ${invoice.invoice_number}</p>
+              <p style="font-size: 13px; color: #64748b;">Date: ${new Date(invoice.created_at).toLocaleDateString('en-IN')}</p>
             </div>
           </div>
+
+          <div class="info-grid">
+            <div class="info-box">
+              <h3>Patient Information</h3>
+              <p><strong>Name:</strong> ${invoice.patient_name}</p>
+              <p><strong>Patient ID:</strong> #${invoice.patient_id || 'N/A'}</p>
+              <p><strong>Payment Status:</strong> ${invoice.status}</p>
+            </div>
+            <div class="info-box">
+              <h3>Hospital Details</h3>
+              <p><strong>Hospital ID:</strong> #${hosp_id}</p>
+              <p><strong>Consultant:</strong> Duty Doctor</p>
+              <p><strong>Invoice Type:</strong> Outpatient Billing</p>
+            </div>
+          </div>
+
           <table>
             <thead>
-              <tr><th>Description</th><th style="text-align: right;">Amount</th></tr>
+              <tr>
+                <th width="50%">Description</th>
+                <th class="text-center">Qty</th>
+                <th class="text-right">Rate</th>
+                <th class="text-right">Total Amount</th>
+              </tr>
             </thead>
             <tbody>
               <tr>
-                <td>General Medical Consultation & Services</td>
-                <td style="text-align: right;">₹${invoice.total_amount}</td>
+                <td>Medical Consultation & Integrated Services</td>
+                <td class="text-center">1</td>
+                <td class="text-right">₹${invoice.total_amount}</td>
+                <td class="text-right">₹${invoice.total_amount}</td>
               </tr>
             </tbody>
           </table>
-          <div class="total-section">Total Paid: ₹${invoice.total_amount}</div>
-          <div class="footer">
-            <p>Thank you for choosing NexHealth. This is a computer-generated receipt.</p>
+
+          <div class="totals-container">
+            <table class="totals-table">
+              <tr>
+                <td>Subtotal</td>
+                <td class="text-right">₹${invoice.total_amount}</td>
+              </tr>
+              <tr>
+                <td>Discount (0%)</td>
+                <td class="text-right">₹0.00</td>
+              </tr>
+              <tr class="grand-total">
+                <td class="grand-total-label">Total Due</td>
+                <td class="grand-total-value text-right">₹${invoice.total_amount}</td>
+              </tr>
+            </table>
           </div>
+
+          <div class="footer">
+            <p><strong>Thank you for choosing NexHealth.</strong></p>
+            <p>This is a computer-generated document and does not require a physical signature.</p>
+            <p>Please keep this receipt for your records and future consultations.</p>
+          </div>
+
           <script>
-            window.onload = function() {
-              window.focus();
-              window.print();
-              window.onafterprint = function() { window.close(); };
+            window.onload = function() { 
+              setTimeout(() => {
+                window.print(); 
+                window.close();
+              }, 500);
             };
           </script>
         </body>
       </html>
     `;
-
     printWindow.document.write(receiptHtml);
     printWindow.document.close();
   };
-
+  const [showPrescription, setShowPrescription] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <button onClick={onBack} style={backBtnStyle}><ArrowLeft size={16} /> Back to Dashboard</button>
       
-      {/* Interactive Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
         <div onClick={() => setFilterStatus("All")} style={{ cursor: 'pointer' }}>
-            <StatCard 
-                icon={<Receipt color="#059669" />} 
-                label="Total Invoices" 
-                value={invoices.length} 
-                trend="Monthly" 
-                isActive={filterStatus === "All"}
-            />
+            <StatCard icon={<Receipt color="#059669" />} label="Total Invoices" value={invoices.length} trend="Monthly" isActive={filterStatus === "All"} />
         </div>
         <div onClick={() => setFilterStatus("Pending")} style={{ cursor: 'pointer' }}>
-            <StatCard 
-                icon={<Clock color="#ea580c" />} 
-                label="Unpaid Invoices" 
-                value={pendingCount} 
-                trend="Attention" 
-                isActive={filterStatus === "Pending"}
-            />
+            <StatCard icon={<Clock color="#ea580c" />} label="Unpaid Invoices" value={pendingCount} trend="Attention" isActive={filterStatus === "Pending"} />
         </div>
         <div onClick={() => setFilterStatus("Paid")} style={{ cursor: 'pointer' }}>
-            <StatCard 
-                icon={<CheckCircle color="#10b981" />} 
-                label="Total Collections" 
-                value={`₹${totalRevenue.toLocaleString()}`} 
-                trend="Live" 
-                isActive={filterStatus === "Paid"}
-            />
+            <StatCard icon={<CheckCircle color="#10b981" />} label="Total Collections" value={`₹${totalRevenue.toLocaleString()}`} trend="Live" isActive={filterStatus === "Paid"} />
         </div>
       </div>
 
-      {/* Search and Action Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
-         <div style={searchWrapperStyle}>
-            <Search size={18} color="#94a3b8" />
-            <input 
-                type="text" 
-                placeholder="Search by Name, Invoice #, or Patient ID..." 
-                style={searchInputStyle} 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
-         </div>
-         <button onClick={() => setShowModal(true)} style={generateBtnStyle}>+ Generate New Bill</button>
-      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+     <div style={searchWrapperStyle}>
+        <Search size={18} color="#94a3b8" />
+        <input type="text" placeholder="Search Patient..." style={searchInputStyle} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+     </div>
+     <button onClick={() => { setSelectedApptId(null); setShowModal(true); }} style={generateBtnStyle}>+ Manual Bill</button>
+  </div>
 
-      {/* Table Section */}
+  {/* NEW: Displays Meera and Siddharth here automatically */}
+  {billingQueue.length > 0 && (
+    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '12px', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
+      <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', alignSelf: 'center', marginRight: '5px' }}>READY FOR BILLING:</span>
+      {billingQueue.map(queueItem => (
+        <button 
+          key={queueItem.id}
+          onClick={() => { setSelectedApptId(queueItem.id); setShowModal(true); }}
+          style={{ 
+            padding: '6px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', 
+            borderRadius: '20px', fontSize: '12px', color: '#1e40af', 
+            cursor: 'pointer', fontWeight: '700', display: 'flex', gap: '6px', alignItems: 'center'
+          }}
+        >
+          <div style={{ width: '6px', height: '6px', background: '#3b82f6', borderRadius: '50%' }}></div>
+          {queueItem.patient_name} (ID: #{queueItem.patient_id})
+        </button>
+      ))}
+    </div>
+  )}
+</div>
+
       <div style={tableCardStyle}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: `1px solid #f1f5f9` }}>
-              <th style={thStyle}>Invoice #</th>
-              <th style={thStyle}>Patient Details</th>
-              <th style={thStyle}>Amount</th>
-              <th style={thStyle}>Date</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Action</th>
-            </tr>
-          </thead>
+        <thead>
+  <tr style={{ textAlign: 'left', borderBottom: `1px solid #f1f5f9` }}>
+    <th style={thStyle}>Invoice #</th>
+    <th style={thStyle}>Patient Details</th>
+    <th style={thStyle}>Amount</th>
+    <th style={thStyle}>Date</th>
+    <th style={thStyle}>Prescription</th> {/* New Column */}
+    <th style={thStyle}>Status</th>
+    <th style={thStyle}>Action</th>
+  </tr>
+</thead>
           <tbody>
             {filteredInvoices.length > 0 ? filteredInvoices.map((inv) => (
               <tr key={inv.id} style={{ borderBottom: `1px solid #f8fafc` }}>
@@ -194,28 +259,41 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
                 <td style={tdStyle}>₹{inv.total_amount}</td>
                 <td style={tdStyle}>{new Date(inv.created_at).toLocaleDateString()}</td>
                 <td style={tdStyle}>
+        <button 
+          onClick={() => { setSelectedInvoice(inv); setShowPrescription(true); }}
+          style={{
+            padding: '6px 12px',
+            background: '#f1f5f9',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            fontSize: '11px',
+            fontWeight: '700',
+            color: '#475569',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          View RX
+        </button>
+      </td>
+                <td style={tdStyle}>
                   <span style={inv.status === 'Paid' ? statusBadgeGreen : statusBadgeBlue}>{inv.status}</span>
                 </td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                     {inv.status === 'Pending' && (
-                      <button onClick={() => handleMarkAsPaid(inv.id)} style={payBtnStyle}>
-                        <CreditCard size={14} /> Pay
-                      </button>
+                      <button onClick={() => handleMarkAsPaid(inv.id)} style={payBtnStyle}><CreditCard size={14} /> Pay</button>
                     )}
-                    <div 
-                      onClick={() => handleDownloadInvoice(inv)}
-                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: inv.status === 'Paid' ? '#059669' : '#94a3b8' }}
-                      title="Download Receipt"
-                    >
-                      <Download size={18} />
-                      <span style={{ fontSize: '12px', fontWeight: '600' }}>Receipt</span>
+                    <div onClick={() => handleDownloadInvoice(inv)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8' }}>
+                      <Download size={18} /> <span style={{ fontSize: '12px', fontWeight: '600' }}>Receipt</span>
                     </div>
                   </div>
                 </td>
               </tr>
             )) : (
-              <tr><td colSpan="6" style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>No {filterStatus !== "All" ? filterStatus.toLowerCase() : ""} billing records found.</td></tr>
+              <tr><td colSpan="6" style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>No records found.</td></tr>
             )}
           </tbody>
         </table>
@@ -225,8 +303,16 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
         {showModal && (
           <InvoiceModal 
             hosp_id={hosp_id} 
-            onClose={() => setShowModal(false)} 
-            onSuccess={() => { setShowModal(false); refresh(); }} 
+            apptId={selectedApptId}
+            onClose={() => { setShowModal(false); setSelectedApptId(null); }} 
+            onSuccess={() => { setShowModal(false); setSelectedApptId(null); refresh(); }} 
+          />
+        )}
+
+{showPrescription && (
+          <PrescriptionDetailModal 
+            invoice={selectedInvoice} 
+            onClose={() => { setShowPrescription(false); setSelectedInvoice(null); }} 
           />
         )}
       </AnimatePresence>
@@ -234,95 +320,281 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
   );
 };
 
-/* --- Internal Components --- */
-
 const StatCard = ({ icon, label, value, trend, isActive }) => (
     <div style={{ 
-      background: 'white', 
-      padding: '24px', 
-      borderRadius: '20px', 
+      background: 'white', padding: '24px', borderRadius: '20px', 
       border: isActive ? `2px solid #10b981` : `1px solid #e2e8f0`, 
       boxShadow: isActive ? '0 10px 15px -3px rgba(16, 185, 129, 0.1)' : '0 1px 3px rgba(0,0,0,0.02)',
-      transition: 'all 0.2s ease-in-out',
-      transform: isActive ? 'scale(1.02)' : 'scale(1)'
+      transform: isActive ? 'scale(1.02)' : 'scale(1)', transition: 'all 0.2s'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div style={{ padding: '10px', background: '#f8fafc', borderRadius: '12px' }}>{icon}</div>
-        <span style={{ 
-          fontSize: '11px', 
-          fontWeight: '700', 
-          color: isActive ? 'white' : '#10b981', 
-          background: isActive ? '#10b981' : '#f0fdf4', 
-          padding: '4px 8px', 
-          borderRadius: '6px' 
-        }}>
-          {isActive ? 'Filtered' : trend}
-        </span>
+        <span style={{ fontSize: '11px', fontWeight: '700', color: isActive ? 'white' : '#10b981', background: isActive ? '#10b981' : '#f0fdf4', padding: '4px 8px', borderRadius: '6px' }}>{trend}</span>
       </div>
       <p style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', margin: 0 }}>{label}</p>
       <h4 style={{ fontSize: '24px', fontWeight: '800', color: '#1e293b', margin: '4px 0 0' }}>{value}</h4>
     </div>
 );
 
-const InvoiceModal = ({ hosp_id, onClose, onSuccess }) => {
-    const [patientId, setPatientId] = useState('');
-    const [items, setItems] = useState([
-        { service_name: 'Consultation Fee', quantity: 1, unit_price: 500 }
-    ]);
+const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId }) => {
+  const [patientId, setPatientId] = useState('');
+  const [patientName, setPatientName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState([]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
+  useEffect(() => {
+      if (apptId) {
+          setLoading(true);
+          fetch(`http://localhost:8000/api/v1/receptionist/billing/prepare/${apptId}?hosp_id=${hosp_id}`)
+              .then(res => res.json())
+              .then(data => {
+                  setPatientId(data.patient_id); 
+                  setPatientName(data.patient_name);
+                  setItems(data.items); 
+              })
+              .finally(() => setLoading(false));
+      } else {
+          setPatientId('');
+          setPatientName('');
+          setItems([{ service_name: 'Consultation Fee', unit_price: 500, type: 'Consultation', quantity: 1 }]);
+      }
+  }, [apptId, hosp_id]);
+
+  const calculateTotal = () => items.reduce((acc, item) => acc + (item.unit_price * (item.quantity || 1)), 0);
+
+  const handleSubmit = async (e) => {
+      e.preventDefault();
+      try {
           const res = await fetch(`http://localhost:8000/api/v1/receptionist/invoices/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                patient_id: parseInt(patientId), 
-                hospital_id: parseInt(hosp_id), 
-                items, 
-                discount: 0, 
-                tax_rate: 0.05 
-            })
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  patient_id: parseInt(patientId), 
+                  hospital_id: parseInt(hosp_id),
+                  appointment_id: apptId ? parseInt(apptId) : null, // CRITICAL: Links to backend cleanup logic
+                  items: items.map(item => ({
+                    ...item,
+                    quantity: item.quantity || 1 // Ensures backend doesn't receive null quantities
+                  })), 
+                  discount: 0, 
+                  tax_rate: 0.05 
+              })
           });
           if (res.ok) onSuccess();
-        } catch (err) { console.error("Billing failed:", err); }
-    };
+      } catch (err) { console.error("Billing failed:", err); }
+  };
 
-    return (
-        <div style={modalOverlay}>
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={modalContent}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-                    <h3 style={{ margin: 0, fontWeight: '800', fontSize: '20px' }}>Generate New Invoice</h3>
-                    <X cursor="pointer" onClick={onClose} />
-                </div>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div>
-                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '8px', display: 'block' }}>PATIENT ID</label>
-                        <input placeholder="Enter ID (e.g. 1)" required style={inputStyle} value={patientId} onChange={(e) => setPatientId(e.target.value)} />
-                    </div>
-                    
-                    <div>
-                        <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '8px', display: 'block' }}>BILLING ITEMS</label>
-                        {items.map((item, idx) => (
-                            <div key={idx} style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                                <input placeholder="Service" style={{ ...inputStyle, flex: 2 }} value={item.service_name} onChange={(e) => {
-                                    const newItems = [...items]; newItems[idx].service_name = e.target.value; setItems(newItems);
-                                }} />
-                                <input type="number" placeholder="Price" style={{ ...inputStyle, flex: 1 }} value={item.unit_price} onChange={(e) => {
-                                    const newItems = [...items]; newItems[idx].unit_price = parseFloat(e.target.value); setItems(newItems);
-                                }} />
-                            </div>
-                        ))}
-                    </div>
-                    
-                    <button type="submit" style={{ ...generateBtnStyle, marginTop: '10px', width: '100%' }}>Create & Post Invoice</button>
-                </form>
-            </motion.div>
-        </div>
-    );
+  return (
+      <div style={modalOverlay}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={modalContent}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontWeight: '800', color: '#1e293b' }}>
+                      {loading ? 'Fetching Details...' : 'Finalize Invoice'}
+                  </h3>
+                  <div onClick={onClose} style={{ cursor: 'pointer', padding: '4px', borderRadius: '50%', background: '#f1f5f9' }}>
+                      <X size={20} color="#64748b" />
+                  </div>
+              </div>
+              
+              {loading ? (
+                  <div style={{ textAlign: 'center', padding: '60px' }}>
+                      <Loader2 className="animate-spin" color="#059669" size={32} />
+                      <p style={{ marginTop: '12px', color: '#64748b', fontSize: '14px' }}>Loading record...</p>
+                  </div>
+              ) : (
+                  <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                          <label style={labelStyle}>PATIENT DETAILS</label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '16px' }}>{patientName || "Manual Entry"}</span>
+                              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>ID: #{patientId}</span>
+                          </div>
+                      </div>
+                      
+                      <div>
+                          <label style={labelStyle}>BILLING SUMMARY</label>
+                          <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {items.map((item, idx) => (
+                                  <div key={idx} style={itemRowStyle}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <span style={{ fontSize: '14px', fontWeight: '700', color: '#334155' }}>{item.service_name}</span>
+                                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <span style={getTypeBadgeStyle(item.type)}>{item.type || 'General'}</span>
+                                            {item.quantity > 1 && <span style={{ fontSize: '10px', color: '#94a3b8' }}>x{item.quantity}</span>}
+                                          </div>
+                                      </div>
+                                      <span style={{ fontWeight: '800', color: '#1e293b' }}>₹{item.unit_price * (item.quantity || 1)}</span>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+
+                      <div style={{ marginTop: '10px', borderTop: '2px dashed #e2e8f0', paddingTop: '20px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px', color: '#64748b' }}>
+                              <span>Subtotal</span>
+                              <span>₹{calculateTotal()}</span>
+                          </div>
+                          <div style={{ padding: '16px', background: '#ecfdf5', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: '800', color: '#065f46' }}>TOTAL PAYABLE</span>
+                              <span style={{ fontSize: '22px', fontWeight: '900', color: '#065f46' }}>₹{calculateTotal()}</span>
+                          </div>
+                      </div>
+                      
+                      <button type="submit" style={generateBtnStyle}>
+                          <CreditCard size={18} style={{ marginRight: '8px' }} /> Confirm & Generate Invoice
+                      </button>
+                  </form>
+              )}
+          </motion.div>
+      </div>
+  );
+};
+/* --- Styles --- */
+const itemRowStyle = {
+  display: 'flex', 
+  justifyContent: 'space-between', 
+  alignItems: 'center', 
+  padding: '12px', 
+  background: '#ffffff', 
+  border: '1px solid #f1f5f9', 
+  borderRadius: '12px'
 };
 
-/* --- Styles --- */
+const getTypeBadgeStyle = (type) => {
+  let colors = { bg: '#f1f5f9', text: '#64748b' }; 
+  
+  // Update to catch 'Pathology' or 'Radiology' as seen in your DB screenshot
+  if (type === 'Laboratory' || type === 'Pathology' || type === 'Radiology') {
+      colors = { bg: '#fef3c7', text: '#92400e' };
+  }
+  if (type === 'Pharmacy') colors = { bg: '#dcfce7', text: '#166534' };
+  if (type === 'Consultation') colors = { bg: '#e0f2fe', text: '#075985' };
+
+  return {
+      fontSize: '10px',
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      padding: '2px 8px',
+      borderRadius: '6px',
+      background: colors.bg,
+      color: colors.text,
+      width: 'fit-content'
+  };
+};
+
+const PrescriptionDetailModal = ({ invoice, onClose }) => {
+  const [rxData, setRxData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // FETCH LIVE CLINICAL DATA
+  useEffect(() => {
+    if (invoice?.appointment_id) {
+      setLoading(true);
+      // Replace with your actual endpoint that returns vitals/diagnosis/meds
+      fetch(`http://localhost:8000/api/v1/receptionist/prescriptions/${invoice.appointment_id}`)
+        .then(res => res.json())
+        .then(data => {
+          setRxData(data);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error("Clinical fetch failed:", err);
+          setLoading(false);
+        });
+    }
+  }, [invoice]);
+
+  if (!invoice) return null;
+
+  // Table Cell Helper Styles
+  const cellStyle = { padding: '10px 15px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#1e293b' };
+  const headerLabelStyle = { ...cellStyle, background: '#f8fafc', fontWeight: '700', color: '#64748b', width: '130px' };
+
+  return (
+    <div style={modalOverlay}>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        style={{ ...modalContent, maxWidth: '800px', padding: '40px', background: '#fff' }}
+      >
+        {/* Header Branding */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '3px solid #059669', paddingBottom: '16px', marginBottom: '24px' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '900' }}>Nex<span style={{ color: '#059669' }}>Health</span></h1>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: '700' }}>MULTISPECIALITY HOSPITAL</p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+             <h2 style={{ margin: 0, fontSize: '20px', color: '#1e293b' }}>PRESCRIPTION</h2>
+             <X onClick={onClose} style={{ cursor: 'pointer', marginTop: '5px' }} />
+          </div>
+        </div>
+
+        {/* Patient & Vitals Grid (LIVE DATA) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #cbd5e1', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid #cbd5e1' }}>
+            <div style={headerLabelStyle}>Patient</div>
+            <div style={cellStyle}>{invoice.patient_name}</div>
+          </div>
+          <div style={{ display: 'flex', borderBottom: '1px solid #cbd5e1', borderLeft: '1px solid #cbd5e1' }}>
+            <div style={headerLabelStyle}>Date</div>
+            <div style={cellStyle}>{new Date(invoice.created_at).toLocaleDateString()}</div>
+          </div>
+          <div style={{ display: 'flex' }}>
+            <div style={headerLabelStyle}>Vitals</div>
+            <div style={cellStyle}>
+              {loading ? '...' : `BP: ${rxData?.vitals?.bp || '--'} | Pulse: ${rxData?.vitals?.pulse || '--'}`}
+            </div>
+          </div>
+          <div style={{ display: 'flex', borderLeft: '1px solid #cbd5e1' }}>
+            <div style={headerLabelStyle}>Diagnosis</div>
+            <div style={cellStyle}>{loading ? 'Loading...' : (rxData?.diagnosis || 'General Checkup')}</div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: '40px', fontWeight: '900', color: '#e2e8f0', marginBottom: '10px', fontFamily: 'serif' }}>Rx</div>
+
+        {/* Medications Table (LIVE DATA) */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+          <thead>
+            <tr style={{ background: '#f1f5f9' }}>
+              <th style={cellStyle}>#</th>
+              <th style={cellStyle}>Medication Name</th>
+              <th style={cellStyle}>Dosage</th>
+              <th style={cellStyle}>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && rxData?.medications?.map((med, idx) => (
+              <tr key={idx}>
+                <td style={{ ...cellStyle, textAlign: 'center' }}>{idx + 1}</td>
+                <td style={{ ...cellStyle, fontWeight: '700' }}>{med.name}</td>
+                <td style={cellStyle}>{med.dosage}</td>
+                <td style={cellStyle}>{med.duration}</td>
+              </tr>
+            ))}
+            {/* Professional padding lines */}
+            {[...Array(3)].map((_, i) => <tr key={i}><td colSpan="4" style={{ ...cellStyle, height: '35px' }}></td></tr>)}
+          </tbody>
+        </table>
+
+        {/* Footer Signature */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '40px' }}>
+          <div style={{ width: '60%', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b' }}>DOCTOR'S ADVICE</span>
+            <p style={{ margin: '5px 0 0', fontSize: '13px' }}>{rxData?.advice || "Take rest and drink plenty of water."}</p>
+          </div>
+          <div style={{ textAlign: 'center', width: '200px' }}>
+            <div style={{ borderBottom: '2px solid #1e293b', paddingBottom: '5px', marginBottom: '5px' }}>
+               <span style={{ fontFamily: 'cursive', fontSize: '16px' }}>Dr. Manish Gupta</span>
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>Authorized Signature</span>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+const labelStyle = { fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '6px', display: 'block' };
 const thStyle = { padding: '16px', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' };
 const tdStyle = { padding: '16px', fontSize: '14px', color: '#475569' };
 const tableCardStyle = { background: 'white', padding: '24px', borderRadius: '24px', border: `1px solid #e2e8f0`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
@@ -331,10 +603,10 @@ const statusBadgeGreen = { fontSize: '11px', fontWeight: '700', padding: '4px 10
 const payBtnStyle = { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' };
 const searchWrapperStyle = { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'white', padding: '0 16px', borderRadius: '12px', border: '1px solid #e2e8f0' };
 const searchInputStyle = { width: '100%', padding: '12px 0', border: 'none', outline: 'none', fontSize: '14px' };
-const generateBtnStyle = { padding: '12px 24px', background: '#059669', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' };
-const backBtnStyle = { border: 'none', background: 'none', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', width: 'fit-content' };
-const modalOverlay = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
-const modalContent = { background: 'white', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '450px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' };
-const inputStyle = { padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', width: '100%', background: '#f8fafc' };
+const generateBtnStyle = { padding: '14px', background: '#059669', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' };
+const backBtnStyle = { border: 'none', background: 'none', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' };
+const modalOverlay = { position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
+const modalContent = { background: 'white', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '450px' };
+const inputStyle = { padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none' };
 
 export default Billing;

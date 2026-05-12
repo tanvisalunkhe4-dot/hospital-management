@@ -1,22 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Save, Thermometer, Heart, Activity, Plus, Trash2, Droplets } from 'lucide-react';
+import { Mic, MicOff, Save, Thermometer, Heart, Activity, Plus, Trash2, Droplets, FileText } from 'lucide-react';
 import axios from 'axios'; 
 
 
-const ConsultationWorkspace = ({ patient, onComplete, onRequestTest }) => {
-  const pId = patient?.patient_id || patient?.id;
-  const apptId =
-  patient?.appointment_id ||
-  patient?.appt_id ||
-  patient?.id;
+const ConsultationWorkspace = ({ 
+  patient, 
+  onComplete, 
+  onRequestTest, 
+  prescribedTests = [],
+  // ADD THESE PROPS FROM DASHBOARD
+  prescription, 
+  setPrescription, 
+  clinicalSummary, 
+  setClinicalSummary,
+  rawTranscript,
+  setRawTranscript 
+}) => {
+    const pId = patient?.patient_id || patient?.id;
+  
+  const apptId = patient?.appointment_id || patient?.appt_id || patient?.id;
   const [isListening, setIsListening] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
-// Change these at the top of your component
-const [rawTranscript, setRawTranscript] = useState(""); 
-const [clinicalSummary, setClinicalSummary] = useState("");
-  const [prescription, setPrescription] = useState([]);
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
   const recorderRef = useRef(null);
@@ -234,8 +240,12 @@ console.log("APPOINTMENT ID:", apptId);
         `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`,
         {
           hospital_id: parseInt(hospitalId),
+          appointment_id: apptId,
+          patient_id: pId,
           summary: clinicalSummary,
-          prescriptions: prescription
+          prescriptions: prescription,
+          lab_tests: prescribedTests,
+          status: "Pending-Pharmacy" // <--- ADD THIS LINE
         },
         {
           headers: {
@@ -371,61 +381,23 @@ console.log("APPOINTMENT ID:", apptId);
 
       {/* COLUMN 3: PRESCRIPTION PAD */}
 <div style={styles.card}>
-  <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Digital Prescription</h3>
-  <button 
-          onClick={onRequestTest}
-          style={{
-            width: '100%',
-            padding: '12px',
-            borderRadius: '12px',
-            border: '2px dashed #3b82f6',
-            backgroundColor: '#eff6ff',
-            color: '#2563eb',
-            fontWeight: '700',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            cursor: 'pointer',
-            marginBottom: '20px',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dbeafe'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-        >
-          <Plus size={18} /> Request Lab Test
-        </button>
+  <h3 style={{ marginBottom: '20px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <FileText size={20} color="#2563eb" /> Digital Prescription
+  </h3>
+
+  {/* SECTION 1: MEDICINE ENTRY */}
   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', position: 'relative' }}>
-    
-    {/* SEARCHABLE MEDICINE INPUT */}
     <div style={{ position: 'relative' }}>
       <input 
-        style={{ ...styles.input, width: '100%' }} 
+        style={{ ...styles.input, width: '100%', border: '1px solid #e2e8f0' }} 
         placeholder="Search Medicine (e.g. Calpol)" 
         value={newMed.name} 
         onChange={(e) => {
           const val = e.target.value;
           setNewMed({...newMed, name: val});
-          
-          // DEBOUNCE LOGIC: Wait 300ms after typing stops before searching
           if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-          
           if (val.length > 1) {
-            searchTimeoutRef.current = setTimeout(async () => {
-              setIsLoadingSearch(true);
-              try {
-                const token = sessionStorage.getItem('token');
-                const res = await axios.get(`http://localhost:8000/api/v1/doctor/search-medicines?q=${val}`, {
-                  headers: { 'Authorization': `Bearer ${token}` }
-                });
-                setSuggestions(res.data);
-                setShowSuggestions(true);
-              } catch (err) {
-                console.error("Search failed", err);
-              } finally {
-                setIsLoadingSearch(false);
-              }
-            }, 300);
+            searchTimeoutRef.current = setTimeout(() => searchMedicines(val), 300);
           } else {
             setSuggestions([]);
             setShowSuggestions(false);
@@ -435,19 +407,13 @@ console.log("APPOINTMENT ID:", apptId);
 
       {/* SUGGESTION DROPDOWN */}
       {showSuggestions && suggestions.length > 0 && (
-  <div style={{
-    position: 'absolute', 
-    top: '100%', 
-    left: 0, 
-    right: 0,
-    backgroundColor: 'white', 
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px', 
-    zIndex: 9999, // INCREASE THIS to 9999
-    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-    maxHeight: '250px', 
-    overflowY: 'auto'
-  }}>
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          backgroundColor: 'white', border: '1px solid #e2e8f0',
+          borderRadius: '8px', zIndex: 9999,
+          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+          maxHeight: '250px', overflowY: 'auto'
+        }}>
           {suggestions.map((item, idx) => (
             <div 
               key={idx}
@@ -456,82 +422,120 @@ console.log("APPOINTMENT ID:", apptId);
                   name: item.name,
                   dosage: item.strength || '', 
                   frequency: '1-0-1',
-                  manufacturer: item.manufacturer // Helpful for the final record
+                  salt_composition: item.salt_composition
                 });
                 setShowSuggestions(false);
               }}
-              style={{
-                padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9',
-                fontSize: '13px', transition: 'background 0.2s'
-              }}
+              style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
             >
               <div style={{ fontWeight: '700', color: '#1e293b' }}>{item.name}</div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>
-                {item.salt_composition} • <span style={{ color: '#10b981' }}>{item.manufacturer}</span>
-              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>{item.salt_composition}</div>
             </div>
           ))}
         </div>
       )}
     </div>
-    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-  <select 
-    style={{ ...styles.input, flex: 1 }}
-    value={newMed.frequency}
-    onChange={(e) => setNewMed({...newMed, frequency: e.target.value})}
-  >
-    <option value="1-0-1">1-0-1 (Twice Daily)</option>
-    <option value="1-1-1">1-1-1 (Thrice Daily)</option>
-    <option value="1-0-0">1-0-0 (Morning Only)</option>
-    <option value="0-0-1">0-0-1 (Night Only)</option>
-    <option value="SOS">SOS (As Needed)</option>
-  </select>
-  
-  <button 
-    onClick={addMedicine} 
-    style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer' }}
-  >
-    <Plus size={20} />
-  </button>
-</div>
+
+    <div style={{ display: 'flex', gap: '8px' }}>
+      <select 
+        style={{ ...styles.input, flex: 1 }}
+        value={newMed.frequency}
+        onChange={(e) => setNewMed({...newMed, frequency: e.target.value})}
+      >
+        <option value="1-0-1">1-0-1 (Twice Daily)</option>
+        <option value="1-1-1">1-1-1 (Thrice Daily)</option>
+        <option value="1-0-0">1-0-0 (Morning Only)</option>
+        <option value="0-0-1">0-0-1 (Night Only)</option>
+        <option value="SOS">SOS (As Needed)</option>
+      </select>
+      
+      <button 
+        onClick={addMedicine} 
+        style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer' }}
+      >
+        <Plus size={20} />
+      </button>
+    </div>
   </div>
 
-  {/* REST OF YOUR PRESCRIPTION LIST CODE ... */}
-
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-            {prescription.length === 0 ? (
-              <div style={{ padding: '20px', border: '2px dashed #f1f5f9', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                  No medications listed.
-              </div>
-            ) : (
-              prescription.map((med) => (
-                <div key={med.id} style={styles.medItem}>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>{med.name}</p>
-                    <p style={{ margin: 0, fontSize: '11px', color: '#10b981', fontStyle: 'italic' }}>{med.salt_composition}</p>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>{med.dosage} • {med.frequency}</p>
-                  </div>
-                  <button onClick={() => removeMed(med.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
-            )}
+  {/* SECTION 2: MEDICINE LIST */}
+  <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>
+    <h4 style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', marginBottom: '10px', fontWeight: '800' }}>Medications</h4>
+    {prescription.length === 0 ? (
+      <div style={{ padding: '15px', border: '1px dashed #e2e8f0', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+          No medicines added
+      </div>
+    ) : (
+      prescription.map((med) => (
+        <div key={med.id} style={styles.medItem}>
+          <div>
+            <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>{med.name}</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>{med.dosage} • {med.frequency}</p>
+          </div>
+          <button onClick={() => removeMed(med.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
+            <Trash2 size={16} />
+          </button>
         </div>
+      ))
+    )}
+  </div>
 
-        
+  {/* SECTION 3: LAB INVESTIGATIONS (NEW PROFESSIONAL LOOK) */}
+  <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '15px', marginBottom: '15px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+      <h4 style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', margin: 0, fontWeight: '800' }}>Lab Investigations</h4>
+      <button 
+        onClick={onRequestTest}
+        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+      >
+        <Plus size={14} /> Add Test
+      </button>
+    </div>
 
-{/* Add this at the bottom of COLUMN 3 (Prescription Pad) */}
+    {prescribedTests.length > 0 ? (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {prescribedTests.map((test, idx) => (
+          <div key={idx} style={{ 
+            display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', 
+            backgroundColor: '#f0f9ff', borderRadius: '10px', border: '1px solid #e0f2fe' 
+          }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#3b82f6' }}></div>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#0369a1' }}>{test}</span>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div 
+        onClick={onRequestTest}
+        style={{ padding: '15px', border: '1px dashed #e2e8f0', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
+      >
+        No tests requested. Click to add.
+      </div>
+    )}
+  </div>
+
+  {/* SECTION 4: FINALIZE */}
+  {/* SECTION 4: FINALIZE */}
 <button 
-  style={{ ...styles.actionBtn(false), width: '100%', marginTop: '20px', justifyContent: 'center', backgroundColor: isProcessing ? '#94a3b8' : '#2563eb' }} 
+  style={{ 
+    ...styles.actionBtn(false), 
+    width: '100%', 
+    justifyContent: 'center', 
+    backgroundColor: isProcessing ? '#94a3b8' : '#2563eb',
+    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' 
+  }} 
   onClick={handleFinalize}
   disabled={isProcessing}
 >
-  {isProcessing ? "Saving Record..." : <><Save size={18} /> Complete & Call Next Patient</>}
+  {isProcessing ? "Sending to Pharmacy..." : (
+    <>
+      <Save size={18} /> Send to Pharmacy & Billing
+    </>
+  )}
 </button>
-      </div>
+</div>
 
       <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }`}</style>
     </div>

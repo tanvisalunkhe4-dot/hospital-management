@@ -68,17 +68,20 @@ const Login = ({ onSignupRedirect, onForgotPassword }) => {
         navigate('/nurse-dashboard/overview');
       } else if (normalizedRole === 'Receptionist') {
         navigate('/reception-desk');
-      } else if (
+      } else if (user.staff_id && user.staff_id.startsWith('PHR')) {
+        navigate('/pharmacist'); // Matches your App.js exactly
+      }
+      // 4. Fallback for other staff roles
+      else if (
         normalizedRole === 'Staff' ||
         normalizedRole === 'LabTechnician' ||
-        normalizedRole === 'Lab Technician' ||
+        normalizedRole === 'Lab Technician'||
         normalizedRole === 'Pharmacist'
       ) {
         navigate('/doctor-portal');
       } else {
         navigate('/patient-dashboard/overview');
       }
-
     } catch (error) {
       const errorMsg =
         error.response?.data?.detail ||

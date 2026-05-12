@@ -153,6 +153,16 @@ const NurseDashboardWrapper = () => {
 
 const PharmacistDashboardWrapper = () => {
   const navigate = useNavigate();
+  const userData = JSON.parse(sessionStorage.getItem('user_data'));
+  
+  // Allow if role is Pharmacist OR if role is Staff with a PHR ID
+  const isAuthorized = userData?.role === 'Pharmacist' || 
+                       (userData?.role === 'Staff' && userData?.staff_id?.startsWith('PHR'));
+
+  if (!isAuthorized) {
+    return <Navigate to="/login" replace />;
+  }
+
   return <PharmacistDashboard onLogout={() => navigate('/login')} />;
 };
 

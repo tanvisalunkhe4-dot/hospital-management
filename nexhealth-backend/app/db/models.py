@@ -162,6 +162,7 @@ class MedicalRecord(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     diagnosis = Column(Text, nullable=True)
     clinical_notes = Column(Text, nullable=True)
+    treatment_plan = Column(Text, nullable=True)
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     appointment_id = Column(Integer, ForeignKey("appointments.id"))
     record_type = Column(String) # e.g., "Prescription", "Lab Report"
@@ -440,6 +441,8 @@ class Prescription(Base):
     hospital_id = Column(Integer, ForeignKey("hospitals.id")) # Important for multi-tenant
     
     medicine_name = Column(String, nullable=False)
+    price = Column(Float, default=0.0) 
+    is_available = Column(Boolean, default=True)
     dosage = Column(String, nullable=True)     
     frequency = Column(String, nullable=True)  
     duration = Column(String, nullable=True)   
@@ -461,7 +464,7 @@ class MedicineCatalog(Base):
     price = Column(Float, default=0.0)
     category = Column(String, nullable=True)
     is_available = Column(Boolean, default=True)
-    
+
 class PrescriptionTemplate(Base):
     __tablename__ = "prescription_templates"
     id = Column(Integer, primary_key=True, index=True)
@@ -475,4 +478,46 @@ class PrescriptionTemplate(Base):
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+
     doctor = relationship("Doctor")
+
+
+class LabRequest(Base):
+    __tablename__ = "lab_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
+    doctor_id = Column(Integer, ForeignKey("staff.id")) # The doctor who requested it
+    
+    # Test Details
+    test_name = Column(String, nullable=False) # e.g., "Complete Blood Count"
+    price_at_request = Column(Float, default=0.0)
+    category = Column(String, nullable=True)  # e.g., "Hematology"
+    priority = Column(String, default="Normal") # e.g., "Urgent", "Stat"
+    
+    # Status Management for Lab Dashboard
+    status = Column(String, default="Pending") # Pending, In-Progress, Completed, Cancelled
+    
+    # Results linkage
+    result_summary = Column(Text, nullable=True)
+    result_file_url = Column(String, nullable=True) # Link to the PDF report
+    
+    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    patient = relationship("Patient")
+    hospital = relationship("Hospital")
+    doctor = relationship("Staff")
+
+class LabTestCatalog(Base):
+    __tablename__ = "lab_test_catalog"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    test_name = Column(String, unique=True, index=True)
+    category = Column(String) # Radiology, Pathology, etc.
+    base_price = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)
+    description = Column(Text, nullable=True)

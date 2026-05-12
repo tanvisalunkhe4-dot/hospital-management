@@ -24,8 +24,8 @@ export const UserProvider = ({ children }) => {
     const token = sessionStorage.getItem('token'); // Use sessionStorage as per your logs
     if (!token || !userRole) return; // Don't fetch if role isn't identified yet
    
-    const isStaff = userRole === 'admin' || userRole === 'doctor' || userRole === 'nurse';
-    
+    const staffRoles = ['admin', 'doctor', 'nurse', 'staff', 'pharmacist', 'receptionist', 'superadmin'];
+    const isStaff = staffRoles.includes(role);
     // ✅ FIX: Use 127.0.0.1 to avoid the "Connection Refused" issues seen in your terminal
     const endpoint = isStaff 
       ? 'http://127.0.0.1:8000/api/v1/staff/profile' 

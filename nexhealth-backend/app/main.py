@@ -39,6 +39,7 @@ from app.router.superadmin import router as superadmin_router
 from app.router.patient import patient_router
 from app.router import security
 from app.router import nurse
+from app.router import pharmacy
 # Initialize Database tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -61,6 +62,8 @@ app.include_router(superadmin_router)
 app.include_router(receptionist_router.router)
 app.include_router(doctor_router.router)
 app.include_router(nurse.router)
+
+app.include_router(pharmacy.router)
 # Patient Portal with specific prefix
 app.include_router(
     patient_router, 
