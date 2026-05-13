@@ -139,9 +139,17 @@ const handleBooking = async (e) => {
   e.preventDefault();
   try {
     const token = sessionStorage.getItem('token');
+    
+    // 1. Get the raw name from your state or existing appointment
+    const selectedDoc = doctors.find(d => d.staff_id == formData.doctor_id);
+    const rawName = selectedDoc?.full_name || selectedAppt?.doctor_name;
+
+    // 2. Ensure the name has the "Dr." prefix before sending to the backend
+    const formattedDoctorName = rawName?.startsWith('Dr.') ? rawName : `Dr. ${rawName}`;
+
     const payload = {
       hospital_id: 1,
-      doctor_name: doctors.find(d => d.staff_id == formData.doctor_id)?.full_name || selectedAppt?.doctor_name,
+      doctor_name: formattedDoctorName, // Updated to send the formatted name
       appointment_date: formData.preferred_date,
       appointment_time: formData.preferred_time,
       reason: formData.reason
@@ -260,7 +268,10 @@ const filteredAppointments = appointments.filter((appt) => {
                     <div style={doctorInfo}>
                       <div style={doctorAvatar}>{appt.doctor_name?.[0] || 'D'}</div>
                       <div>
-                        <h4 style={docName}>Dr. {appt.doctor_name}</h4>
+                        {/* Change this line inside the List View mapping */}
+<h4 style={docName}>
+  {appt.doctor_name?.startsWith('Dr.') ? appt.doctor_name : `Dr. ${appt.doctor_name}`}
+</h4>
                         <p style={reasonLabel}><MessageSquare size={12} /> {appt.reason}</p>
                       </div>
                     </div>
@@ -367,11 +378,12 @@ const filteredAppointments = appointments.filter((appt) => {
           disabled={isRescheduling} // 🟢 Prevent changing doctor during reschedule to maintain consistency
         >
           <option value="">Choose a Doctor</option>
-          {doctors.map(d => (
-            <option key={d.staff_id} value={d.staff_id}>
-              {d.full_name} ({d.specialization})
-            </option>
-          ))}
+{doctors.map(d => (
+  <option key={d.staff_id} value={d.staff_id}>
+    {/* This adds 'Dr.' only if it's not already there */}
+    {d.full_name?.startsWith('Dr.') ? d.full_name : `Dr. ${d.full_name}`} ({d.specialization})
+  </option>
+))}
         </select>
       </div>
 
@@ -463,19 +475,24 @@ const filteredAppointments = appointments.filter((appt) => {
 
     {/* Main Info Section */}
     <div style={detailBox}>
-      <div style={detailRow}>
-        <span style={label}>Practitioner</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-          <div style={{ ...doctorAvatar, backgroundColor: '#10b981', color: '#fff' }}>
-             {/* Fixed initial display */}
-            {selectedAppt.doctor_name ? selectedAppt.doctor_name[0].toUpperCase() : 'D'}
-          </div>
-          <div>
-            <p style={{ ...detailText, fontSize: '18px' }}>Dr. {selectedAppt.doctor_name}</p>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Primary Care Specialist</p>
-          </div>
-        </div>
-      </div>
+    <div style={detailRow}>
+  <span style={label}>Practitioner</span>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+    <div style={{ ...doctorAvatar, backgroundColor: '#10b981', color: '#fff' }}>
+      {/* Keeping the avatar as the actual name initial (e.g., 'P' for Patil) */}
+      {selectedAppt.doctor_name ? selectedAppt.doctor_name[0].toUpperCase() : 'D'}
+    </div>
+    <div>
+      {/* logic to prevent "Dr. Dr." double prefix */}
+      <p style={{ ...detailText, fontSize: '18px' }}>
+        {selectedAppt.doctor_name?.startsWith('Dr.') 
+          ? selectedAppt.doctor_name 
+          : `Dr. ${selectedAppt.doctor_name}`}
+      </p>
+      <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Primary Care Specialist</p>
+    </div>
+  </div>
+</div>
       
       <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '8px 0' }} />
 
