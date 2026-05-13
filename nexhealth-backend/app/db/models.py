@@ -113,6 +113,11 @@ class Patient(Base):
     medical_records = relationship("MedicalRecord", back_populates="patient")
     invoices = relationship("Invoice", back_populates="patient")
 
+
+    @property
+    def full_name(self):
+        """Dynamically combines first and last name for the UI"""
+        return f"{self.first_name} {self.last_name}"
 class Vitals(Base):
     __tablename__ = "vitals"
     
@@ -128,7 +133,7 @@ class Vitals(Base):
     weight = Column(Float, nullable=True)           # Current weight
     
     # --- Metadata ---
-    recorded_at = Column(DateTime, default=lambda: datetime.now(IST))
+    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     remarks = Column(Text, nullable=True) # e.g., "Patient was resting"
     
     # Relationships
@@ -433,6 +438,7 @@ class InvoiceItem(Base):
     invoice = relationship("Invoice", back_populates="items")
 
 
+
 class Prescription(Base):
     __tablename__ = "prescriptions"
     
@@ -463,7 +469,10 @@ class MedicineCatalog(Base):
     manufacturer = Column(String, nullable=True)
     price = Column(Float, default=0.0)
     category = Column(String, nullable=True)
-    is_available = Column(Boolean, default=True)
+    is_available =  Column(Boolean, default =True)
+
+
+
 
 class PrescriptionTemplate(Base):
     __tablename__ = "prescription_templates"
@@ -478,9 +487,7 @@ class PrescriptionTemplate(Base):
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-
     doctor = relationship("Doctor")
-
 
 class LabRequest(Base):
     __tablename__ = "lab_requests"
@@ -492,6 +499,7 @@ class LabRequest(Base):
     doctor_id = Column(Integer, ForeignKey("staff.id")) # The doctor who requested it
     
     # Test Details
+
     test_name = Column(String, nullable=False) # e.g., "Complete Blood Count"
     price_at_request = Column(Float, default=0.0)
     category = Column(String, nullable=True)  # e.g., "Hematology"

@@ -40,6 +40,7 @@ from app.router.patient import patient_router
 from app.router import security
 from app.router import nurse
 from app.router import pharmacy
+from app.router import Lab
 # Initialize Database tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -64,6 +65,7 @@ app.include_router(doctor_router.router)
 app.include_router(nurse.router)
 
 app.include_router(pharmacy.router)
+app.include_router(Lab.router)
 # Patient Portal with specific prefix
 app.include_router(
     patient_router, 

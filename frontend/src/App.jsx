@@ -87,8 +87,8 @@ function App() {
           </Route>
 
           {/* Lab Portal with Nested Routing */}
-          <Route path="/lab" element={<LabDashboardWrapper />}>
-  <Route index element={<TestProcessing />} /> {/* Changed from LabOverview */}
+          <Route path="/lab-dashboard" element={<LabDashboardWrapper />}>
+  <Route index element={<TestProcessing />} /> 
   <Route path="requests" element={<TestRequests />} />
   <Route path="samples" element={<SampleCollection />} />
   <Route path="reports" element={<ReportManager />} />
@@ -168,9 +168,23 @@ const PharmacistDashboardWrapper = () => {
 
 const LabDashboardWrapper = () => {
   const navigate = useNavigate();
+  const userData = JSON.parse(sessionStorage.getItem('user_data'));
+  
+  // Normalize the role to handle spaces or different naming conventions
+  const normalizedRole = userData?.role?.replace(" ", "");
+
+  // Check if authorized (Role is Lab, LabTechnician, or Staff with a LAB ID)
+  const isAuthorized = 
+    normalizedRole === 'Lab' || 
+    normalizedRole === 'LabTechnician' || 
+    (userData?.role === 'Staff' && userData?.staff_id?.startsWith('LAB'));
+
+  if (!isAuthorized) {
+    return <Navigate to="/login" replace />;
+  }
+
   return <LabDashboard onLogout={() => navigate('/login')} />;
 };
-
 const AboutPageWrapper = () => {
   const n = useNavigate();
   return <AboutPage onBack={() => n('/')} />;

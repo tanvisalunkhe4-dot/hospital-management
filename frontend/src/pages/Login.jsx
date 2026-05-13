@@ -72,14 +72,18 @@ const Login = ({ onSignupRedirect, onForgotPassword }) => {
         navigate('/pharmacist'); // Matches your App.js exactly
       }
       // 4. Fallback for other staff roles
-      else if (
-        normalizedRole === 'Staff' ||
-        normalizedRole === 'LabTechnician' ||
-        normalizedRole === 'Lab Technician'||
-        normalizedRole === 'Pharmacist'
-      ) {
-        navigate('/doctor-portal');
-      } else {
+      else if (normalizedRole === 'LabTechnician' || normalizedRole === 'Lab') {
+        // Point this to your actual Lab Dashboard route
+        navigate('/lab-dashboard'); 
+      } 
+      else if (normalizedRole === 'Pharmacist') {
+        navigate('/pharmacist');
+      }
+      else if (normalizedRole === 'Staff') {
+        navigate('/staff-overview'); // Or wherever generic staff goes
+      } 
+      /* --------------------------- */
+      else {
         navigate('/patient-dashboard/overview');
       }
     } catch (error) {
