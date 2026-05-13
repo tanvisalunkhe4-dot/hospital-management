@@ -113,11 +113,19 @@ class Patient(Base):
     medical_records = relationship("MedicalRecord", back_populates="patient")
     invoices = relationship("Invoice", back_populates="patient")
 
-
     @property
     def full_name(self):
         """Dynamically combines first and last name for the UI"""
         return f"{self.first_name} {self.last_name}"
+
+    @full_name.setter
+    def full_name(self, value):
+        """Allows setting the name via a single string"""
+        if value:
+            name_parts = value.split(" ", 1)
+            self.first_name = name_parts[0]
+            self.last_name = name_parts[1] if len(name_parts) > 1 else ""
+            
 class Vitals(Base):
     __tablename__ = "vitals"
     

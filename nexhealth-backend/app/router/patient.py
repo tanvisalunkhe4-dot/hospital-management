@@ -102,11 +102,7 @@ def read_patient_profile(
 ):
     patient = get_or_create_patient_profile(db, current_user)
     
-    # 🟢 THE FIX: Manually attach User data to the patient object 
-    # so the response model can pick them up
-    patient.full_name = current_user.full_name
-    patient.profile_url = current_user.profile_url
-    
+   
     return patient
 
 
