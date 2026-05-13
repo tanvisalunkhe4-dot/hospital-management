@@ -79,6 +79,8 @@ const LabSidebar = () => {
 };
 
 // --- Updated Styles for Spacing & Weight ---
+// Change ONLY this section in your LabSidebar.jsx
+
 const sidebarContainer = {
   width: '280px',
   height: '100vh',
@@ -86,11 +88,15 @@ const sidebarContainer = {
   display: 'flex',
   flexDirection: 'column',
   borderRight: '1px solid #f1f5f9',
-  position: 'sticky',
+  // FIX: Change 'sticky' to 'fixed'
+  position: 'fixed', 
+  left: 0,
   top: 0,
-  zIndex: 100
+  bottom: 0,
+  zIndex: 100,
+  // Optional: prevent the sidebar itself from ever shrinking
+  flexShrink: 0 
 };
-
 const headerSection = {
   padding: '40px 24px 32px 24px', // More generous top padding
   display: 'flex',

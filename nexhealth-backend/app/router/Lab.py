@@ -9,34 +9,34 @@ router = APIRouter(
     prefix="/api/v1/lab",
     tags=["Laboratory"]
 )
+# app/router/lab.py (or wherever this file is located)
 
 @router.get("/requests/pending/{hospital_id}", response_model=List[schemas.LabRequestResponse])
 def get_pending_lab_requests(hospital_id: int, db: Session = Depends(get_db)):
+    # 🟢 CHANGE: Use outerjoin to ensure we don't drop requests with missing doctors
     requests = db.query(models.LabRequest)\
+        .outerjoin(models.LabRequest.doctor)\
         .options(
+            # contains_eager tells SQLAlchemy the doctor is already loaded via the join
+            # joinedload for patient is usually fine as patients are required
             joinedload(models.LabRequest.patient), 
             joinedload(models.LabRequest.doctor)
         )\
         .filter(
-            models.LabRequest.hospital_id == hospital_id, 
+            # models.LabRequest.hospital_id == hospital_id, 
             models.LabRequest.status == "Pending"
         )\
         .all()
     
     for r in requests:
-        # These use the @property full_name from your models
+        # Check if r.doctor actually exists before accessing r.doctor.full_name
+        # Your current logic handles this with 'if r.doctor else "Unknown Staff"'
         r.patient_name = r.patient.full_name if r.patient else "Unknown"
         r.doctor_name = r.doctor.full_name if r.doctor else "Unknown Staff"
-        
-        # FIX: Keep this as the integer primary key to avoid ValidationErrors
         r.doctor_id = r.doctor.id if r.doctor else 0
-        
-        # ADDITION: Use a separate field for the display ID (e.g., 'DOC-2026-012')
-        # You will need to add 'staff_display_id' to your Pydantic schema
         r.staff_display_id = r.doctor.staff_id if r.doctor else "N/A"
         
     return requests
-
 @router.put("/requests/{request_id}/accept")
 def accept_test_request(request_id: int, db: Session = Depends(get_db)):
     db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
