@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, CheckCircle, IndianRupee, XCircle, Info, Hash, ShoppingBag } from 'lucide-react';
+import { User, CheckCircle, IndianRupee, XCircle, Hash, ShoppingBag } from 'lucide-react';
 import axios from 'axios';
 
 const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
@@ -10,7 +10,7 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
       ...m,
       is_available: m.is_available ?? true,
       price: m.price || 0,
-      quantity: m.quantity || 1 // Ensure quantity is present
+      quantity: m.quantity || 1 
     }))
   );
 
@@ -27,7 +27,6 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
     setMeds(updated);
   };
 
-  // Calculation updated to include Quantity
   const totalAmount = meds
     .filter(m => m.is_available)
     .reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
@@ -69,7 +68,6 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
 
   return (
     <div style={styles.card}>
-      {/* Top Identity Bar */}
       <div style={styles.header}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -103,9 +101,16 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ opacity: med.is_available ? 1 : 0.6 }}>
-                  <p style={{ ...styles.medName, textDecoration: med.is_available ? 'none' : 'line-through' }}>
-                    {med.medicine_name || med.name}
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <p style={{ ...styles.medName, textDecoration: med.is_available ? 'none' : 'line-through' }}>
+                      {med.medicine_name || med.name}
+                    </p>
+                    {med.is_out_of_stock && (
+                      <span style={styles.outOfStockBadge}>
+                         OUT OF STOCK ({med.current_inventory} LEFT)
+                      </span>
+                    )}
+                  </div>
                   <p style={styles.medDetails}>
                     {med.dosage} • {med.frequency} • <b>Qty: {med.quantity}</b>
                   </p>
@@ -145,7 +150,6 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
           ))}
         </div>
 
-        {/* Action Footer */}
         <div style={styles.footer}>
           <div style={styles.totalRow}>
             <div>
@@ -186,6 +190,7 @@ const styles = {
   medItem: { padding: '16px', borderRadius: '16px', transition: 'all 0.2s ease' },
   medName: { margin: 0, fontSize: '14px', fontWeight: '600', color: '#1e293b' },
   medDetails: { margin: '4px 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: '500' },
+  outOfStockBadge: { background: '#fff1f2', border: '1px solid #fda4af', color: '#e11d48', fontSize: '9px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px' },
   toggleBtn: { background: 'none', border: 'none', padding: '4px', display: 'flex' },
   priceSection: { marginTop: '12px', display: 'flex', alignItems: 'center', gap: '15px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' },
   inputWrapper: { display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', padding: '6px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', width: '110px' },
