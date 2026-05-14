@@ -118,7 +118,6 @@ def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
     
     if active_row:
         return {
-            
             "appt_id": active_row.id,
             "patient_id": active_row.patient_id,
             "patient_name": active_row.patient_name,
@@ -189,7 +188,6 @@ def get_latest_vitals(patient_id: int, db: Session = Depends(get_db)):
         .first()
     
     if not latest_vital:
-       
         return {
             "blood_pressure": None,
             "pulse_rate": 0,
@@ -225,7 +223,6 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
             }
 
         # 3. Text -> Structured AI Summary (Gemini 2.0 Flash)
-        # We MUST await this because generate_medical_summary is now 'async'
         clinical_summary = await generate_medical_summary(raw_text)
         
         return {
@@ -235,7 +232,6 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
         
     except Exception as e:
         print(f"Scribe Router Error: {e}")
-        # We return a 200 with an error message so the UI doesn't crash
         return {
             "raw_transcript": "Error during processing",
             "clinical_note": "AI Summarization failed. Please enter notes manually."
@@ -298,28 +294,54 @@ async def finish_consultation(
 
         # 7. Save Prescriptions
         for med in data.prescriptions:
+            # Get raw values
+            freq_str = med.get("frequency", "1-0-1")
+            duration_str = med.get("duration", "5 Days")
+            route = med.get("route", "Oral")
+            name = (med.get("name") or med.get("medicine_name")).lower()
+
+            # 1. Parse Duration (Extract the number from "5 Days")
+            try:
+                days = int(''.join(filter(str.isdigit, duration_str)))
+            except:
+                days = 5 # Default fallback
+
+            # 2. Parse Frequency (Sum the 1s in "1-1-1")
+            # This turns "1-1-1" into 3, and "1-0-1" into 2
+            try:
+                per_day = sum(int(x) for x in freq_str.split('-') if x.isdigit())
+            except:
+                per_day = 2 # Default fallback
+
+            # 3. Calculate Final Quantity
+            # Logic: If it's a Tablet/Capsule, multiply. If it's a Syrup/Liquid, keep it as 1 bottle.
+            if any(unit in name for unit in ["tablet", "tab", "capsule", "cap"]):
+                final_qty = per_day * days
+            else:
+                final_qty = 1 # Assume 1 bottle for syrups/drops/infusions
+
             new_prescription = models.Prescription(
                 medical_record_id=new_record.id,
                 hospital_id=data.hospital_id,
                 medicine_name=med.get("name") or med.get("medicine_name"),
                 dosage=med.get("dosage"),
-                frequency=med.get("frequency"),
-                duration=med.get("duration", "5 Days"),
+                quantity=final_qty,  # <--- Now correctly calculated (e.g., 15)
+                frequency=freq_str,
+                duration=duration_str,
                 instructions=med.get("instructions", ""),
-                route=med.get("route", "Oral")
+                route=route
             )
             db.add(new_prescription)
-
-            for test_name in data.lab_tests:
-            # Fetch price from catalog so billing works
-              test_info = db.query(models.LabTestCatalog).filter(
+        # 8. Save Lab Requests (Outside Prescription loop to prevent duplicates)
+        for test_name in data.lab_tests:
+            test_info = db.query(models.LabTestCatalog).filter(
                 models.LabTestCatalog.test_name == test_name
             ).first()
             
             new_lab_request = models.LabRequest(
                 hospital_id=data.hospital_id,
                 patient_id=appointment.patient_id,
-                appointment_id=appointment_id, # <--- THIS FIXES THE NULL ISSUE
+                appointment_id=appointment_id,
                 doctor_id=staff_record.id,
                 test_name=test_name,
                 price_at_request=test_info.base_price if test_info else 0.0,
@@ -327,7 +349,7 @@ async def finish_consultation(
             )
             db.add(new_lab_request)
 
-        # 8. Update Status for Pharmacy Queue
+        # 9. Update Status for Pharmacy Queue
         appointment.status = "Pending-Pharmacy"
         
         db.commit()
@@ -337,6 +359,7 @@ async def finish_consultation(
         db.rollback()
         print(f"FINALIZE ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 # --- AI Scribe Logic (Streaming & Finalization) ---
 
 model = WhisperModel("base", device="cpu", compute_type="int8")
@@ -364,12 +387,9 @@ async def websocket_scribe_stream(websocket: WebSocket):
             if len(current_chunk) > 500000: 
                 try:
                     # 3. CRITICAL FIX: Prepend the initial header to the current chunk
-                    # This tells FFmpeg: "This is a WebM file with X codec"
                     processing_buffer = initial_header + current_chunk
                     
                     audio_fp = io.BytesIO(processing_buffer)
-                    
-                    # pydub will now find the EBML header and won't crash
                     audio_segment = AudioSegment.from_file(audio_fp, format="webm")
                     
                     # Convert to WAV for Whisper
@@ -397,7 +417,6 @@ async def websocket_scribe_stream(websocket: WebSocket):
                         current_chunk = bytearray()
                     
                 except Exception as e:
-                    # If it's a mid-frame cut, we just keep the data and wait for more
                     print(f"Slice decoding skipped (waiting for more data): {e}")
                     continue
 
@@ -409,7 +428,6 @@ def search_medicines(
     q: str = Query(..., min_length=2), 
     db: Session = Depends(get_db)
 ):
-    # This query searches the catalog and returns the top 10 matches
     results = db.query(MedicineCatalog).filter(
         MedicineCatalog.name.ilike(f"%{q}%")
     ).limit(10).all()
@@ -436,7 +454,6 @@ async def create_lab_request(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Missing Patient or Hospital ID")
 
     # 1. FETCH BASE PRICE FROM CATALOG
-    # This ensures the 'price_at_request' isn't 0 when the receptionist bills the patient
     test_info = db.query(models.LabTestCatalog).filter(
         models.LabTestCatalog.test_name == data.get("test_name")
     ).first()
@@ -447,11 +464,9 @@ async def create_lab_request(data: dict, db: Session = Depends(get_db)):
     new_request = models.LabRequest(
         hospital_id=data.get("hospital_id"),
         patient_id=data.get("patient_id"),
-        # CRITICAL: Ensure your doctor's frontend is sending the 'appointment_id'
         appointment_id=data.get("appointment_id"), 
         doctor_id=data.get("doctor_id"),
         test_name=data.get("test_name"),
-        # Link the price now so it's locked in for billing
         price_at_request=initial_price, 
         category=data.get("category"),
         status="Pending",
@@ -474,15 +489,11 @@ async def create_lab_request(data: dict, db: Session = Depends(get_db)):
 
 @router.get("/lab-test-catalog")
 def get_lab_catalog(db: Session = Depends(get_db)):
-    # Returns the live list of tests for your "Nexus" UI selection
     tests = db.query(models.LabTestCatalog).filter(models.LabTestCatalog.is_active == True).all()
     return tests
+
 @router.get("/patient/{patient_id}/lab-reports")
 def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
-    """
-    Fetches history of lab requests joined with patient details for identification.
-    """
-    # Use a JOIN to get the patient's name along with the lab request data
     results = (
         db.query(
             models.LabRequest,
@@ -494,7 +505,6 @@ def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    # Flatten the result so the frontend receives a clean list of objects
     reports = []
     for request, p_name in results:
         report_data = {
@@ -503,7 +513,7 @@ def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
             "category": request.category,
             "status": request.status,
             "requested_at": request.requested_at,
-            "patient_name": p_name, # Critical for identification
+            "patient_name": p_name,
             "priority": request.priority
         }
         reports.append(report_data)

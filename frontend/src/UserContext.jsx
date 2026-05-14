@@ -21,12 +21,15 @@ export const UserProvider = ({ children }) => {
   });
 
   const fetchPersistentImage = useCallback(async () => {
-    const token = sessionStorage.getItem('token'); // Use sessionStorage as per your logs
-    if (!token || !userRole) return; // Don't fetch if role isn't identified yet
+    const token = sessionStorage.getItem('token');
+    if (!token || !userRole) return; 
    
     const staffRoles = ['admin', 'doctor', 'nurse', 'staff', 'pharmacist', 'receptionist', 'superadmin'];
-    const isStaff = staffRoles.includes(role);
-    // ✅ FIX: Use 127.0.0.1 to avoid the "Connection Refused" issues seen in your terminal
+    
+    // ✅ FIX: Change 'role' to 'userRole' (matches the state variable above)
+    const normalizedRole = userRole.toLowerCase().replace(" ", "");
+    const isStaff = staffRoles.includes(normalizedRole);
+
     const endpoint = isStaff 
       ? 'http://127.0.0.1:8000/api/v1/staff/profile' 
       : 'http://127.0.0.1:8000/api/v1/patient/profile';

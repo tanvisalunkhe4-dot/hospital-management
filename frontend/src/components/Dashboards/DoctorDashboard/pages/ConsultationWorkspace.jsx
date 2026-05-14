@@ -23,7 +23,7 @@ const ConsultationWorkspace = ({
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
-  const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1' });
+  const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1', duration: '5 Days', quantity:1 });
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
   const recorderRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -81,6 +81,18 @@ const searchMedicines = async (query) => {
   } finally {
     setIsLoadingSearch(false);
   }
+};
+// 2. HELPER: Calculate total tablets based on frequency and days
+const calculateTotalQty = (freq, durationStr) => {
+  if (freq === 'SOS') return 1;
+  
+  // Extract number from "5 Days" -> 5
+  const days = parseInt(durationStr) || 1;
+  
+  // Split "1-0-1" and sum the doses
+  const dosesPerDay = freq.split('-').reduce((acc, val) => acc + parseInt(val || 0), 0);
+  
+  return dosesPerDay * days;
 };
 
 const [liveTranscript, setLiveTranscript] = useState("");
@@ -208,10 +220,22 @@ useEffect(() => {
   }, [patient]);
 
    // --- PRESCRIPTION LOGIC ---
-  const addMedicine = () => {
+   const addMedicine = () => {
     if (newMed.name) {
-      setPrescription([...prescription, { ...newMed, id: Date.now() }]);
-      setNewMed({ name: '', dosage: '', frequency: '1-0-1' });
+      // 3. MATH: Calculate quantity automatically before adding
+      const calculatedQty = calculateTotalQty(newMed.frequency, newMed.duration);
+      
+      setPrescription([
+        ...prescription, 
+        { 
+          ...newMed, 
+          quantity: calculatedQty, // System calculated
+          id: Date.now() 
+        }
+      ]);
+      
+      // Reset with defaults
+      setNewMed({ name: '', dosage: '', frequency: '1-0-1', duration: '5 Days' });
     }
   };
 
@@ -450,7 +474,20 @@ console.log("APPOINTMENT ID:", apptId);
         <option value="0-0-1">0-0-1 (Night Only)</option>
         <option value="SOS">SOS (As Needed)</option>
       </select>
-      
+     {/* 5. NEW DURATION SELECTOR */}
+     <select 
+            style={{ ...styles.input, flex: 1 }}
+            value={newMed.duration}
+            onChange={(e) => setNewMed({...newMed, duration: e.target.value})}
+          >
+            <option value="1 Day">1 Day</option>
+            <option value="3 Days">3 Days</option>
+            <option value="5 Days">5 Days</option>
+            <option value="7 Days">7 Days</option>
+            <option value="10 Days">10 Days</option>
+            <option value="15 Days">15 Days</option>
+            <option value="30 Days">30 Days</option>
+          </select>
       <button 
         onClick={addMedicine} 
         style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer' }}
@@ -471,8 +508,12 @@ console.log("APPOINTMENT ID:", apptId);
       prescription.map((med) => (
         <div key={med.id} style={styles.medItem}>
           <div>
-            <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>{med.name}</p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>{med.dosage} • {med.frequency}</p>
+            <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>{med.name}
+            <span style={{ color: '#2563eb', marginLeft: '8px' }}>x {med.quantity}</span>
+            </p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                  {med.frequency} • {med.duration}
+                </p>
           </div>
           <button onClick={() => removeMed(med.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>
             <Trash2 size={16} />
@@ -516,7 +557,6 @@ console.log("APPOINTMENT ID:", apptId);
     )}
   </div>
 
-  {/* SECTION 4: FINALIZE */}
   {/* SECTION 4: FINALIZE */}
 <button 
   style={{ 

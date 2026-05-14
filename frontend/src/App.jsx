@@ -21,6 +21,7 @@ import PatientDashboard     from './components/Dashboards/PatientDashboard/pages
 // Main Dashboard Layouts (Now inside their respective pages folders)
 import PharmacistDashboard  from './components/Dashboards/PharmacistDashboard/pages/PharmacistDashboard';
 import LabDashboard         from './components/Dashboards/LabDashboard/pages/LabDashboard';
+
 // --- MODULE PAGES ---
 
 // Nurse Module
@@ -31,7 +32,8 @@ import WardManagement from './components/Dashboards/NurseDashboard/pages/WardMan
 import TreatmentSupport from './components/Dashboards/NurseDashboard/pages/TreatmentSupport';
 import RecordsAccess from './components/Dashboards/NurseDashboard/pages/RecordsAccess';
 
-// Pharmacist Module
+// --- Pharmacist Module ---
+import PharmacyOverview    from './components/Dashboards/PharmacistDashboard/pages/PharmacyOverview'; // ADD THIS
 import PrescriptionQueue    from './components/Dashboards/PharmacistDashboard/pages/PrescriptionQueue';
 import MedicineDispensing   from './components/Dashboards/PharmacistDashboard/pages/MedicineDispensing';
 import InventoryManagement  from './components/Dashboards/PharmacistDashboard/pages/InventoryManagement';
@@ -77,14 +79,14 @@ function App() {
           </Route>
 
           {/* Pharmacist Portal with Nested Routing */}
-          <Route path="/pharmacist" element={<PharmacistDashboardWrapper />}>
-            <Route index element={<PrescriptionQueue />} />
-            <Route path="prescriptions" element={<PrescriptionQueue />} />
-            <Route path="dispense" element={<MedicineDispensing />} />
-            <Route path="inventory" element={<InventoryManagement />} />
-            <Route path="suppliers" element={<SupplierManagement />} />
-            <Route path="alerts" element={<StockAlerts />} />
-          </Route>
+<Route path="/pharmacist" element={<PharmacistDashboardWrapper />}>
+  <Route index element={<PharmacyOverview />} /> {/* This will now find the component */}
+  <Route path="prescriptions" element={<PrescriptionQueue />} />
+  <Route path="dispense" element={<MedicineDispensing />} />
+  <Route path="inventory" element={<InventoryManagement />} />
+  <Route path="suppliers" element={<SupplierManagement />} />
+  <Route path="alerts" element={<StockAlerts />} />
+</Route>
 
           {/* Lab Portal with Nested Routing */}
           <Route path="/lab-dashboard" element={<LabDashboardWrapper />}>

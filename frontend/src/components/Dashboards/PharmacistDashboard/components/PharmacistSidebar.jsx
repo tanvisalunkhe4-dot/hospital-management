@@ -10,7 +10,7 @@ const PharmacistSidebar = () => {
   const location = useLocation();
 
   const menuItems = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20}/>, path: '/pharmacist' },
+    { name: 'Overview', icon: <LayoutDashboard size={20}/>, path: '/pharmacist' },
     { name: 'Prescriptions', icon: <ClipboardList size={20}/>, path: '/pharmacist/prescriptions' },
     { name: 'Dispensing', icon: <ShoppingCart size={20}/>, path: '/pharmacist/dispense' },
     { name: 'Inventory', icon: <Package size={20}/>, path: '/pharmacist/inventory' },

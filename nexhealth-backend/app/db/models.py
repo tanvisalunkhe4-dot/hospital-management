@@ -456,6 +456,7 @@ class Prescription(Base):
     
     medicine_name = Column(String, nullable=False)
     price = Column(Float, default=0.0) 
+    quantity = Column(Integer, default=1)
     is_available = Column(Boolean, default=True)
     dosage = Column(String, nullable=True)     
     frequency = Column(String, nullable=True)  
@@ -477,6 +478,7 @@ class MedicineCatalog(Base):
     manufacturer = Column(String, nullable=True)
     price = Column(Float, default=0.0)
     category = Column(String, nullable=True)
+    stock_quantity = Column(Integer, default=0)
     is_available =  Column(Boolean, default =True)
 
 
