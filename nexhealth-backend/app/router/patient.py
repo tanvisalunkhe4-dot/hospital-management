@@ -132,8 +132,6 @@ def update_patient_profile(
     db.refresh(patient) # Forces SQLAlchemy to re-read the state from Postgres
     
     # Re-attach these so the 'response_model' doesn't return None for them
-    patient.full_name = current_user.full_name
-    patient.profile_url = current_user.profile_url
     return patient
 
 @patient_router.patch("/profile/change-password")

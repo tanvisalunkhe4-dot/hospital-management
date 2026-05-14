@@ -14,7 +14,7 @@ const LabHeader = () => {
         <Bell size={20} color="#64748b" />
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>Tanvi S.</p>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}></p>
             <p style={{ margin: 0, fontSize: '12px', color: '#10b981' }}>Senior Lab Tech</p>
           </div>
           <UserCircle size={35} color="#cbd5e1" />

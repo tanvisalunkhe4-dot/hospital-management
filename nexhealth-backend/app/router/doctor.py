@@ -8,7 +8,6 @@ import os
 import io
 from pydantic import BaseModel
 
-# Internal Imports
 from app.constants import (
     STATUS_VITALS_TAKEN, 
     STATUS_SCHEDULED, 
@@ -16,19 +15,17 @@ from app.constants import (
     STATUS_IN_CONSULTATION, 
     STATUS_COMPLETED
 )
-from app.core.auth import get_current_user  # Ensure this matches the name in core/auth.py
+from app.core.auth import get_current_user  
 from app.db import models
 from app.db.session import get_db
 from app.services.scribe import transcribe_audio, generate_medical_summary
 from app.db.models import MedicineCatalog
 
-# AI & Audio Processing
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
-# REMOVED local STATUS definitions to use the ones imported above
 class ScribeTextRequest(BaseModel):
     raw_text: str
 
@@ -36,7 +33,7 @@ class FinalizeConsultationRequest(BaseModel):
     summary: str
     prescriptions: List[Dict[str, Any]]
     hospital_id: int
-    appointment_id: int  # <--- ADD THIS
+    appointment_id: int  
     lab_tests: List[str]
 
 STATUS_VITALS_TAKEN = "Vitals Taken"
@@ -60,7 +57,6 @@ def resolve_staff_record(staff_id: str, db: Session) -> models.Staff:
 
 @router.get("/queue/{staff_id}")
 def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
-    # Resolve the doctor record once
     doctor = resolve_staff_record(staff_id, db)
 
     rows = (
@@ -75,7 +71,6 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         .filter(
             models.Appointment.doctor_id == doctor.id,
             models.Appointment.hospital_id == doctor.hospital_id,
-            # CHANGE: Only show patients who finished Vitals
             models.Appointment.status == STATUS_VITALS_TAKEN, 
             models.Appointment.appointment_date == date.today(),
         )
@@ -94,12 +89,10 @@ def get_doctor_queue(staff_id: str, db: Session = Depends(get_db)) -> List[Dict[
         for r in rows
     ]
 
-# ADD THIS NEW ENDPOINT FOR THE RESUME LOGIC
 @router.get("/active-session/{staff_id}")
 def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
     doctor = resolve_staff_record(staff_id, db)
     
-    # Only look for a session that started TODAY
     active_row = (
         db.query(
             models.Appointment.id,
@@ -216,7 +209,6 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
         raw_text = transcribe_audio(temp_file)
         
         if not raw_text.strip():
-            # Return a friendly message if Whisper finds nothing
             return {
                 "raw_transcript": "",
                 "clinical_note": "No audio detected. Please ensure your microphone is working."

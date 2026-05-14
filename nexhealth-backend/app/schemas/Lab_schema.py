@@ -22,19 +22,24 @@ class LabRequestCreate(LabRequestBase):
     pass
 
 class LabRequestResponse(LabRequestBase):
-    """Schema for returning lab request data (Lab Dashboard Side)"""
     id: int
     status: str
     requested_at: datetime
     completed_at: Optional[datetime] = None
     
-    # These fields are populated by the mapping logic in Lab.py
+    # Live data fields for the Professional Modal
     patient_name: Optional[str] = "Unknown"
+    patient_age: Optional[int] = 0        # Add this
+    patient_gender: Optional[str] = "N/A"  # Add this
     doctor_name: Optional[str] = "Unknown Staff"
+    doctor_dept: Optional[str] = "General" # Add this
+    
+    # Ensure this matches the field name used in the doctor's prescription
+    notes: Optional[str] = None 
+    sample_type: Optional[str] = "TBD"
     
     result_summary: Optional[str] = None
     result_file_url: Optional[str] = None
-
 class LabResultSubmit(BaseModel):
     """Schema for submitting test results"""
     result_summary: str
