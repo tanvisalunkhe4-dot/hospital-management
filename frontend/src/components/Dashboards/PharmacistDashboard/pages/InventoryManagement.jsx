@@ -10,7 +10,7 @@ const InventoryManagement = () => {
         name: '',
         stock_quantity: 0,
         min_reserve_limit: 0,
-        price_per_unit: 0,
+        price: 0,
         expiry_date: ''
     });
     const [inventory, setInventory] = useState([]);
@@ -21,12 +21,9 @@ const InventoryManagement = () => {
     const fetchInventoryData = async () => {
         try {
             const hospitalId = sessionStorage.getItem('hospital_id');
-            
-            // 1. Fetch alerts for the table
             const alertRes = await axios.get(`http://localhost:8000/api/v1/pharmacy/inventory-alerts/${hospitalId}`);
             setInventory(alertRes.data.low_stock || []); 
             
-            // 2. Fetch total count from our new stats endpoint
             const statsRes = await axios.get(`http://localhost:8000/api/v1/pharmacy/inventory-stats/${hospitalId}`);
             setTotalCatalogCount(statsRes.data.total_medicines || 0);
 
@@ -45,16 +42,37 @@ const InventoryManagement = () => {
         e.preventDefault();
         try {
             const hospitalId = sessionStorage.getItem('hospital_id');
-            await axios.post(`http://localhost:8000/api/v1/pharmacy/inventory/${hospitalId}`, formData);
+            
+            // FIX: Renamed local variable to 'payload' to avoid shadowing React state 'formData'
+            // FIX: Explicitly cast types to match FastAPI Pydantic schema
+            const payload = {
+                name: formData.name,
+                stock_quantity: parseInt(formData.stock_quantity) || 0,
+                min_reserve_limit: parseInt(formData.min_reserve_limit) || 0,
+                price: parseFloat(formData.price) || 0.0,
+                expiry_date: formData.expiry_date || null
+            };
+
+            await axios.post(`http://localhost:8000/api/v1/pharmacy/inventory/${hospitalId}`, payload);
+            
             alert("Medicine registered successfully!");
-            fetchInventoryData(); // Refresh list and stats
+            
+            // Reset form after success
+            setFormData({
+                name: '',
+                stock_quantity: 0,
+                min_reserve_limit: 0,
+                price: 0,
+                expiry_date: ''
+            });
+            
+            fetchInventoryData(); 
         } catch (err) {
-            console.error("Error adding medicine:", err);
-            alert("Failed to add medicine.");
+            console.error("Error adding medicine:", err.response?.data || err.message);
+            alert("Failed to add medicine. Check console for details.");
         }
     };
 
-    // PERFORMANCE OPTIMIZATION: useMemo prevents the "lag" when typing in search
     const filteredInventory = useMemo(() => {
         return inventory.filter(item => 
             item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -63,7 +81,6 @@ const InventoryManagement = () => {
 
     return (
         <div style={container}>
-            {/* Header with SaaS-style Stat Cards */}
             <div style={pageHeader}>
                 <div>
                     <h2 style={title}>Pharmacy Inventory</h2>
@@ -91,7 +108,6 @@ const InventoryManagement = () => {
             </div>
 
             <div style={contentGrid}>
-                {/* Section 1: Registration Form */}
                 <div style={formCard}>
                     <h3 style={sectionTitle}>
                         <PlusCircle size={20} color="#10b981" /> 
@@ -116,6 +132,7 @@ const InventoryManagement = () => {
                                 <div style={iconInputGroup}>
                                     <Package size={16} color="#64748b" />
                                     <input type="number" style={rawInput} placeholder="0"
+                                        value={formData.stock_quantity}
                                         onChange={(e) => setFormData({...formData, stock_quantity: e.target.value})}/>
                                 </div>
                             </div>
@@ -124,6 +141,7 @@ const InventoryManagement = () => {
                                 <div style={iconInputGroup}>
                                     <ShieldAlert size={16} color="#64748b" />
                                     <input type="number" style={rawInput} placeholder="10"
+                                        value={formData.min_reserve_limit}
                                         onChange={(e) => setFormData({...formData, min_reserve_limit: e.target.value})}/>
                                 </div>
                             </div>
@@ -134,16 +152,17 @@ const InventoryManagement = () => {
                                 <label style={label}>Price per Unit</label>
                                 <div style={iconInputGroup}>
                                     <IndianRupee size={16} color="#64748b" />
-                                    <input type="number" style={rawInput} placeholder="0.00"
+                                    <input type="number" step="0.01" style={rawInput} placeholder="0.00"
+                                        value={formData.price_per_unit}
                                         onChange={(e) => setFormData({...formData, price_per_unit: e.target.value})}/>
                                 </div>
                             </div>
-                            {/* FIXED: Removed double expiry date container */}
                             <div style={inputContainer}>
                                 <label style={label}>Expiry Date</label>
                                 <div style={iconInputGroup}>
                                     <Calendar size={16} color="#64748b" />
                                     <input type="date" style={rawInput}
+                                        value={formData.expiry_date}
                                         onChange={(e) => setFormData({...formData, expiry_date: e.target.value})}/>
                                 </div>
                             </div>
@@ -155,7 +174,6 @@ const InventoryManagement = () => {
                     </form>
                 </div>
 
-                {/* Section 2: Visual Stock Ledger */}
                 <div style={tableCard}>
                     <div style={tableHeader}>
                         <h3 style={sectionTitle}>Stock Ledger</h3>
@@ -220,7 +238,7 @@ const InventoryManagement = () => {
     );
 };
 
-// --- Styles ---
+// Styles remain the same...
 const container = { padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh' };
 const pageHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' };
 const title = { margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e293b', letterSpacing: '-0.5px' };

@@ -15,7 +15,7 @@ class MedicineCreate(BaseModel):
     name: str
     stock_quantity: int
     min_reserve_limit: int
-    price_per_unit: float
+    price: float
     expiry_date: Optional[date] = None
 
     class Config:
@@ -210,7 +210,7 @@ async def add_to_inventory(hospital_id: int, medicine: MedicineCreate, db: Sessi
             name=medicine.name,
             stock_quantity=medicine.stock_quantity,
             min_reserve_limit=medicine.min_reserve_limit,
-            price_per_unit=medicine.price_per_unit,
+            price=medicine.price,
             expiry_date=medicine.expiry_date
         )
         db.add(new_medicine)
