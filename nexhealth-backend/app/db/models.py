@@ -453,6 +453,7 @@ class Prescription(Base):
     id = Column(Integer, primary_key=True, index=True)
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"))
     hospital_id = Column(Integer, ForeignKey("hospitals.id")) # Important for multi-tenant
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
     
     medicine_name = Column(String, nullable=False)
     price = Column(Float, default=0.0) 
@@ -480,7 +481,7 @@ class MedicineCatalog(Base):
     category = Column(String, nullable=True)
     stock_quantity = Column(Integer, default=0)
     is_available =  Column(Boolean, default =True)
-
+    min_reserve_limit = Column(Integer, default=0) # Safety Stock Threshold
 
 
 

@@ -8,9 +8,9 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
   const [meds, setMeds] = useState(
     order.prescriptions.map(m => ({
       ...m,
-      is_available: m.is_available ?? true,
-      price: m.price || 0,
-      quantity: m.quantity || 1 
+      is_available: m.is_out_of_stock ? false : (m.is_available ?? true),
+    price: m.price || 0,
+    quantity: m.quantity || 1
     }))
   );
 
@@ -135,8 +135,13 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
                         placeholder="0.00"
                         value={med.price || ""}
                         onChange={(e) => handlePriceChange(idx, e.target.value)}
-                        style={styles.priceInput}
-                      />
+                        disabled={med.is_out_of_stock} // DISABLE INPUT IF OUT OF STOCK
+  style={{
+    ...styles.priceInput,
+    cursor: med.is_out_of_stock ? 'not-allowed' : 'text',
+    opacity: med.is_out_of_stock ? 0.5 : 1
+  }}
+/>
                     ) : (
                       <span style={styles.fixedPrice}>{med.price.toFixed(2)}</span>
                     )}

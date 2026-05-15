@@ -52,7 +52,7 @@ async def get_pharmacy_queue(
             
             if catalog_item:
                 available_stock = catalog_item.stock_quantity
-                if available_stock < p.quantity:
+                if (available_stock - p.quantity) < catalog_item.min_reserve_limit:
                     is_out_of_stock = True
             else:
                 is_out_of_stock = True
@@ -95,29 +95,46 @@ async def verify_prescription(
     try:
         for med_item in data.medicines:
             db_med = db.query(Prescription).filter(Prescription.id == med_item.id).first()
-            if db_med:
-                db_med.is_available = med_item.is_available
-                # If med is unavailable, price MUST be 0.0
-                db_med.price = med_item.price if med_item.is_available else 0.0
+            if not db_med:
+                continue
 
-                # Actual Stock Deduction happens when moving to 'Pending-Billing'
-                if data.status == "Pending-Billing" and db_med.is_available:
-                    catalog_item = db.query(MedicineCatalog).filter(
-                        MedicineCatalog.name == db_med.medicine_name
-                    ).first()
-                    
-                    if catalog_item:
-                        catalog_item.stock_quantity -= db_med.quantity
+            # 1. Fetch the catalog item immediately for every item
+            catalog_item = db.query(MedicineCatalog).filter(
+                MedicineCatalog.name == db_med.medicine_name
+            ).first()
 
+            # 2. THE HARD STOP: Run this check whenever 'is_available' is True
+            if med_item.is_available and catalog_item:
+                projected_stock = catalog_item.stock_quantity - db_med.quantity
+                
+                # If the pharmacist tries to mark it 'Available' but it's reserved
+                if projected_stock < catalog_item.min_reserve_limit:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Action Denied: {db_med.medicine_name} is reserved for emergencies (Stock: {catalog_item.stock_quantity}, Reserve: {catalog_item.min_reserve_limit})."
+                    )
+
+            # 3. Update the prescription record
+            db_med.is_available = med_item.is_available
+            # Force price to 0 if unavailable, otherwise use the provided price
+            db_med.price = med_item.price if med_item.is_available else 0.0
+
+            # 4. STOCK DEDUCTION: Only happens when finally moving to Billing
+            if data.status == "Pending-Billing" and db_med.is_available and catalog_item:
+                catalog_item.stock_quantity -= db_med.quantity
+
+        # 5. Commit changes
         appt.status = data.status
         db.commit()
-        return {"status": "success", "message": f"Updated to {data.status}"}
+        return {"status": "success", "message": f"Verified and moved to {data.status}"}
 
+    except HTTPException as he:
+        db.rollback()
+        raise he
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
-# 3. GET BILLING QUEUE (For Receptionist Overview)
+        # 3. GET BILLING QUEUE (For Receptionist Overview)
 @router.get("/billing-queue/{hospital_id}")
 async def get_billing_queue(hospital_id: int, db: Session = Depends(get_db)):
     orders = db.query(Appointment).filter(
