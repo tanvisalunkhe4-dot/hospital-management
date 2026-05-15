@@ -49,7 +49,8 @@ from app.schemas.appointment_schema import(
 patient_router = APIRouter(tags=["patient"])
 def get_or_create_patient_profile(db: Session, current_user: User) -> Patient:
     """Find receptionist-created record or link a new one to the user."""
-    if current_user.role != "Patient":
+    allowed_roles = ["Patient", "LabTechnician", "Staff", "Admin"]
+    if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=403,
             detail=f"Access denied: Patient role required",
@@ -60,6 +61,8 @@ def get_or_create_patient_profile(db: Session, current_user: User) -> Patient:
     if patient:
         return patient
 
+    if current_user.role != "Patient":
+        return None
     # 2. BRIDGE LOGIC: Check if a receptionist created a record using this user's details
     # We search by phone or email where user_id is still NULL
     search_id = current_user.email or current_user.phone

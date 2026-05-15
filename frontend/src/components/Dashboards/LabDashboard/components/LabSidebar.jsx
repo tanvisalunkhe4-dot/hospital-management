@@ -35,7 +35,7 @@ const LabSidebar = ({ setActiveTab }) => {
       {/* Brand Header Section */}
       <div style={headerSection}>
         <h1 style={logoStyle}>
-          Nex<span style={{ color: '#10b981' }}>Health</span>
+              Nex<span style={{ color: '#10b981' }}>Health</span>
         </h1>
         <div style={roleBadge}>
           ID: {staffId} | LAB TECHNICIAN
