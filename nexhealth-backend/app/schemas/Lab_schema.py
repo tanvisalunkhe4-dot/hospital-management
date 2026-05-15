@@ -41,14 +41,36 @@ class LabRequestResponse(LabRequestBase):
     # --- Lifecycle & Chain of Custody Fields ---
     accession_number: Optional[str] = None # Unique ID for Barcode/Physical Label
     sample_type: Optional[str] = "TBD"      # Confirmed during acceptance
-    collection_started_at: Optional[datetime] = None # The "Handshake" timestamp
+    test_results: Optional[dict] = None  # To show results in the UI
+    collection_started_at: Optional[datetime] = None
+    collected_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     
     notes: Optional[str] = None 
     result_summary: Optional[str] = None
     result_file_url: Optional[str] = None
-
 class LabResultSubmit(BaseModel):
     """Schema for submitting final test results"""
     result_summary: str
     result_file_url: Optional[str] = None
     status: str = "Completed"
+
+
+class LabResultUpdate(BaseModel):
+    """Data sent when finalizing a test in the Processing Unit"""
+    test_results: dict  # This maps to your JSONB column in Supabase
+    result_summary: Optional[str] = "Test completed successfully."
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class LabCollectionUpdate(BaseModel):
+    """Data sent when the technician physically collects the specimen"""
+    collected_by: int  # Staff ID of the phlebotomist
+    collection_notes: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+# --- NEW: Schema for Rejection (Handling errors) ---
+class LabRejectionUpdate(BaseModel):
+    rejection_reason: str # e.g., "Hemolyzed", "Insufficient Volume"
+    technician_id: int
