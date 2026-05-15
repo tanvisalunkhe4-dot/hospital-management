@@ -8,18 +8,22 @@ class LabRequestBase(BaseModel):
     appointment_id: Optional[int] = None
     doctor_id: int
     test_name: str
-    # Make this Optional so creation doesn't fail if it's generated server-side
     staff_display_id: Optional[str] = "N/A" 
     category: Optional[str] = None
     priority: str = "Normal"
     price_at_request: float = 0.0
     
-    # Use the Pydantic v2 way for the base as well
     model_config = ConfigDict(from_attributes=True)
 
 class LabRequestCreate(LabRequestBase):
     """Schema for creating a new lab request (Doctor Side)"""
     pass
+
+# --- NEW: Schema for the "Handshake" (Acceptance) ---
+class LabAcceptanceUpdate(BaseModel):
+    """Data sent by technician when clicking 'Accept & Start Collection'"""
+    sample_type: str  # e.g., "Venous Blood", "Urine", "Swab"
+    # Optionally add collection_notes if the tech needs to record difficulty
 
 class LabRequestResponse(LabRequestBase):
     id: int
@@ -29,19 +33,22 @@ class LabRequestResponse(LabRequestBase):
     
     # Live data fields for the Professional Modal
     patient_name: Optional[str] = "Unknown"
-    patient_age: Optional[int] = 0        # Add this
-    patient_gender: Optional[str] = "N/A"  # Add this
+    patient_age: Optional[int] = 0        
+    patient_gender: Optional[str] = "N/A"  
     doctor_name: Optional[str] = "Unknown Staff"
-    doctor_dept: Optional[str] = "General" # Add this
+    doctor_dept: Optional[str] = "General" 
     
-    # Ensure this matches the field name used in the doctor's prescription
+    # --- Lifecycle & Chain of Custody Fields ---
+    accession_number: Optional[str] = None # Unique ID for Barcode/Physical Label
+    sample_type: Optional[str] = "TBD"      # Confirmed during acceptance
+    collection_started_at: Optional[datetime] = None # The "Handshake" timestamp
+    
     notes: Optional[str] = None 
-    sample_type: Optional[str] = "TBD"
-    
     result_summary: Optional[str] = None
     result_file_url: Optional[str] = None
+
 class LabResultSubmit(BaseModel):
-    """Schema for submitting test results"""
+    """Schema for submitting final test results"""
     result_summary: str
     result_file_url: Optional[str] = None
     status: str = "Completed"

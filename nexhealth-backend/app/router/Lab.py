@@ -4,7 +4,9 @@ from typing import List
 from datetime import date
 from app.db.session import get_db 
 from app.db import models
-from app.schemas import Lab_schema as schemas 
+from app.schemas import Lab_schema as schemas
+import uuid # For generating unique Accession Numbers
+from datetime import datetime 
 
 router = APIRouter(
     prefix="/api/v1/lab",
@@ -70,15 +72,6 @@ def get_pending_lab_requests(hospital_id: int, db: Session = Depends(get_db)):
     return requests
 
 
-@router.put("/requests/{request_id}/accept")
-def accept_test_request(request_id: int, db: Session = Depends(get_db)):
-    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
-    if not db_req:
-        raise HTTPException(status_code=404, detail="Lab Request not found")
-    
-    db_req.status = "In-Progress"
-    db.commit()
-    return {"status": "success", "message": "Request moved to Sample Collection"}
 
 
 @router.get("/requests/{request_id}", response_model=schemas.LabRequestResponse)
@@ -113,3 +106,45 @@ def get_request_details(request_id: int, db: Session = Depends(get_db)):
             db_req.doctor_dept = "General Medicine"
             
     return db_req
+
+
+@router.put("/requests/{request_id}/accept", response_model=schemas.LabRequestResponse)
+def accept_test_request(
+    request_id: int, 
+    # Add a simple schema for confirmation (sample_type)
+    confirmation: schemas.LabAcceptanceUpdate, 
+    db: Session = Depends(get_db)
+):
+    """
+    Initiates the Clinical Chain of Custody.
+    Updates status to 'In-Progress', generates an Accession Number, 
+    and confirms the sample type for labeling.
+    """
+    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
+    
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Lab Request not found")
+    
+    if db_req.status != "Pending":
+        raise HTTPException(status_code=400, detail="Request is already being processed")
+
+    # 1. Update Status & Chain of Custody
+    db_req.status = "Accepted" 
+    
+    # 2. Generate Unique Accession Number for Barcoding
+    # Format: ACC-YYYYMMDD-HEX (Professional LIS Standard)
+    date_str = datetime.now().strftime("%Y%m%d")
+    unique_suffix = uuid.uuid4().hex[:4].upper()
+    db_req.accession_number = f"ACC-{date_str}-{unique_suffix}"
+    
+    # 3. Capture Clinical Metadata from the Technician
+    db_req.sample_type = confirmation.sample_type
+    db_req.collection_started_at = datetime.now() # The "Handshake" timestamp
+    
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return db_req
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error during acceptance")

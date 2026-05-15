@@ -9,12 +9,12 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const LabSidebar = () => {
+const LabSidebar = ({ setActiveTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
   
   const userData = JSON.parse(sessionStorage.getItem('user_data')) || {};
-  const staffId = userData.staff_id || "LAB-2026-061"; // Using ID from your screenshot
+  const staffId = userData.staff_id || "LAB-2026-061"; 
 
   const menuItems = [
     { id: 'requests', label: 'Test Requests', icon: <ClipboardList size={20}/>, path: '/lab-dashboard/requests' },
@@ -41,21 +41,24 @@ const LabSidebar = () => {
         </div>
       </div>
 
-      {/* Navigation Section with added spacing */}
+      {/* Navigation Section */}
       <nav style={navSection}>
         {menuItems.map((item) => {
+          // Check if current URL matches the item path for styling
           const isActive = location.pathname.includes(item.path);
+          
           return (
             <div 
               key={item.id}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                setActiveTab(item.id); // 1. Swaps the component in LabDashboard
+                navigate(item.path);   // 2. Updates the URL path
+              }}
               style={{
                 ...navItemStyle,
                 backgroundColor: isActive ? '#ecfdf5' : 'transparent',
                 color: isActive ? '#10b981' : '#64748b',
-                // Increased font weight for professional look
                 fontWeight: isActive ? '700' : '600', 
-                // Subtle border on active item
                 borderLeft: isActive ? `4px solid #10b981` : '4px solid transparent'
               }}
             >
@@ -78,8 +81,7 @@ const LabSidebar = () => {
   );
 };
 
-// --- Updated Styles for Spacing & Weight ---
-// Change ONLY this section in your LabSidebar.jsx
+// --- Styles ---
 
 const sidebarContainer = {
   width: '280px',
@@ -88,25 +90,24 @@ const sidebarContainer = {
   display: 'flex',
   flexDirection: 'column',
   borderRight: '1px solid #f1f5f9',
-  // FIX: Change 'sticky' to 'fixed'
   position: 'fixed', 
   left: 0,
   top: 0,
   bottom: 0,
   zIndex: 100,
-  // Optional: prevent the sidebar itself from ever shrinking
   flexShrink: 0 
 };
+
 const headerSection = {
-  padding: '40px 24px 32px 24px', // More generous top padding
+  padding: '40px 24px 32px 24px',
   display: 'flex',
   flexDirection: 'column',
   gap: '6px'
 };
 
 const logoStyle = {
-  fontSize: '26px', // Slightly larger logo
-  fontWeight: '900', // Heaviest weight for brand
+  fontSize: '26px',
+  fontWeight: '900',
   margin: 0,
   letterSpacing: '-0.8px',
   color: '#0f172a'
@@ -129,15 +130,15 @@ const navSection = {
   padding: '0 16px',
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px' // Increased vertical spacing between items
+  gap: '8px'
 };
 
 const navItemStyle = {
   display: 'flex',
   alignItems: 'center',
   gap: '14px',
-  padding: '14px 16px', // Increased internal padding for better touch targets
-  borderRadius: '0 12px 12px 0', // Rounded on right side
+  padding: '14px 16px',
+  borderRadius: '0 12px 12px 0',
   cursor: 'pointer',
   transition: 'all 0.2s ease-in-out',
   fontSize: '15px'
