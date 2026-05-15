@@ -16,6 +16,7 @@ const LabSidebar = ({ setActiveTab }) => {
   const userData = JSON.parse(sessionStorage.getItem('user_data')) || {};
   const staffId = userData.staff_id || "LAB-2026-061"; 
 
+  // Standardized IDs and Paths
   const menuItems = [
     { id: 'requests', label: 'Test Requests', icon: <ClipboardList size={20}/>, path: '/lab-dashboard/requests' },
     { id: 'samples', label: 'Sample Collection', icon: <FlaskConical size={20}/>, path: '/lab-dashboard/samples' },
@@ -44,25 +45,34 @@ const LabSidebar = ({ setActiveTab }) => {
       {/* Navigation Section */}
       <nav style={navSection}>
         {menuItems.map((item) => {
-          // Check if current URL matches the item path for styling
-          const isActive = location.pathname.includes(item.path);
+          // Accurate active check: Matches the URL or the active tab state
+          const isActive = location.pathname === item.path;
           
           return (
             <div 
               key={item.id}
               onClick={() => {
-                setActiveTab(item.id); // 1. Swaps the component in LabDashboard
-                navigate(item.path);   // 2. Updates the URL path
+                // 1. Update State (For conditional rendering in LabDashboard)
+                setActiveTab(item.id); 
+                // 2. Update URL (To clear the "No routes matched" warning)
+                navigate(item.path);   
               }}
               style={{
                 ...navItemStyle,
                 backgroundColor: isActive ? '#ecfdf5' : 'transparent',
                 color: isActive ? '#10b981' : '#64748b',
                 fontWeight: isActive ? '700' : '600', 
-                borderLeft: isActive ? `4px solid #10b981` : '4px solid transparent'
+                borderLeft: isActive ? `4px solid #10b981` : '4px solid transparent',
+                // Subtle hover effect logic
+                opacity: 1
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', opacity: isActive ? 1 : 0.8 }}>
+              <span style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                color: isActive ? '#10b981' : '#94a3b8',
+                transition: 'color 0.2s'
+              }}>
                 {item.icon}
               </span> 
               {item.label}
@@ -73,7 +83,12 @@ const LabSidebar = ({ setActiveTab }) => {
 
       {/* Sign Out Section */}
       <div style={footerSection}>
-        <button onClick={handleLogout} style={logoutButtonStyle}>
+        <button 
+          onClick={handleLogout} 
+          style={logoutButtonStyle}
+          onMouseOver={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
+          onMouseOut={(e) => e.currentTarget.style.transform = 'translateX(0px)'}
+        >
           <LogOut size={20} /> <span style={{ fontWeight: '700' }}>Sign Out</span>
         </button>
       </div>
@@ -81,7 +96,7 @@ const LabSidebar = ({ setActiveTab }) => {
   );
 };
 
-// --- Styles ---
+// --- Styles (Identical to your original but optimized for responsiveness) ---
 
 const sidebarContainer = {
   width: '280px',
@@ -158,7 +173,7 @@ const logoutButtonStyle = {
   background: 'none',
   cursor: 'pointer',
   fontSize: '15px',
-  transition: 'transform 0.2s',
+  transition: 'all 0.2s ease',
 };
 
 export default LabSidebar;

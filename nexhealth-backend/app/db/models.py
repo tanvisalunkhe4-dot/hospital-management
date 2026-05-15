@@ -4,6 +4,7 @@ from sqlalchemy.sql.functions import now
 from sqlalchemy import event
 from app.db.session import Base
 from datetime import datetime, timezone
+from datetime import datetime, timezone
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Date, Time
 class Revenue(Base):
@@ -483,9 +484,9 @@ class MedicineCatalog(Base):
     category = Column(String, nullable=True)
     stock_quantity = Column(Integer, default=0)
     is_available =  Column(Boolean, default =True)
+
     min_reserve_limit = Column(Integer, default=0) # Safety Stock Threshold
     
-
 
 class PrescriptionTemplate(Base):
     __tablename__ = "prescription_templates"
@@ -501,7 +502,6 @@ class PrescriptionTemplate(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     doctor = relationship("Doctor")
-
 class LabRequest(Base):
     __tablename__ = "lab_requests"
     
@@ -509,29 +509,65 @@ class LabRequest(Base):
     hospital_id = Column(Integer, ForeignKey("hospitals.id"))
     patient_id = Column(Integer, ForeignKey("patients.id"))
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
-    doctor_id = Column(Integer, ForeignKey("staff.id")) # The doctor who requested it
+    doctor_id = Column(Integer, ForeignKey("staff.id")) 
     
     # Test Details
-
-    test_name = Column(String, nullable=False) # e.g., "Complete Blood Count"
+    test_name = Column(String, nullable=False) 
     price_at_request = Column(Float, default=0.0)
-    category = Column(String, nullable=True)  # e.g., "Hematology"
-    priority = Column(String, default="Normal") # e.g., "Urgent", "Stat"
+    category = Column(String, nullable=True)  
+    priority = Column(String, default="Normal") 
+
+    accession_number = Column(String, unique=True, index=True, nullable=True)
+    sample_type = Column(String, nullable=True) 
     
-    # Status Management for Lab Dashboard
-    status = Column(String, default="Pending") # Pending, In-Progress, Completed, Cancelled
-    
-    # Results linkage
+    # --- STATUS & LIFECYCLE ---
+    # Transitions: Pending -> Accepted -> Collected -> Processing -> Completed
+    status = Column(String, default="Pending")
+
+    # --- NEW: RESULTS DATA STORAGE ---
+    # Stores numerical/text findings: e.g., {"Hb": "14.2", "WBC": "7000"}
+    test_results = Column(JSONB, nullable=True) 
     result_summary = Column(Text, nullable=True)
-    result_file_url = Column(String, nullable=True) # Link to the PDF report
+    result_file_url = Column(String, nullable=True) 
     
+    # --- NEW: DETAILED TIMESTAMPS ---
     requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    completed_at = Column(DateTime, nullable=True)
+    collection_started_at = Column(DateTime, nullable=True) # When technician clicked 'Accept'
+    collected_at = Column(DateTime, nullable=True)          # When technician clicked 'Mark Collected'
+    processing_at = Column(DateTime, nullable=True)         # When sample entered the machine
+    completed_at = Column(DateTime, nullable=True)          # When results were finalized
+
+    # --- NEW: STAFF TRACKING ---
+    technician_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
 
     # Relationships
     patient = relationship("Patient")
     hospital = relationship("Hospital")
-    doctor = relationship("Staff")
+    doctor = relationship("Staff", foreign_keys=[doctor_id])
+    technician = relationship("Staff", foreign_keys=[technician_id])
+    results = relationship("LabResult", back_populates="request", cascade="all, delete-orphan")
+
+
+class LabResult(Base):
+    __tablename__ = "lab_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(Integer, ForeignKey("lab_requests.id", ondelete="CASCADE"), nullable=False)
+    
+    # Clinical Data
+    parameter_name = Column(String, nullable=False)  # e.g., "Hemoglobin", "Glucose"
+    parameter_value = Column(String, nullable=False) # Stored as string to handle "Negative/Positive" or numbers
+    unit = Column(String)                           # e.g., "g/dL", "mg/dL"
+    reference_range = Column(String)                # e.g., "13.5 - 17.5"
+    
+    # Metadata
+    interpreted_status = Column(String)             # "Normal", "High", "Low", "Critical"
+    entered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    technician_notes = Column(Text, nullable=True)
+
+    # Relationships
+    # This links the result back to the original request we've been tracking
+    request = relationship("LabRequest", back_populates="results")
 
 class LabTestCatalog(Base):
     __tablename__ = "lab_test_catalog"

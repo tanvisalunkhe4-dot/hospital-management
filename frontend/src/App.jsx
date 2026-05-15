@@ -89,7 +89,7 @@ function App() {
 </Route>
 
           {/* Lab Portal with Nested Routing */}
-          <Route path="/lab-dashboard" element={<LabDashboardWrapper />}>
+          <Route path="/lab-dashboard/*" element={<LabDashboardWrapper />}>
   <Route index element={<TestProcessing />} /> 
   <Route path="requests" element={<TestRequests />} />
   <Route path="samples" element={<SampleCollection />} />

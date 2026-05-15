@@ -53,6 +53,16 @@ const secondaryValue = { fontSize: '13px', color: '#64748b', fontWeight: '500' }
 const metaBadge = { fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', border: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' };
 const iconCircle = { width: '32px', height: '32px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' };
 
+
+const getStatusStyle = (status) => {
+  switch (status) {
+    case 'Pending': return { bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' }; // Orange
+    case 'Accepted': return { bg: '#eff6ff', text: '#1d4ed8', border: '#dbeafe' }; // Blue
+    case 'Collected': return { bg: '#f0fdf4', text: '#15803d', border: '#dcfce7' }; // Green
+    default: return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+  }
+};
+
 const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
  
   const navigate = useNavigate();
@@ -168,6 +178,7 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
             <tr>
               <th style={thStyle}>Patient Metadata</th>
               <th style={thStyle}>Test Profile</th>
+              <th style={thStyle}>Status</th> 
               <th style={thStyle}>Requesting Source</th>
               <th style={thStyle}>Urgency</th>
               <th style={thStyle}>Actions</th>
@@ -201,6 +212,27 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
                     </div>
                   </div>
                 </td>
+                <td style={tdStyle}>
+  {(() => {
+    const colors = getStatusStyle(req.status || 'Pending');
+    return (
+      <span style={{
+        backgroundColor: colors.bg,
+        color: colors.text,
+        border: `1px solid ${colors.border}`,
+        padding: '6px 12px',
+        borderRadius: '20px',
+        fontSize: '11px',
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        display: 'inline-block'
+      }}>
+        {req.status || 'Pending'}
+      </span>
+    );
+  })()}
+</td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={priorityDot(req.priority === 'Urgent')}></span>
@@ -254,16 +286,24 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
                   <ShieldCheck size={24} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>Collection Handshake</h3>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                    <span style={metaBadge}>Ref: #LAB-{selectedRequest.id}</span>
-                    <span style={metaBadge}>
-                      {selectedRequest.requested_at ? new Date(selectedRequest.requested_at).toLocaleString('en-IN', {
-                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                      }) : 'N/A'}
-                    </span>
-                  </div>
-                </div>
+  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>Collection Handshake</h3>
+  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+    <span style={metaBadge}>Ref: #LAB-{selectedRequest.id}</span>
+    
+    {/* ADDED: Visual confirmation of the Barcode/Accession ID */}
+    {selectedRequest.accession_number && (
+      <span style={{ ...metaBadge, color: '#10b981', borderColor: '#10b981', background: '#f0fdf4' }}>
+        LIS ID: {selectedRequest.accession_number}
+      </span>
+    )}
+
+    <span style={metaBadge}>
+      {selectedRequest.requested_at ? new Date(selectedRequest.requested_at).toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      }) : 'N/A'}
+    </span>
+  </div>
+</div>
               </div>
               <button onClick={() => setShowModal(false)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
             </div>

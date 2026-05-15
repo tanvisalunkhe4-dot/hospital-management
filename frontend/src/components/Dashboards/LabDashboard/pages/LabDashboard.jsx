@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import LabSidebar from '../components/LabSidebar';
 import LabHeader from '../components/LabHeader';
 import TestRequests from './TestRequests';
-import SampleCollection from './SampleCollection'; // 1. Import the new component
+import SampleCollection from './SampleCollection';
+import TestProcessing from './TestProcessing'; // 1. Import the new component
 
 const LabDashboard = () => {
-  // 2. Ensure your Sidebar is sending 'samples' as the key when clicked
   const [activeTab, setActiveTab] = useState('requests');
 
   return (
@@ -22,19 +22,24 @@ const LabDashboard = () => {
             
             <div className="mb-4">
               <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 w-fit px-2 py-1 rounded">
-                LIS / {activeTab === 'requests' ? 'Test Requests' : 'Sample Collection'}
+                LIS / {
+                  activeTab === 'requests' ? 'Test Requests' : 
+                  activeTab === 'samples' ? 'Sample Collection' : 
+                  'Test Processing'
+                }
               </p>
             </div>
 
             <div className="animate-in fade-in duration-500">
-              {/* 3. Conditional Rendering Logic */}
               {activeTab === 'requests' && <TestRequests setActiveTab={setActiveTab} />}              
               {activeTab === 'samples' && <SampleCollection />}
+              
+              {/* 2. Replace the placeholder with the actual module */}
+              {activeTab === 'processing' && <TestProcessing />}
 
-              {/* Placeholder for future modules */}
-              {activeTab === 'processing' && (
+              {activeTab === 'reports' && (
                 <div className="p-10 bg-white rounded-xl border border-slate-100 text-center text-slate-400">
-                  Test Processing module coming soon...
+                  Reports module coming soon...
                 </div>
               )}
             </div>
