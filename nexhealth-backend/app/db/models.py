@@ -454,7 +454,7 @@ class Prescription(Base):
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"))
     hospital_id = Column(Integer, ForeignKey("hospitals.id")) # Important for multi-tenant
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
-    
+
     medicine_name = Column(String, nullable=False)
     price = Column(Float, default=0.0) 
     quantity = Column(Integer, default=1)
@@ -472,17 +472,19 @@ class Prescription(Base):
 class MedicineCatalog(Base):
     __tablename__ = "medicine_catalog"
     id = Column(Integer, primary_key=True, index=True)
+    hospital_id = Column(Integer, index=True)
     name = Column(String, index=True, nullable=False) # e.g., "Augmentin"
     strength = Column(String, nullable=True)          # e.g., "625mg"
     form = Column(String, nullable=True)              # e.g., "Tablet"
     salt_composition = Column(Text, nullable=True)    # e.g., "Amoxycillin + Clavulanic Acid"
     manufacturer = Column(String, nullable=True)
     price = Column(Float, default=0.0)
+    expiry_date = Column(Date, nullable=True)
     category = Column(String, nullable=True)
     stock_quantity = Column(Integer, default=0)
     is_available =  Column(Boolean, default =True)
     min_reserve_limit = Column(Integer, default=0) # Safety Stock Threshold
-
+    
 
 
 class PrescriptionTemplate(Base):

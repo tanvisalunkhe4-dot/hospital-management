@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from datetime import datetime
+from typing import List, Optional
+from datetime import datetime, date, timedelta
 from pydantic import BaseModel
 
 # Project imports
@@ -10,7 +10,16 @@ from app.db.models import Appointment, Prescription, Patient, MedicalRecord, Lab
 
 router = APIRouter(prefix="/api/v1/pharmacy", tags=["Pharmacy"])
 
-# --- Request Schemas ---
+# --- Schemas ---
+class MedicineCreate(BaseModel):
+    name: str
+    stock_quantity: int
+    min_reserve_limit: int
+    price_per_unit: float
+    expiry_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
 
 class MedicineVerifyItem(BaseModel):
     id: int
@@ -191,4 +200,72 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
             } for l in labs
         ],
         "total_amount": consultation_fee + total_meds + total_labs
+    }
+
+@router.post("/inventory/{hospital_id}")
+async def add_to_inventory(hospital_id: int, medicine: MedicineCreate, db: Session = Depends(get_db)):
+    try:
+        new_medicine = MedicineCatalog(
+            hospital_id=hospital_id,
+            name=medicine.name,
+            stock_quantity=medicine.stock_quantity,
+            min_reserve_limit=medicine.min_reserve_limit,
+            price_per_unit=medicine.price_per_unit,
+            expiry_date=medicine.expiry_date
+        )
+        db.add(new_medicine)
+        db.commit()
+        db.refresh(new_medicine)
+        return {"status": "success", "message": f"{medicine.name} added to inventory"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/inventory-alerts/{hospital_id}")
+async def get_inventory_alerts(hospital_id: int, db: Session = Depends(get_db)):
+    # 1. Low Stock Alerts (Stock <= Reserve Limit)
+    low_stock = db.query(MedicineCatalog).filter(
+        MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit
+    ).all()
+
+    # 2. Expiry Alerts (Expiring in the next 30 days)
+    # Note: Requires the expiry_date column added above
+    thirty_days_from_now = datetime.now().date() + timedelta(days=30)
+    expiring_soon = db.query(MedicineCatalog).filter(
+        MedicineCatalog.expiry_date <= thirty_days_from_now
+    ).all()
+
+    return {
+        "low_stock": [
+            {
+                "name": m.name,
+                "current_stock": m.stock_quantity,
+                "reserve_limit": m.min_reserve_limit,
+                "status": "Critical" if m.stock_quantity == 0 else "Low"
+            } for m in low_stock
+        ],
+        "expiring_soon": [
+            {
+                "name": m.name,
+                "expiry_date": m.expiry_date.strftime("%Y-%m-%d"),
+                "days_left": (m.expiry_date - datetime.now().date()).days
+            } for m in expiring_soon
+        ]
+    }
+@router.get("/inventory-stats/{hospital_id}")
+async def get_inventory_stats(hospital_id: int, db: Session = Depends(get_db)):
+    # 1. Total count of ALL medicine types in your Kaggle/Active catalog
+    total_catalog = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id
+    ).count()
+    
+    # 2. Count only those that have triggered an alert (Stock <= Reserve)
+    critical_alerts = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id,
+        MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit
+    ).count()
+
+    return {
+        "total_medicines": total_catalog,
+        "low_stock_alerts": critical_alerts
     }
