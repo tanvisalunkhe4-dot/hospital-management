@@ -53,7 +53,8 @@ async def get_pharmacy_queue(
         pres_list = []
         for p in prescriptions:
             catalog_item = db.query(MedicineCatalog).filter(
-                MedicineCatalog.name == p.medicine_name
+                MedicineCatalog.name == p.medicine_name,
+                MedicineCatalog.hospital_id == hospital_id
             ).first()
 
             is_out_of_stock = False
@@ -109,7 +110,8 @@ async def verify_prescription(
 
             # 1. Fetch the catalog item immediately for every item
             catalog_item = db.query(MedicineCatalog).filter(
-                MedicineCatalog.name == db_med.medicine_name
+                MedicineCatalog.name == db_med.medicine_name,
+                MedicineCatalog.hospital_id == appt.hospital_id
             ).first()
 
             # 2. THE HARD STOP: Run this check whenever 'is_available' is True
@@ -202,38 +204,83 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
         "total_amount": consultation_fee + total_meds + total_labs
     }
 
+# --- ADD THIS NEW ENDPOINT FOR SEARCH SUGGESTIONS ---
+@router.get("/search-master")
+async def search_master_catalog(q: str, db: Session = Depends(get_db)):
+    """Searches the global Kaggle database (where hospital_id is NULL) as the pharmacist types."""
+    if not q or len(q) < 3:
+        return []
+    
+    results = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == None,
+        MedicineCatalog.name.ilike(f"%{q}%")
+    ).limit(10).all()
+    
+    return [{"id": m.id, "name": m.name, "manufacturer": m.manufacturer, "category": m.category} for m in results]
+
+
 @router.post("/inventory/{hospital_id}")
 async def add_to_inventory(hospital_id: int, medicine: MedicineCreate, db: Session = Depends(get_db)):
     try:
+        # Step 1: Check if this medicine is already assigned to your specific hospital
+        local_item = db.query(MedicineCatalog).filter(
+            MedicineCatalog.name == medicine.name,
+            MedicineCatalog.hospital_id == hospital_id
+        ).first()
+        
+        if local_item:
+            # If it already exists locally, simply update the stock and parameters (No Duplicates)
+            local_item.stock_quantity += medicine.stock_quantity
+            local_item.min_reserve_limit = medicine.min_reserve_limit
+            local_item.price = medicine.price
+            if medicine.expiry_date:
+                local_item.expiry_date = medicine.expiry_date
+            db.commit()
+            return {"status": "success", "message": f"Updated stock for existing inventory item: {medicine.name}"}
+
+        # Step 2: If it's a first-time activation, fetch the structural template (Kaggle dataset reference row)
+        global_item = db.query(MedicineCatalog).filter(
+            MedicineCatalog.name == medicine.name,
+            MedicineCatalog.hospital_id == None
+        ).first()
+
+        # Step 3: CLONE instead of modify. Create a brand new dedicated tracking row for this hospital branch
         new_medicine = MedicineCatalog(
-            hospital_id=hospital_id,
+            hospital_id=hospital_id,          # Explicitly isolate to this hospital context
             name=medicine.name,
             stock_quantity=medicine.stock_quantity,
             min_reserve_limit=medicine.min_reserve_limit,
             price=medicine.price,
-            expiry_date=medicine.expiry_date
+            expiry_date=medicine.expiry_date,
+            
+            # Inherit catalog attributes dynamically from master reference template if found
+            salt_composition=global_item.salt_composition if global_item else None,
+            strength=global_item.strength if global_item else None,
+            category=global_item.category if global_item else "General",
+            manufacturer=global_item.manufacturer if global_item else "Unknown Lab"
         )
         db.add(new_medicine)
         db.commit()
-        db.refresh(new_medicine)
-        return {"status": "success", "message": f"{medicine.name} added to inventory"}
+        return {"status": "success", "message": f"Successfully activated tracking row for {medicine.name}"}
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/inventory-alerts/{hospital_id}")
 async def get_inventory_alerts(hospital_id: int, db: Session = Depends(get_db)):
-    # 1. Low Stock Alerts (Stock <= Reserve Limit)
+    # 1. Low Stock Alerts: Genuinely checks across ALL medicines belonging to this hospital ID
     low_stock = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id, # <-- Strictly targets your hospital's stock row
         MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit
-    ).all()
+    ).order_by(MedicineCatalog.stock_quantity.asc()).limit(100).all()
 
-    # 2. Expiry Alerts (Expiring in the next 30 days)
-    # Note: Requires the expiry_date column added above
+    # 2. Expiry Alerts: Strictly restricted to this hospital ID
     thirty_days_from_now = datetime.now().date() + timedelta(days=30)
     expiring_soon = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id, # <-- Keeps data isolated
         MedicineCatalog.expiry_date <= thirty_days_from_now
-    ).all()
+    ).limit(50).all()
 
     return {
         "low_stock": [
@@ -241,27 +288,30 @@ async def get_inventory_alerts(hospital_id: int, db: Session = Depends(get_db)):
                 "name": m.name,
                 "current_stock": m.stock_quantity,
                 "reserve_limit": m.min_reserve_limit,
+                "price": m.price, # <-- ADDED: Passes pricing context to frontend edit modal
+                "expiry_date": m.expiry_date.strftime("%Y-%m-%d") if m.expiry_date else "",
                 "status": "Critical" if m.stock_quantity == 0 else "Low"
             } for m in low_stock
         ],
         "expiring_soon": [
             {
                 "name": m.name,
-                "expiry_date": m.expiry_date.strftime("%Y-%m-%d"),
-                "days_left": (m.expiry_date - datetime.now().date()).days
+                "expiry_date": m.expiry_date.strftime("%Y-%m-%d") if m.expiry_date else "N/A",
+                "days_left": (m.expiry_date - datetime.now().date()).days if m.expiry_date else 0
             } for m in expiring_soon
         ]
     }
+
 @router.get("/inventory-stats/{hospital_id}")
 async def get_inventory_stats(hospital_id: int, db: Session = Depends(get_db)):
-    # 1. Total count of ALL medicine types in your Kaggle/Active catalog
+    # Total unique medicines activated for this specific hospital unit
     total_catalog = db.query(MedicineCatalog).filter(
         MedicineCatalog.hospital_id == hospital_id
     ).count()
     
-    # 2. Count only those that have triggered an alert (Stock <= Reserve)
+    # Real-time alert counts exclusively calculated for this hospital
     critical_alerts = db.query(MedicineCatalog).filter(
-        MedicineCatalog.hospital_id == hospital_id,
+        MedicineCatalog.hospital_id == hospital_id, # <-- Isolates calculation targets
         MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit
     ).count()
 

@@ -473,7 +473,7 @@ class Prescription(Base):
 class MedicineCatalog(Base):
     __tablename__ = "medicine_catalog"
     id = Column(Integer, primary_key=True, index=True)
-    hospital_id = Column(Integer, index=True)
+    hospital_id = Column(Integer, index=True, nullable=True)
     name = Column(String, index=True, nullable=False) # e.g., "Augmentin"
     strength = Column(String, nullable=True)          # e.g., "625mg"
     form = Column(String, nullable=True)              # e.g., "Tablet"
