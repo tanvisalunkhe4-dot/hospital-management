@@ -17,7 +17,6 @@ import shutil
 import os
 import uuid
 from app.db.models import MedicalRecord
-# Import your shared logic
 from ..utils import verify_password, hash_password
 from app.db.session import get_db
 from app.router.deps import get_current_active_user

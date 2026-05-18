@@ -8,7 +8,6 @@ const ConsultationWorkspace = ({
   onComplete, 
   onRequestTest, 
   prescribedTests = [],
-  // ADD THESE PROPS FROM DASHBOARD
   prescription, 
   setPrescription, 
   clinicalSummary, 
@@ -27,8 +26,8 @@ const ConsultationWorkspace = ({
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
   const recorderRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const searchTimeoutRef = useRef(null); // ADD THIS LINE
-// Add these with your other refs/states
+  const searchTimeoutRef = useRef(null); 
+  
 const socketRef = useRef(null);
   if (!patient) {
     return (
@@ -244,10 +243,10 @@ useEffect(() => {
   };
 
 
-  const handleFinalize = async () => {
+const handleFinalize = async () => {
 
     console.log("PATIENT:", patient);
-console.log("APPOINTMENT ID:", apptId);
+    console.log("APPOINTMENT ID:", apptId);
   
     if (!apptId) {
       alert("Error: Missing Appointment ID.");
@@ -260,6 +259,20 @@ console.log("APPOINTMENT ID:", apptId);
       const token = sessionStorage.getItem('token');
       const hospitalId = sessionStorage.getItem('hospital_id');
   
+      const formattedLabTests = prescribedTests.map(test => {
+        // If the item is already an object, use its properties
+        if (typeof test === 'object' && test !== null) {
+          return {
+            test_name: test.name || test.test_name, // Try both common key names
+            priority: (test.priority || 'NORMAL').toUpperCase()
+          };
+        }
+        // Fallback if it's just a string
+        return {
+          test_name: test,
+          priority: 'NORMAL'
+        };
+      });
       await axios.post(
         `http://localhost:8000/api/v1/doctor/consultation/finish/${apptId}`,
         {
@@ -268,7 +281,7 @@ console.log("APPOINTMENT ID:", apptId);
           patient_id: pId,
           summary: clinicalSummary,
           prescriptions: prescription,
-          lab_tests: prescribedTests,
+          lab_tests: formattedLabTests,
           status: "Pending-Pharmacy" // <--- ADD THIS LINE
         },
         {
@@ -536,26 +549,52 @@ console.log("APPOINTMENT ID:", apptId);
     </div>
 
     {prescribedTests.length > 0 ? (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {prescribedTests.map((test, idx) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {prescribedTests.map((test, idx) => {
+        // Handle both old text string arrays and new object structures gracefully
+        const testName = typeof test === 'object' ? test.name : test;
+        const priority = typeof test === 'object' ? (test.priority || 'NORMAL').toUpperCase() : 'NORMAL';
+
+        // Set colors based on chosen urgency
+        const badgeStyles = {
+          URGENT: { color: '#ef4444', bg: '#fef2f2', dot: '#ef4444', border: '#fee2e2' },
+          HIGH: { color: '#f97316', bg: '#fff7ed', dot: '#f97316', border: '#ffedd5' },
+          NORMAL: { color: '#0369a1', bg: '#f0f9ff', dot: '#3b82f6', border: '#e0f2fe' }
+        }[priority] || { color: '#0369a1', bg: '#f0f9ff', dot: '#3b82f6', border: '#e0f2fe' };
+
+        return (
           <div key={idx} style={{ 
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', 
-            backgroundColor: '#f0f9ff', borderRadius: '10px', border: '1px solid #e0f2fe' 
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', 
+            backgroundColor: badgeStyles.bg, borderRadius: '10px', border: `1px solid ${badgeStyles.border}` 
           }}>
-            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#3b82f6' }}></div>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: '#0369a1' }}>{test}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: badgeStyles.dot }}></div>
+              <span style={{ fontSize: '13px', fontWeight: '600', color: badgeStyles.color }}>{testName}</span>
+            </div>
+            
+            {/* Visual Priority Indicator */}
+            <span style={{ 
+              fontSize: '10px', 
+              fontWeight: '800', 
+              letterSpacing: '0.5px',
+              color: badgeStyles.color,
+              opacity: 0.8
+            }}>
+              {priority}
+            </span>
           </div>
-        ))}
-      </div>
-    ) : (
-      <div 
-        onClick={onRequestTest}
-        style={{ padding: '15px', border: '1px dashed #e2e8f0', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
-      >
-        No tests requested. Click to add.
-      </div>
-    )}
-  </div>
+        );
+      })}
+    </div>
+  ) : (
+    <div 
+      onClick={onRequestTest}
+      style={{ padding: '15px', border: '1px dashed #e2e8f0', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
+    >
+      No tests requested. Click to add.
+    </div>
+  )}
+</div>
 
   {/* SECTION 4: FINALIZE */}
 <button 

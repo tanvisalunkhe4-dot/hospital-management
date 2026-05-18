@@ -28,13 +28,16 @@ router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
 class ScribeTextRequest(BaseModel):
     raw_text: str
-
+class LabTestItem(BaseModel):
+    test_name: str
+    priority: str = "NORMAL"
 class FinalizeConsultationRequest(BaseModel):
     summary: str
     prescriptions: List[Dict[str, Any]]
     hospital_id: int
     appointment_id: int  
-    lab_tests: List[str]
+    lab_tests: List[LabTestItem]
+
 
 STATUS_VITALS_TAKEN = "Vitals Taken"
 STATUS_SCHEDULED = "Scheduled"
@@ -324,10 +327,11 @@ async def finish_consultation(
                 route=route
             )
             db.add(new_prescription)
-        # 8. Save Lab Requests (Outside Prescription loop to prevent duplicates)
-        for test_name in data.lab_tests:
+        # 8. Save Lab Requests
+        for test_obj in data.lab_tests:
+            # test_obj is an instance of LabTestItem
             test_info = db.query(models.LabTestCatalog).filter(
-                models.LabTestCatalog.test_name == test_name
+                models.LabTestCatalog.test_name == test_obj.test_name
             ).first()
             
             new_lab_request = models.LabRequest(
@@ -335,12 +339,12 @@ async def finish_consultation(
                 patient_id=appointment.patient_id,
                 appointment_id=appointment_id,
                 doctor_id=staff_record.id,
-                test_name=test_name,
+                test_name=test_obj.test_name,
                 price_at_request=test_info.base_price if test_info else 0.0,
-                status="Pending"
+                status="Pending",
+                priority=test_obj.priority # Use the priority from the request object
             )
             db.add(new_lab_request)
-
         # 9. Update Status for Pharmacy Queue
         appointment.status = "Pending-Pharmacy"
         

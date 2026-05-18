@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from datetime import date
@@ -187,6 +187,38 @@ def accept_test_request(
         db.rollback()
         raise HTTPException(status_code=500, detail="Database error during acceptance")
 
+@router.put("/requests/{request_id}/reject", response_model=schemas.LabRequestResponse)
+def reject_test_request(request_id: int, db: Session = Depends(get_db)):
+    """
+    Updates the status of a pending requisition to 'Rejected'.
+    Ensures safe operations by preventing modification of active flows.
+    """
+    db_req = db.query(models.LabRequest).options(
+        joinedload(models.LabRequest.patient),
+        joinedload(models.LabRequest.doctor).joinedload(models.Staff.department)
+    ).filter(models.LabRequest.id == request_id).first()
+    
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Lab Request record not found")
+        
+    if db_req.status != "Pending":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot reject request. Current process status is tracking as '{db_req.status}'."
+        )
+        
+    db_req.status = "Rejected"
+    
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return flatten_lab_data(db_req)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error handling rejection record submission")
+
+
+        
 router.put("/requests/{request_id}/collect", response_model=schemas.LabRequestResponse)
 def mark_sample_collected(request_id: int, db: Session = Depends(get_db)):
     """Triggered when technician confirms they have the physical vial"""
@@ -209,33 +241,95 @@ def get_collected_samples(hospital_id: int, db: Session = Depends(get_db)):
         .filter(models.LabRequest.hospital_id == hospital_id, models.LabRequest.status == "Collected").all()
     return [flatten_lab_data(r) for r in requests]
 
-@router.put("/requests/{request_id}/complete")
-def complete_lab_test(request_id: int, result_data: schemas.LabResultUpdate, db: Session = Depends(get_db)):
-    """Finalizes the test and saves the findings into the JSONB column"""
-    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
-    if not db_req:
-        raise HTTPException(status_code=404, detail="Request not found")
 
+@router.put("/requests/{request_id}/complete")
+def complete_lab_test(
+    request_id: int, 
+    result_data: schemas.LabResultUpdate, 
+    db: Session = Depends(get_db)
+):
+    """
+    Requirements Addressed:
+    - Record test results (JSONB storage)
+    - Update test status (Mark as 'Completed')
+    """
+    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
+    
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Lab Request not found")
+
+    # 1. Update status to 'Completed'
     db_req.status = "Completed"
-    db_req.test_results = result_data.test_results # The JSON blob from your UI
+    
+    # 2. Record the medical findings
+    db_req.test_results = result_data.test_results  # Flexible JSON for any test type
     db_req.result_summary = result_data.result_summary
+    
+    # 3. Final timestamp
     db_req.completed_at = datetime.now(timezone.utc)
     
-    db.commit()
-    return {"status": "success", "message": "Results finalized"}
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return {"status": "success", "message": "Results finalized", "request_id": request_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save results")
 
-# In your FastAPI router file
-@router.put("/requests/{request_id}/collect")
-async def collect_sample(request_id: int, db: Session = Depends(get_db)):
-    # 1. Find the request in PostgreSQL
-    db_request = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
+@router.put("/requests/{request_id}/collect", response_model=schemas.LabRequestResponse)
+def mark_sample_collected(
+    request_id: int, 
+    # Use a schema to record WHO and any specific details/notes
+    collection_data: schemas.LabCollectionUpdate, 
+    db: Session = Depends(get_db)
+):
+    """
+    Finalizes the physical collection:
+    1. Validates the request exists.
+    2. Records the timestamp and technician ID.
+    3. Moves status to 'Collected'.
+    """
+    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
     
-    if not db_request:
-        raise HTTPException(status_code=404, detail="Request not found")
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Lab Request not found")
+
+    # Step: Record sample details
+    db_req.status = "Collected"
+    db_req.collected_at = datetime.now()
+    
+    # Assuming your model has these fields for accountability
+    # If your model uses 'notes' instead of 'collection_notes', adjust accordingly
+    db_req.notes = collection_data.collection_notes 
+    
+    # If you have a phlebotomist_id field in your DB:
+    # db_req.collected_by = collection_data.collected_by 
+
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return flatten_lab_data(db_req)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update collection status")
+
+
+
+
+@router.get("/requests/{request_id}/label", response_model=schemas.LabRequestResponse)
+def get_label_data(request_id: int, db: Session = Depends(get_db)):
+    """
+    Provides the verified metadata for printing physical specimen labels.
+    """
+    db_req = db.query(models.LabRequest)\
+        .options(joinedload(models.LabRequest.patient))\
+        .filter(models.LabRequest.id == request_id).first()
         
-    # 2. Update status and timestamp
-    db_request.status = "Collected"
-    db_request.collected_at = datetime.now()
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Request not found")
     
-    db.commit()
-    return {"message": "Sample marked as collected", "status": "Collected"}
+    if not db_req.accession_number:
+        raise HTTPException(status_code=400, detail="Accession number not generated. Accept the request first.")
+
+    return flatten_lab_data(db_req)
+

@@ -13,7 +13,7 @@ const LabReports = ({ patient, onBack }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [successMessage, setSuccessMessage] = useState(""); // Feedback for the doctor
-  
+  const [selectedPriority, setSelectedPriority] = useState("Normal");
   const [newlyAddedTests, setNewlyAddedTests] = useState([]);
   const pId = patient?.patient_id || patient?.id;
 
@@ -58,7 +58,7 @@ const LabReports = ({ patient, onBack }) => {
         doctor_id: userData?.staff_record_id || 38, 
         test_name: test.test_name,
         category: test.category,
-        priority: "Normal"
+        priority: selectedPriority
       };
   
       const response = await axios.post("http://localhost:8000/api/v1/doctor/lab-requests", payload, {
@@ -69,10 +69,10 @@ const LabReports = ({ patient, onBack }) => {
         setSuccessMessage(`${test.test_name} requested successfully!`);
         setShowModal(false);
         // Replace the line where you update newlyAddedTests:
-setNewlyAddedTests(prev => {
-  if (prev.includes(test.test_name)) return prev; // Don't add duplicates
-  return [...prev, test.test_name];
-});
+        setNewlyAddedTests(prev => {
+          if (prev.find(t => t.name === test.test_name)) return prev;
+          return [...prev, { name: test.test_name, priority: selectedPriority }];
+        });
         fetchReports(); 
         
         // Clear success message after 3 seconds
@@ -149,6 +149,18 @@ setNewlyAddedTests(prev => {
                 style={{ padding: '12px 12px 12px 40px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%', outline: 'none' }}
                 onChange={(e) => setCatalogSearch(e.target.value)}
               />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>Select Priority:</label>
+              <select 
+                value={selectedPriority} 
+                onChange={(e) => setSelectedPriority(e.target.value)}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px', outline: 'none' }}
+              >
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
+                <option value="Urgent">Urgent</option>
+              </select>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
   {filteredCatalog.map(test => {

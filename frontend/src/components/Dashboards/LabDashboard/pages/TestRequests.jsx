@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, CheckCircle2, Clock, Search, Beaker, User, ShieldCheck } from 'lucide-react';
+import { Eye, CheckCircle2, Clock, Search, Beaker, User, ShieldCheck, XCircle} from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom'; 
 const containerStyle = { 
@@ -32,11 +32,11 @@ const tdStyle = { padding: '20px 24px', verticalAlign: 'middle' };const trStyle 
 const doctorAvatar = { width: '36px', height: '36px', borderRadius: '12px', background: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '800', border: '1px solid #dbeafe' };
 const testBadge = { backgroundColor: '#f0fdf4', color: '#16a34a', padding: '8px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', border: '1px solid #dcfce7' };
 
-const priorityDot = (isUrgent) => ({ width: '8px', height: '8px', borderRadius: '50%', background: isUrgent ? '#ef4444' : '#6366f1', display: 'inline-block', marginRight: '8px' });
 const urgentBadge = { color: '#ef4444', backgroundColor: '#fef2f2', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '800', border: '1px solid #fee2e2' };
 const normalBadge = { color: '#6366f1', backgroundColor: '#eef2ff', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '800', border: '1px solid #e0e7ff' };
 
 const acceptButton = { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '12px', border: 'none', background: '#10b981', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)' };
+const rejectButton = { display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', borderRadius: '12px', border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s ease' };
 const actionGroup = { display: 'flex', gap: '8px' };
 const viewButton = { padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer' };
 const emptyState = { textAlign: 'center', padding: '80px', color: '#94a3b8', fontWeight: '600' };
@@ -53,6 +53,29 @@ const secondaryValue = { fontSize: '13px', color: '#64748b', fontWeight: '500' }
 const metaBadge = { fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', border: '1px solid #e2e8f0', color: '#64748b', background: '#f8fafc' };
 const iconCircle = { width: '32px', height: '32px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' };
 
+const getPriorityDot = (priority) => {
+  const p = (priority || "").toLowerCase();
+  return {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: p === 'urgent' ? '#ef4444' : (p === 'high' ? '#f59e0b' : '#6366f1'),
+    display: 'inline-block',
+    marginRight: '8px'
+  };
+};
+
+const getPriorityBadgeStyle = (priority) => {
+  switch (priority) {
+    case 'Urgent':
+      return { color: '#ef4444', bg: '#fef2f2', border: '#fee2e2' };
+    case 'High':
+      return { color: '#b45309', bg: '#fffbeb', border: '#fde68a' };
+    case 'Normal':
+    default:
+      return { color: '#6366f1', bg: '#eef2ff', border: '#e0e7ff' };
+  }
+};
 
 const getStatusStyle = (status) => {
   switch (status) {
@@ -133,6 +156,25 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
       alert(error.response?.data?.detail || "Failed to accept request. Please check backend connection.");
     }
 };
+
+
+const handleReject = async (requestId) => {
+  if (!window.confirm("Are you sure you want to reject this laboratory request?")) {
+    return;
+  }
+
+  try {
+    const response = await axios.put(`http://localhost:8000/api/v1/lab/requests/${requestId}/reject`);
+    if (response.status === 200) {
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+      alert("Request successfully rejected.");
+    }
+  } catch (error) {
+    console.error("Rejection Error:", error);
+    alert(error.response?.data?.detail || "Failed to reject request.");
+  }
+};
+
   const filteredRequests = requests.filter(req => 
     req.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     req.patient_id?.toString().includes(searchQuery)
@@ -176,17 +218,19 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
         <table style={tableStyle}>
           <thead>
             <tr>
-              <th style={thStyle}>Patient Metadata</th>
+            <th style={thStyle}>Patient Metadata</th>
               <th style={thStyle}>Test Profile</th>
-              <th style={thStyle}>Status</th> 
               <th style={thStyle}>Requesting Source</th>
-              <th style={thStyle}>Urgency</th>
+              <th style={thStyle}>Status</th> 
+              <th style={thStyle}>Priority</th>       {/* Matches Cell 5 */}
+              <th style={thStyle}>Request Date</th>   {/* Matches Cell 6 */}
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredRequests.length > 0 ? filteredRequests.map((req) => (
               <tr key={req.id}>
+                {/* Cell 1: Patient Metadata */}
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div style={{ width: '42px', height: '42px', borderRadius: '14px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', border: '1px solid #e2e8f0' }}>
@@ -198,9 +242,12 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
                     </div>
                   </div>
                 </td>
+                {/* Cell 2: Test Profile */}
                 <td style={tdStyle}>
                   <div style={testBadge}>{req.test_name}</div>
                 </td>
+
+                {/* Cell 3: Requesting Source */}
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={doctorAvatar}>
@@ -212,6 +259,7 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
                     </div>
                   </div>
                 </td>
+                {/* Cell 4: Status */}
                 <td style={tdStyle}>
   {(() => {
     const colors = getStatusStyle(req.status || 'Pending');
@@ -233,37 +281,97 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
     );
   })()}
 </td>
+
+{/* Cell 5: Dynamic Priority Badge */}
+<td style={tdStyle}>
+  <div style={{ display: 'flex', alignItems: 'center' }}>
+    <span style={getPriorityDot(req.priority)}></span>
+    
+    {(() => {
+      const raw = (req.priority || "Normal").toLowerCase();
+      // CHANGE: Use .toUpperCase() here for the display text
+      const displayPriority = raw.toUpperCase(); 
+      
+      // Use the normalized 'raw' value for the style lookup
+      const pStyle = getPriorityBadgeStyle(raw.charAt(0).toUpperCase() + raw.slice(1)); 
+      
+      return (
+        <span style={{
+          padding: '6px 12px',
+          borderRadius: '8px',
+          fontSize: '11px',
+          fontWeight: '800',
+          color: pStyle.color,
+          backgroundColor: pStyle.bg,
+          border: `1px solid ${pStyle.border}`
+        }}>
+          {displayPriority} 
+        </span>
+      );
+    })()}
+  </div>
+</td>               {/* Cell 6: Request Date (Aligned to Request Date Header) */}
+               <td style={tdStyle}>
+  {req.requested_at ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      {/* Date Row: Outputs e.g., "12 May 2026" using Indian Date Formats */}
+      <div style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
+        {new Date(req.requested_at).toLocaleDateString('en-IN', {
+          day: '2-digit', 
+          month: 'short', 
+          year: 'numeric',
+          timeZone: 'Asia/Kolkata' // Forces Indian Time Zone evaluation
+        })}
+      </div>
+      
+      {/* Time Row: Outputs e.g., "06:11 AM" */}
+      <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>
+        {new Date(req.requested_at).toLocaleTimeString('en-IN', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata' // Forces Indian Time Zone evaluation
+        })}
+      </div>
+    </div>
+  ) : (
+    /* Clean, non-mock fallback display if backend fields return blank/null strings */
+    <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', fontWeight: '500' }}>
+      Timestamp Missing
+    </div>
+  )}
+</td>
+
+                {/* Cell 7: Actions */}
                 <td style={tdStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={priorityDot(req.priority === 'Urgent')}></span>
-                    <span style={req.priority === 'Urgent' ? urgentBadge : normalBadge}>
-                      {req.priority}
-                    </span>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      style={{ ...viewButton, padding: '10px' }} 
+                      onClick={() => handleOpenModal(req, true)} 
+                    >
+                      <Eye size={18} />
+                    </button>
+
+                    <button 
+                      className="action-btn"
+                      style={rejectButton}
+                      onClick={() => handleReject(req.id)}
+                      title="Reject Request"
+                    >
+                      <XCircle size={15} /> <span style={{ fontSize: '12px' }}>Reject</span>
+                    </button>
+                    <button 
+                      onClick={() => handleOpenModal(req, false)} 
+                      style={acceptButton}
+                    >
+                      <CheckCircle2 size={16} /> Accept
+                    </button>
                   </div>
                 </td>
-                <td style={tdStyle}>
-  <div style={{ display: 'flex', gap: '10px' }}>
-    {/* EYE ICON: Now opens as View-Only */}
-    <button 
-      style={{ ...viewButton, padding: '10px' }} 
-      onClick={() => handleOpenModal(req, true)} 
-    >
-      <Eye size={18} />
-    </button>
-
-    {/* ACCEPT BUTTON: Opens the active collection handshake */}
-    <button 
-      onClick={() => handleOpenModal(req, false)} 
-      style={acceptButton}
-    >
-      <CheckCircle2 size={16} /> Accept
-    </button>
-  </div>
-</td>
               </tr>
             )) : (
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '120px', color: '#94a3b8' }}>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '120px', color: '#94a3b8' }}>
                   <Beaker size={48} style={{ marginBottom: '16px', opacity: 0.2, margin: '0 auto' }} />
                   <p style={{ fontSize: '16px', fontWeight: '600' }}>
                     {loading ? "Refreshing Lab Queue..." : "All requests have been processed."}
@@ -289,7 +397,11 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
   <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>Collection Handshake</h3>
   <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
     <span style={metaBadge}>Ref: #LAB-{selectedRequest.id}</span>
-    
+    <span style={
+  (selectedRequest.priority || "").toLowerCase() === 'urgent' ? urgentBadge : normalBadge
+}>
+  {(selectedRequest.priority || "Normal").toUpperCase()}
+</span>
     {/* ADDED: Visual confirmation of the Barcode/Accession ID */}
     {selectedRequest.accession_number && (
       <span style={{ ...metaBadge, color: '#10b981', borderColor: '#10b981', background: '#f0fdf4' }}>
@@ -321,8 +433,12 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{selectedRequest.patient_name}</div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <span style={selectedRequest.priority === 'Urgent' ? urgentBadge : normalBadge}>{selectedRequest.priority}</span>
-          <span style={{ ...metaBadge, background: '#fff' }}>{selectedRequest.patient_type || 'OPD'}</span>
+        <span style={
+  (selectedRequest.priority || "").toLowerCase() === 'urgent' ? urgentBadge : normalBadge
+}>
+  {(selectedRequest.priority || "Normal").toUpperCase()}
+</span>
+         <span style={{ ...metaBadge, background: '#fff' }}>{selectedRequest.patient_type || 'OPD'}</span>
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '8px' }}>
