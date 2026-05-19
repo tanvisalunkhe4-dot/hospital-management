@@ -3,7 +3,8 @@ import LabSidebar from '../components/LabSidebar';
 import LabHeader from '../components/LabHeader';
 import TestRequests from './TestRequests';
 import SampleCollection from './SampleCollection';
-import TestProcessing from './TestProcessing'; // 1. Import the new component
+import TestProcessing from './TestProcessing'; 
+import ReportManager from './ReportManager';
 
 const LabDashboard = () => {
   const [activeTab, setActiveTab] = useState('requests');
@@ -37,11 +38,8 @@ const LabDashboard = () => {
               {/* 2. Replace the placeholder with the actual module */}
               {activeTab === 'processing' && <TestProcessing />}
 
-              {activeTab === 'reports' && (
-                <div className="p-10 bg-white rounded-xl border border-slate-100 text-center text-slate-400">
-                  Reports module coming soon...
-                </div>
-              )}
+              {activeTab === 'reports' && <ReportManager />}
+              
             </div>
           </div>
         </main>

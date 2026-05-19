@@ -45,23 +45,22 @@ class LabRequestResponse(LabRequestBase):
     collection_started_at: Optional[datetime] = None
     collected_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    
+    report_file_url: Optional[str] = None
+    report_generated_at: Optional[datetime] = None
+    report_sent_at: Optional[datetime] = None
+    report_delivery_status: Optional[str] = "Not Sent"
     notes: Optional[str] = None 
     result_summary: Optional[str] = None
     result_file_url: Optional[str] = None
+
+
 class LabResultUpdate(BaseModel):
     """Data sent when finalizing a test in the Processing Unit"""
     test_results: dict  
     result_summary: Optional[str] = "Test completed successfully."
-    # Add status here if you want to be able to change it from the frontend
+    # Ensure this field exists so Pydantic doesn't reject the incoming request
     status: Optional[str] = "Completed" 
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class LabResultUpdate(BaseModel):
-    """Data sent when finalizing a test in the Processing Unit"""
-    test_results: dict  # This maps to your JSONB column in Supabase
-    result_summary: Optional[str] = "Test completed successfully."
+    note: Optional[str] = None # Added because your frontend sends 'note'
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -84,3 +83,10 @@ class LabCollectionUpdate(BaseModel):
 class LabRejectionUpdate(BaseModel):
     rejection_reason: str # e.g., "Hemolyzed", "Insufficient Volume"
     technician_id: int
+
+class LabReportUpdate(BaseModel):
+    """Schema for updating report status and file URL"""
+    report_file_url: Optional[str] = None
+    report_delivery_status: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
