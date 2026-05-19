@@ -48,7 +48,8 @@ const PharmacyOverview = () => {
 
       {/* Main Stats Grid Block */}
       <div style={styles.statsGrid}>
-        <div style={{ ...styles.statCard, borderLeft: '4px solid #3b82f6' }} onClick={() => navigate('/pharmacist/queue')}>
+        {/* 1. Pending Verification -> Maps to your Prescription Queue Component */}
+        <div style={{ ...styles.statCard, borderLeft: '4px solid #3b82f6' }} onClick={() => navigate('/pharmacist/prescriptions')}>
           <div>
             <span style={styles.statLabel}>Pending Verification</span>
             <h3 style={styles.statValue}>{metrics.pending_verify}</h3>
@@ -57,7 +58,8 @@ const PharmacyOverview = () => {
           <div style={{ ...styles.iconBox, background: '#eff6ff' }}><Clock color="#3b82f6" size={22} /></div>
         </div>
 
-        <div style={{ ...styles.statCard, borderLeft: '4px solid #10b981' }} onClick={() => navigate('/pharmacist/dispensing')}>
+        {/* 2. Ready to Dispense -> Maps to your Medicine Dispensing Component */}
+        <div style={{ ...styles.statCard, borderLeft: '4px solid #10b981' }} onClick={() => navigate('/pharmacist/dispense')}>
           <div>
             <span style={styles.statLabel}>Ready to Dispense</span>
             <h3 style={styles.statValue}>{metrics.ready_to_dispense}</h3>
@@ -66,6 +68,7 @@ const PharmacyOverview = () => {
           <div style={{ ...styles.iconBox, background: '#ecfdf5' }}><CheckCircle color="#10b981" size={22} /></div>
         </div>
 
+        {/* 3. Low Stock Items -> Maps to your Stock Alerts Component */}
         <div style={{ ...styles.statCard, borderLeft: '4px solid #f97316' }} onClick={() => navigate('/pharmacist/alerts')}>
           <div>
             <span style={styles.statLabel}>Low Stock Items</span>
@@ -75,6 +78,7 @@ const PharmacyOverview = () => {
           <div style={{ ...styles.iconBox, background: '#fff7ed' }}><AlertTriangle color="#f97316" size={22} /></div>
         </div>
 
+        {/* 4. Out of Stock -> Maps directly to your Stock Alerts Component (Since it handles both low and critical/out stock states) */}
         <div style={{ ...styles.statCard, borderLeft: '4px solid #ef4444' }} onClick={() => navigate('/pharmacist/alerts')}>
           <div>
             <span style={styles.statLabel}>Out of Stock</span>
@@ -84,7 +88,6 @@ const PharmacyOverview = () => {
           <div style={{ ...styles.iconBox, background: '#fef2f2' }}><ShieldAlert color="#ef4444" size={22} /></div>
         </div>
       </div>
-
       {/* Lower Secondary Management Hub Row */}
       <div style={styles.lowerSection}>
         <div style={styles.managementCard}>
