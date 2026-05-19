@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.db import models
 from app.schemas import Lab_schema as schemas
 import uuid # For generating unique Accession Numbers
-from datetime import datetime 
+from datetime import datetime, timezone 
 
 router = APIRouter(
     prefix="/api/v1/lab",
@@ -248,24 +248,22 @@ def complete_lab_test(
     result_data: schemas.LabResultUpdate, 
     db: Session = Depends(get_db)
 ):
-    """
-    Requirements Addressed:
-    - Record test results (JSONB storage)
-    - Update test status (Mark as 'Completed')
-    """
     db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
     
     if not db_req:
         raise HTTPException(status_code=404, detail="Lab Request not found")
 
-    # 1. Update status to 'Completed'
+    # Update status and data
     db_req.status = "Completed"
     
-    # 2. Record the medical findings
-    db_req.test_results = result_data.test_results  # Flexible JSON for any test type
-    db_req.result_summary = result_data.result_summary
+    # Ensure test_results is not empty
+    if not result_data.test_results:
+        raise HTTPException(status_code=400, detail="Test results cannot be empty")
+        
+    db_req.test_results = result_data.test_results
+    db_req.result_summary = result_data.result_summary or "Verified by Lab Staff"
     
-    # 3. Final timestamp
+    # Fix: Ensure timezone is used correctly
     db_req.completed_at = datetime.now(timezone.utc)
     
     try:
@@ -274,7 +272,7 @@ def complete_lab_test(
         return {"status": "success", "message": "Results finalized", "request_id": request_id}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to save results")
+        raise HTTPException(status_code=500, detail="Failed to save results to database")
 
 @router.put("/requests/{request_id}/collect", response_model=schemas.LabRequestResponse)
 def mark_sample_collected(
@@ -333,3 +331,30 @@ def get_label_data(request_id: int, db: Session = Depends(get_db)):
 
     return flatten_lab_data(db_req)
 
+@router.put("/requests/{request_id}/draft")
+def save_lab_test_draft(
+    request_id: int, 
+    draft_data: schemas.LabResultUpdate, 
+    db: Session = Depends(get_db)
+):
+    """
+    Saves partial results to the database without changing the status to 'Completed'.
+    """
+    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
+    
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Lab Request not found")
+
+    # Update only the results data
+    if draft_data.test_results:
+        db_req.test_results = draft_data.test_results
+    
+    # We do NOT change db_req.status here. It stays as 'Collected'
+    
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return {"status": "success", "message": "Draft saved", "request_id": request_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save draft")

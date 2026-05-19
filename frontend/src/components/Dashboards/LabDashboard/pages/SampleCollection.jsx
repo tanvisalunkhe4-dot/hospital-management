@@ -64,6 +64,9 @@ const SampleCollection = () => {
       setLoading(false);
     }
   };
+  
+
+
   const handleFinalizeCollection = async () => {
     const { sample, sampleType, quantity, collectionMethod, collectionSite } = collectionModal;
     setProcessingId(sample.id);
@@ -74,19 +77,29 @@ const SampleCollection = () => {
         quantity: quantity,
         collection_method: collectionMethod,
         collection_site: collectionSite,
-        collected_at: new Date().toISOString()
+        collected_at: new Date().toISOString(),
+        status: 'Processing' // This field transition moves the request to the next stage
       };
 
       // Submits the complete metadata form to your collection API route
       const response = await axios.put(`http://localhost:8000/api/v1/lab/requests/${sample.id}/collect`, payload);
       
       if (response.status === 200) {
+        // Updates local UI to remove the processed item from the collection queue
         setSamples(prev => prev.filter(s => s.id !== sample.id));
         if (selectedPatientCard?.id === sample.id) {
           setSelectedPatientCard(null);
         }
-        setCollectionModal({ isOpen: false, sample: null, sampleType: '', quantity: '', collectionMethod: '', collectionSite: '' });
-        setToast({ visible: true, message: 'Sample metrics logged successfully!', type: 'success' });
+        setCollectionModal({ 
+          isOpen: false, 
+          sample: null, 
+          sampleType: '', 
+          quantity: '', 
+          collectionMethod: '', 
+          collectionSite: '' 
+        });
+        
+        setToast({ visible: true, message: 'Sample transitioned to Test Processing!', type: 'success' });
         setTimeout(() => setToast({ visible: false, message: '', type: 'success' }), 3000);
       }
     } catch (error) {
@@ -96,24 +109,75 @@ const SampleCollection = () => {
       setProcessingId(null);
     }
   };
-  
 
   const handlePrintLabel = (sample) => {
-    // Mocking the professional label output
-    const labelData = {
-      patient: sample.patient_name,
-      accession: sample.accession_number,
-      specimen: sample.sample_type,
-      timestamp: new Date().toLocaleString()
-    };
-    
-    console.log("Printing Specimen Label:", labelData);
-    alert(`Label Printed!\nAccession: ${sample.accession_number}\nPatient: ${sample.patient_name}`);
+    const printWindow = window.open('', '_blank', 'width=450,height=600');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <style>
+            @page { size: 3in 4in; margin: 0; }
+            body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 10px; margin: 0; color: #1e293b; }
+            .label-container { border: 2px solid #10b981; padding: 12px; width: 280px; border-radius: 8px; background: #fff; }
+            .header { text-align: center; border-bottom: 2px solid #10b981; padding-bottom: 8px; margin-bottom: 12px; }
+            .logo-text { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+            .hosp-name { font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+            .field { display: flex; justify-content: space-between; margin: 5px 0; font-size: 12px; }
+            .label-title { font-weight: 700; color: #475569; }
+            .barcode-area { text-align: center; margin: 15px 0; background: #f8fafc; padding: 10px; border-radius: 6px; }
+            .acc-num { font-size: 18px; font-weight: 900; color: #0f172a; }
+            .scanner-hint { font-size: 8px; color: #64748b; margin-top: 4px; font-weight: 600; }
+            .footer-section { margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+            .sig-line { border-top: 1px solid #1e293b; width: 120px; margin: 25px auto 5px auto; }
+            .sig-text { font-size: 10px; color: #64748b; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <div class="label-container">
+            <div class="header">
+              <div class="logo-text">Powered by NexHealth</div>
+              <div class="hosp-name">CITY CENTRAL HOSPITAL</div>
+            </div>
+            
+            <div class="field"><span class="label-title">Patient:</span> <span>${sample.patient_name}</span></div>
+            <div class="field"><span class="label-title">PID/Age:</span> <span>${sample.patient_id || 'N/A'} / ${sample.patient_age || 'N/A'}</span></div>
+            
+            <div class="barcode-area">
+              <div class="acc-num">${sample.accession_number}</div>
+              <div class="scanner-hint">SCAN FOR LIS DATA</div>
+            </div>
+  
+            <div class="field"><span class="label-title">Test:</span> <span>${sample.test_name}</span></div>
+            <div class="field"><span class="label-title">Type:</span> <span>${sample.sample_type}</span></div>
+            <div class="field"><span class="label-title">Collected:</span> <span>${new Date().toLocaleString('en-IN')}</span></div>
+            
+            <div class="footer-section">
+              <div class="field"><span class="label-title">Doctor:</span> <span>${sample.doctor_name || 'N/A'}</span></div>
+              <div class="field"><span class="label-title">Dept:</span> <span>${sample.doctor_dept || 'N/A'}</span></div>
+            </div>
+            
+            <div class="sig-text" style="margin-top: 15px;">Tech: ${sessionStorage.getItem('user_name') || 'Lab Staff'}</div>
+            <div class="sig-line"></div>
+            <div class="sig-text">Laboratory Signature</div>
+          </div>
+          <script>window.print(); window.close();</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const countPending = samples.length;
   const uniqueSampleTypes = ['All', ...new Set(samples.map(s => s.sample_type).filter(Boolean))];
-
+  const formatIST = (dateString) => {
+    if (!dateString) return new Date().toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata'
+    });
+    
+    return new Date(dateString).toLocaleTimeString('en-IN', {
+      hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata'
+    });
+  };
   // Modern UI Styles
   const containerStyle = { padding: '32px', marginLeft: '280px', width: 'calc(100% - 280px)', boxSizing: 'border-box', position:'relative' };
   const cardStyle = { 
@@ -437,7 +501,7 @@ const SampleCollection = () => {
                     <td style={{ padding: '16px 24px' }}>
   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', fontWeight: '600', color: '#334155' }}>
     <Clock size={14} color="#94a3b8" /> 
-    {sample.collection_time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+    {formatIST(sample.collection_time)}
   </div>
 </td>
 
@@ -576,7 +640,6 @@ const SampleCollection = () => {
                 </span>
               </div>
 
-              {/* Field 6: Priority Level */}
              {/* Field 6: Priority Level - Dynamic Live Data */}
 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '4px' }}>
   <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Priority Level</span>
@@ -616,6 +679,20 @@ const SampleCollection = () => {
           </div>
         </div>
       )}
+      {/* Collection Confirmation Modal */}
+{collectionModal.isOpen && (
+  <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
+    <div style={{ background: 'white', padding: '24px', borderRadius: '16px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+      <h3 style={{ marginTop: 0 }}>Confirm Collection</h3>
+      <p style={{ fontSize: '14px', color: '#64748b' }}>Proceeding will move this sample to the Processing queue.</p>
+      
+      <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+        <button onClick={() => setCollectionModal({...collectionModal, isOpen: false})} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white' }}>Cancel</button>
+        <button onClick={handleFinalizeCollection} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#10b981', color: 'white', fontWeight: 'bold' }}>Confirm & Process</button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
