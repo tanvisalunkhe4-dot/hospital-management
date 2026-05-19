@@ -106,7 +106,9 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
   };
 
   useEffect(() => {
-    fetchRequests();
+    let isMounted = true;
+    fetchRequests().then(() => { if (isMounted) setLoading(false); });
+    return () => { isMounted = false; };
   }, []);
 
   const fetchRequests = async () => {
@@ -121,6 +123,27 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
       setLoading(false);
     }
   };
+
+  const formatIST = (dateString, type = 'full') => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    
+    if (type === 'date') {
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata'
+      });
+    }
+    if (type === 'time') {
+      return date.toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata'
+      });
+    }
+    // Default 'full' format
+    return date.toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata'
+    });
+  };
+
 
   const handleAccept = async (requestId, sampleType) => {
     if (!sampleType) {
@@ -310,36 +333,17 @@ const handleReject = async (requestId) => {
       );
     })()}
   </div>
-</td>               {/* Cell 6: Request Date (Aligned to Request Date Header) */}
+</td>
+               {/* Cell 6: Request Date (Aligned to Request Date Header) */}
                <td style={tdStyle}>
-  {req.requested_at ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-      {/* Date Row: Outputs e.g., "12 May 2026" using Indian Date Formats */}
-      <div style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
-        {new Date(req.requested_at).toLocaleDateString('en-IN', {
-          day: '2-digit', 
-          month: 'short', 
-          year: 'numeric',
-          timeZone: 'Asia/Kolkata' // Forces Indian Time Zone evaluation
-        })}
-      </div>
-      
-      {/* Time Row: Outputs e.g., "06:11 AM" */}
-      <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>
-        {new Date(req.requested_at).toLocaleTimeString('en-IN', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true,
-          timeZone: 'Asia/Kolkata' // Forces Indian Time Zone evaluation
-        })}
-      </div>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+    <div style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
+      {formatIST(req.requested_at, 'date')}
     </div>
-  ) : (
-    /* Clean, non-mock fallback display if backend fields return blank/null strings */
-    <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', fontWeight: '500' }}>
-      Timestamp Missing
+    <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>
+      {formatIST(req.requested_at, 'time')}
     </div>
-  )}
+  </div>
 </td>
 
                 {/* Cell 7: Actions */}
@@ -409,11 +413,9 @@ const handleReject = async (requestId) => {
       </span>
     )}
 
-    <span style={metaBadge}>
-      {selectedRequest.requested_at ? new Date(selectedRequest.requested_at).toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-      }) : 'N/A'}
-    </span>
+<span style={metaBadge}>
+  {formatIST(selectedRequest.requested_at, 'full')}
+</span>
   </div>
 </div>
               </div>
@@ -459,7 +461,9 @@ const handleReject = async (requestId) => {
     </div>
     <div style={{ flex: 1 }}>
       <div style={{ fontWeight: '700', color: '#334155', fontSize: '14px' }}>Dr. {selectedRequest.doctor_name}</div>
-      <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500' }}>{selectedRequest.doctor_dept} • Requested {new Date(selectedRequest.requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+      <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500' }}>
+  {selectedRequest.doctor_dept} • Requested {formatIST(selectedRequest.requested_at, 'time')}
+</div>
     </div>
     <button style={{ ...viewButton, fontSize: '11px', fontWeight: '700', padding: '6px 12px' }}>Contact Physician</button>
   </div>

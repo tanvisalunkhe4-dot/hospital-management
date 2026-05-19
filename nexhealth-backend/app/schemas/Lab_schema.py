@@ -49,12 +49,14 @@ class LabRequestResponse(LabRequestBase):
     notes: Optional[str] = None 
     result_summary: Optional[str] = None
     result_file_url: Optional[str] = None
-class LabResultSubmit(BaseModel):
-    """Schema for submitting final test results"""
-    result_summary: str
-    result_file_url: Optional[str] = None
-    status: str = "Completed"
-
+class LabResultUpdate(BaseModel):
+    """Data sent when finalizing a test in the Processing Unit"""
+    test_results: dict  
+    result_summary: Optional[str] = "Test completed successfully."
+    # Add status here if you want to be able to change it from the frontend
+    status: Optional[str] = "Completed" 
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class LabResultUpdate(BaseModel):
     """Data sent when finalizing a test in the Processing Unit"""
@@ -64,8 +66,16 @@ class LabResultUpdate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class LabCollectionUpdate(BaseModel):
-    """Data sent when the technician physically collects the specimen"""
-    collected_by: int  # Staff ID of the phlebotomist
+    """Updated Schema to match your frontend payload"""
+    sample_type: str
+    quantity: str
+    collection_method: str
+    collection_site: str
+    collected_at: datetime  # Ensure this matches your date string format
+    status: str = "Processing" # Added to accept the status transition
+    
+    # Keep these if you still need them
+    collected_by: Optional[int] = None 
     collection_notes: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
