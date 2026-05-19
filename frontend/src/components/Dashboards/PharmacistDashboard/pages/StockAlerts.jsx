@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { AlertTriangle, Calendar, Package } from 'lucide-react';
+import { Calendar, Package, AlertCircle, ShieldAlert, Clock } from 'lucide-react';
 
 const StockAlerts = () => {
     const [alerts, setAlerts] = useState({ low_stock: [], expiring_soon: [] });
@@ -10,7 +10,6 @@ const StockAlerts = () => {
         const fetchAlerts = async () => {
             try {
                 const hospitalId = sessionStorage.getItem('hospital_id');
-                // Hits the optimized endpoint (will return max 50 actual low-stock items)
                 const res = await axios.get(`http://localhost:8000/api/v1/pharmacy/inventory-alerts/${hospitalId}`);
                 setAlerts(res.data);
                 setLoading(false);
@@ -23,31 +22,49 @@ const StockAlerts = () => {
     }, []);
 
     if (loading) {
-        return <div style={{ padding: '24px', color: '#64748b' }}>Analyzing inventory health...</div>;
+        return (
+            <div style={styles.loadingWrapper}>
+                <div style={styles.spinner}>Analyzing inventory health matrix...</div>
+            </div>
+        );
     }
 
     return (
-        <div style={{ padding: '24px' }}>
-            <h2 style={{ fontWeight: '800', marginBottom: '20px', color: '#1e293b' }}>Inventory Health</h2>
+        <div style={styles.container}>
+            {/* Header Section */}
+            <div style={styles.headerSection}>
+                <h2 style={styles.pageTitle}>Inventory Health</h2>
+                <p style={styles.pageSubtitle}>Real-time tracking of critical stock depletion thresholds and upcoming batch expirations.</p>
+            </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={styles.gridContainer}>
                 {/* Low Stock Section */}
                 <div style={styles.alertCard}>
                     <div style={styles.cardHeader}>
-                        <Package color="#e11d48" />
-                        <h3 style={{ margin: 0, color: '#1e293b' }}>Stock Depletion</h3>
+                        <div style={{ ...styles.iconBox, background: '#fee2e2' }}><Package size={18} color="#ef4444" /></div>
+                        <div>
+                            <h3 style={styles.cardTitle}>Stock Depletion</h3>
+                            <p style={styles.cardSubtitle}>Active items that have crossed safety reserve margins</p>
+                        </div>
                     </div>
                     <div style={styles.listWrapper}>
                         {alerts.low_stock.map((item, idx) => (
                             <div key={idx} style={styles.alertItem}>
-                                <span style={{ fontWeight: '600', color: '#334155' }}>{item.name}</span>
+                                <div style={styles.itemMeta}>
+                                    <span style={styles.medicineName}>{item.name}</span>
+                                    <span style={styles.subtext}>Safety Limit: {item.reserve_limit} units</span>
+                                </div>
                                 <span style={styles.stockBadge}>
-                                    {item.current_stock} left (Goal: {item.reserve_limit})
+                                    <span style={styles.statusDotRed}></span>
+                                    {item.current_stock} units left
                                 </span>
                             </div>
                         ))}
                         {alerts.low_stock.length === 0 && (
-                            <div style={styles.emptyText}>All stocks are healthy! 🎉</div>
+                            <div style={styles.emptyContainer}>
+                                <ShieldAlert size={28} color="#10b981" />
+                                <div style={styles.emptyText}>All stocks are healthy!</div>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -55,20 +72,33 @@ const StockAlerts = () => {
                 {/* Expiry Section */}
                 <div style={styles.alertCard}>
                     <div style={styles.cardHeader}>
-                        <Calendar color="#f59e0b" />
-                        <h3 style={{ margin: 0, color: '#1e293b' }}>Expiring Soon</h3>
+                        <div style={{ ...styles.iconBox, background: '#fffbeb' }}><Calendar size={18} color="#d97706" /></div>
+                        <div>
+                            <h3 style={styles.cardTitle}>Expiring Soon</h3>
+                            <p style={styles.cardSubtitle}>Inventory tracking batches expiring within 30 days</p>
+                        </div>
                     </div>
                     <div style={styles.listWrapper}>
-                        {alerts.expiring_soon.map((item, idx) => (
-                            <div key={idx} style={styles.alertItem}>
-                                <span style={{ fontWeight: '600', color: '#334155' }}>{item.name}</span>
-                                <span style={styles.expiryBadge}>
-                                    {item.days_left <= 0 ? 'Expired' : `${item.days_left} days left`}
-                                </span>
-                            </div>
-                        ))}
+                        {alerts.expiring_soon.map((item, idx) => {
+                            const isExpired = item.days_left <= 0;
+                            return (
+                                <div key={idx} style={styles.alertItem}>
+                                    <div style={styles.itemMeta}>
+                                        <span style={styles.medicineName}>{item.name}</span>
+                                        <span style={styles.subtext}>Expires: {item.expiry_date || 'N/A'}</span>
+                                    </div>
+                                    <span style={isExpired ? styles.expiredBadge : styles.expiryBadge}>
+                                        <span style={isExpired ? styles.statusDotGray : styles.statusDotOrange}></span>
+                                        {isExpired ? 'Expired' : `${item.days_left} days left`}
+                                    </span>
+                                </div>
+                            );
+                        })}
                         {alerts.expiring_soon.length === 0 && (
-                            <div style={styles.emptyText}>No items expiring in the next 30 days.</div>
+                            <div style={styles.emptyContainer}>
+                                <Clock size={28} color="#64748b" />
+                                <div style={styles.emptyText}>No items expiring within 30 days.</div>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -77,14 +107,39 @@ const StockAlerts = () => {
     );
 };
 
+// --- ENTERPRISE PRODUCT LEVEL STYLES ---
 const styles = {
-    alertCard: { background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' },
-    cardHeader: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' },
-    listWrapper: { maxHeight: '400px', overflowY: 'auto' }, // Adds a clean scrollbar if alerts get heavy
-    alertItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f8fafc' },
-    stockBadge: { background: '#fff1f2', color: '#e11d48', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' },
-    expiryBadge: { background: '#fef3c7', color: '#d97706', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' },
-    emptyText: { padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }
+    container: { padding: '24px', backgroundColor: '#f8fafc', minHeight: '85vh', fontFamily: 'Inter, system-ui, sans-serif' },
+    headerSection: { marginBottom: '28px' },
+    pageTitle: { margin: 0, fontSize: '24px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px' },
+    pageSubtitle: { margin: '4px 0 0 0', fontSize: '14px', color: '#64748b' },
+    gridContainer: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' },
+    
+    alertCard: { background: '#ffffff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)' },
+    cardHeader: { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' },
+    iconBox: { width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    cardTitle: { margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' },
+    cardSubtitle: { margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' },
+    
+    listWrapper: { maxHeight: '420px', overflowY: 'auto', paddingRight: '2px' },
+    alertItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid #f8fafc' },
+    itemMeta: { display: 'flex', flexDirection: 'column', gap: '3px' },
+    medicineName: { fontSize: '14px', fontWeight: '600', color: '#1e293b' },
+    subtext: { fontSize: '12px', color: '#94a3b8' },
+    
+    // Premium Pill Badges with live indicators
+    stockBadge: { background: '#fef2f2', color: '#ef4444', padding: '6px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' },
+    expiryBadge: { background: '#fff7ed', color: '#ea580c', padding: '6px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' },
+    expiredBadge: { background: '#f1f5f9', color: '#64748b', padding: '6px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '6px' },
+    
+    statusDotRed: { width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444' },
+    statusDotOrange: { width: '6px', height: '6px', borderRadius: '50%', background: '#ea580c' },
+    statusDotGray: { width: '6px', height: '6px', borderRadius: '50%', background: '#64748b' },
+    
+    emptyContainer: { padding: '48px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+    emptyText: { color: '#94a3b8', fontSize: '13px', fontWeight: '500' },
+    loadingWrapper: { padding: '64px', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+    spinner: { color: '#64748b', fontSize: '14px', fontWeight: '500' }
 };
 
 export default StockAlerts;

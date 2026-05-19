@@ -487,6 +487,29 @@ class MedicineCatalog(Base):
 
     min_reserve_limit = Column(Integer, default=0) # Safety Stock Threshold
     
+class Supplier(Base):
+    __tablename__ = "suppliers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hospital_id = Column(Integer, index=True)  # Keeps vendors isolated by unit
+    name = Column(String, nullable=False)
+    contact_person = Column(String)
+    phone = Column(String)
+    email = Column(String)
+    address = Column(String)
+
+class PurchaseOrder(Base):
+    __tablename__ = "purchase_orders"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    hospital_id = Column(Integer, index=True)
+    supplier_id = Column(Integer, ForeignKey("suppliers.id"))
+    medicine_name = Column(String, nullable=False)
+    quantity_ordered = Column(Integer, nullable=False)
+    unit_cost = Column(Float, nullable=False)
+    total_amount = Column(Float, nullable=False)
+    purchase_date = Column(Date, default=datetime.utcnow().date)
+    status = Column(String, default="Delivered")  # e.g., Ordered, Delivered
 
 class PrescriptionTemplate(Base):
     __tablename__ = "prescription_templates"

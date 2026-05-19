@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 # Project imports
 from app.db.session import get_db
-from app.db.models import Appointment, Prescription, Patient, MedicalRecord, LabRequest, MedicineCatalog
+from app.db.models import Appointment, Prescription, Patient, MedicalRecord, LabRequest, MedicineCatalog, Supplier, PurchaseOrder
 
 router = APIRouter(prefix="/api/v1/pharmacy", tags=["Pharmacy"])
 
@@ -30,6 +30,18 @@ class PharmacyVerifyRequest(BaseModel):
     medicines: List[MedicineVerifyItem]
     status: str 
 
+class SupplierCreate(BaseModel):
+    name: str
+    contact_person: Optional[str] = ""
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    address: Optional[str] = ""
+
+class PurchaseCreate(BaseModel):
+    supplier_id: int
+    medicine_name: str
+    quantity_ordered: int
+    unit_cost: float
 # --- Endpoints ---
 
 # 1. GET PENDING FOR PHARMACY (Queue for Pricing & Dispensing)
@@ -318,4 +330,122 @@ async def get_inventory_stats(hospital_id: int, db: Session = Depends(get_db)):
     return {
         "total_medicines": total_catalog,
         "low_stock_alerts": critical_alerts
+    }
+
+# A. Add a new supplier vendor
+@router.post("/suppliers/{hospital_id}")
+async def add_supplier(hospital_id: int, payload: SupplierCreate, db: Session = Depends(get_db)):
+    db_supplier = Supplier(
+        hospital_id=hospital_id,
+        name=payload.name,
+        contact_person=payload.contact_person,
+        phone=payload.phone,
+        email=payload.email,
+        address=payload.address
+    )
+    db.add(db_supplier)
+    db.commit()
+    db.refresh(db_supplier)
+    return {"message": "Supplier registered successfully", "supplier_id": db_supplier.id}
+
+# B. Get all suppliers for the current hospital unit
+@router.get("/suppliers/{hospital_id}")
+async def get_suppliers(hospital_id: int, db: Session = Depends(get_db)):
+    return db.query(Supplier).filter(Supplier.hospital_id == hospital_id).all()
+
+# C. Record a Purchase Order (And increment inventory stock automatically!)
+@router.post("/purchase/{hospital_id}")
+async def record_purchase(hospital_id: int, payload: PurchaseCreate, db: Session = Depends(get_db)):
+    # 1. Calculate total cost transaction
+    total = payload.quantity_ordered * payload.unit_cost
+    
+    # 2. Log purchase history entry
+    order = PurchaseOrder(
+        hospital_id=hospital_id,
+        supplier_id=payload.supplier_id,
+        medicine_name=payload.medicine_name,
+        quantity_ordered=payload.quantity_ordered,
+        unit_cost=payload.unit_cost,
+        total_amount=total,
+        purchase_date=datetime.utcnow().date()
+    )
+    db.add(order)
+    
+    # 3. CRITICAL LOOP: Find the medication row inside this hospital and add the incoming stock
+    catalog_item = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id,
+        MedicineCatalog.name.ilike(payload.medicine_name)
+    ).first()
+    
+    if catalog_item:
+        catalog_item.stock_quantity += payload.quantity_ordered
+        catalog_item.price = payload.unit_cost * 1.25
+    else:
+        # If medicine doesn't exist yet, register it as a fresh record automatically
+        new_item = MedicineCatalog(
+            hospital_id=hospital_id,
+            name=payload.medicine_name,
+            stock_quantity=payload.quantity_ordered,
+            min_reserve_limit=10, # default safety fallback margin
+            price=payload.unit_cost * 1.25 # markup automatically for patient pricing retail
+        )
+        db.add(new_item)
+        
+    db.commit()
+    return {"message": "Purchase completed successfully. Inventory stock replenished!"}
+
+# D. Fetch running transaction purchase history statement ledger
+@router.get("/purchase-history/{hospital_id}")
+async def get_purchase_history(hospital_id: int, db: Session = Depends(get_db)):
+    results = db.query(
+        PurchaseOrder.id,
+        PurchaseOrder.medicine_name,
+        PurchaseOrder.quantity_ordered,
+        PurchaseOrder.unit_cost,
+        PurchaseOrder.total_amount,
+        PurchaseOrder.purchase_date,
+        Supplier.name.label("supplier_name")
+    ).join(Supplier, PurchaseOrder.supplier_id == Supplier.id)\
+     .filter(PurchaseOrder.hospital_id == hospital_id)\
+     .order_by(PurchaseOrder.id.desc()).all()
+     
+    return [dict(r._mapping) for r in results]
+
+@router.get("/overview-metrics/{hospital_id}")
+async def get_overview_metrics(hospital_id: int, db: Session = Depends(get_db)):
+    # 1. Count pending prescriptions waiting for verification
+    pending_count = db.query(Appointment).filter(
+        Appointment.hospital_id == hospital_id,
+        Appointment.status == "Pending-Pharmacy"
+    ).count()
+
+    # 2. Count items ready for handover dispensing
+    ready_count = db.query(Appointment).filter(
+        Appointment.hospital_id == hospital_id,
+        Appointment.status == "Ready-to-Dispense"
+    ).count()
+
+    # 3. Count low stock items (where stock is less than or equal to reserve safety limit)
+    low_stock = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id,
+        MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit,
+        MedicineCatalog.stock_quantity > 0
+    ).count()
+
+    # 4. Count out-of-stock critical rows
+    out_of_stock = db.query(MedicineCatalog).filter(
+        MedicineCatalog.hospital_id == hospital_id,
+        MedicineCatalog.stock_quantity == 0
+    ).count()
+
+    # 5. Count total registered supply partners
+    # Note: If you haven't imported the Supplier model here yet, ensure it's imported at the top!
+    total_suppliers = db.query(Supplier).filter(Supplier.hospital_id == hospital_id).count()
+
+    return {
+        "pending_verify": pending_count,
+        "ready_to_dispense": ready_count,
+        "low_stock_count": low_stock,
+        "out_of_stock_count": out_of_stock,
+        "total_suppliers": total_suppliers
     }

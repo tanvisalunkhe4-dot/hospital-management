@@ -4,8 +4,10 @@ import {
     Calendar, Search, Edit3, Activity, AlertCircle, X, Save 
 } from 'lucide-react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-const InventoryManagement = ({ setActiveTab }) => {
+const InventoryManagement = () => {
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         name: '',
         stock_quantity: '', 
@@ -155,7 +157,7 @@ const InventoryManagement = ({ setActiveTab }) => {
                     </div>
                     <div 
                         style={miniStatCardRedClickable}
-                        onClick={() => setActiveTab && setActiveTab('alerts')}
+                        onClick={() => navigate('/pharmacist/alerts')}
                     >
                         <div style={{...statIconBox, background: '#fef2f2'}}><AlertCircle size={18} color="#ef4444"/></div>
                         <div>
