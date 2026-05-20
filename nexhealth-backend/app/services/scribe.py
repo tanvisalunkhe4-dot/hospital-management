@@ -10,7 +10,7 @@ load_dotenv()
 
 # 1. Setup Whisper
 # 'base' is good for speed; use 'small' or 'medium' for higher accuracy in medical terms
-MODEL_SIZE = "base"
+MODEL_SIZE = "small"
 whisper_model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
 
 # 2. Setup Groq Client
@@ -19,19 +19,59 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 def transcribe_audio(audio_path: str):
     """Converts audio into raw text using Faster-Whisper."""
     try:
-        segments, _ = whisper_model.transcribe(audio_path, beam_size=5)
+        segments, _ = whisper_model.transcribe(audio_path, beam_size=1,vad_filter=True,language="en")
         return " ".join([segment.text for segment in segments])
     except Exception as e:
         print(f"Transcription Error: {e}")
         return ""
+async def stream_transcription(audio_path, websocket):
+    try:
+        segments, _ = whisper_model.transcribe(
+            audio_path,
+            beam_size=1,
+            vad_filter=True,
+            language="en"
+        )
+
+        full_text = ""
+
+        for segment in segments:
+
+            partial = segment.text.strip()
+
+            if not partial:
+                continue
+
+            # Send realtime partial
+            await websocket.send_json({
+                "type": "partial_transcript",
+                "text": partial
+            })
+
+            full_text += " " + partial
+
+            await asyncio.sleep(0.03)
+
+        # Send finalized text
+        await websocket.send_json({
+            "type": "final_transcript",
+            "text": full_text.strip()
+        })
+
+    except Exception as e:
+        print("Streaming Error:", e)
+
 
 async def generate_medical_summary(transcript: str, max_retries: int = 2):
     """
     Uses Groq (Llama 3.1 8B) to generate a professional clinical report.
     Includes automated medical reasoning and suggested medications.
     """
+    
     if not transcript.strip():
         return "No clear dialogue detected in the recording."
+
+    transcript = re.sub(r'\b(uh|umm|hmm)\b', '', transcript, flags=re.IGNORECASE)
 
     # Professional Medical Prompt
     prompt = f"""
@@ -54,7 +94,9 @@ async def generate_medical_summary(transcript: str, max_retries: int = 2):
     ---
     ### 💊 AI-ASSISTED TREATMENT PLAN
     **Suggested Medications**: 
-    - (Suggest specific medications, dosage, and duration based on standard protocols for the discussed symptoms)
+    - (Suggest common first-line medications only if clearly supported by symptoms.
+If uncertain, write:
+"Physician review required.", dosage, and duration based on standard protocols for the discussed symptoms)
     
     **Patient Advice**: 
     - (Lifestyle instructions or precautions given)
@@ -97,7 +139,7 @@ async def generate_medical_summary(transcript: str, max_retries: int = 2):
             # Handling Groq Rate Limits (429)
             if "429" in error_str or "RATE_LIMIT" in error_str:
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1.5 * (attempt + 1))
                     continue
                 else:
                     return "AI Scribe (Groq) is currently busy. Please wait 10 seconds and try again."

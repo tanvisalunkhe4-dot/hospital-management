@@ -35,6 +35,7 @@ class LabRequestResponse(LabRequestBase):
     patient_name: Optional[str] = "Unknown"
     patient_age: Optional[int] = 0        
     patient_gender: Optional[str] = "N/A"  
+    patient_email: Optional[str] = "N/A"  # ADD THIS LINE
     doctor_name: Optional[str] = "Unknown Staff"
     doctor_dept: Optional[str] = "General" 
     

@@ -380,7 +380,7 @@ async def websocket_scribe_stream(websocket: WebSocket):
             current_chunk.extend(chunk)
 
             # 2. Process when we have ~0.5MB of new data
-            if len(current_chunk) > 500000: 
+            if len(current_chunk) > 16000: 
                 try:
                     # 3. CRITICAL FIX: Prepend the initial header to the current chunk
                     processing_buffer = initial_header + current_chunk
@@ -515,3 +515,36 @@ def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
         reports.append(report_data)
     
     return reports
+
+@router.patch("/lab-reports/{request_id}/accept")
+def accept_lab_report(request_id: int, db: Session = Depends(get_db)):
+    """
+    Updates the LabRequest status to 'Accepted' 
+    to acknowledge the doctor has reviewed the report.
+    """
+    # 1. Fetch the existing lab request
+    lab_request = db.query(models.LabRequest).filter(
+        models.LabRequest.id == request_id
+    ).first()
+
+    if not lab_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Lab request not found."
+        )
+
+    # 2. Update status
+    # Assuming 'Accepted' is the desired status once the doctor reviews it
+    lab_request.status = "Accepted" 
+    
+    try:
+        db.commit()
+        db.refresh(lab_request)
+        return {
+            "status": "success", 
+            "message": f"Report {lab_request.test_name} accepted successfully.",
+            "request_id": lab_request.id
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update report status.")

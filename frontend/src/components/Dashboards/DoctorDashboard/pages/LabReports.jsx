@@ -16,7 +16,7 @@ const LabReports = ({ patient, onBack }) => {
   const [selectedPriority, setSelectedPriority] = useState("Normal");
   const [newlyAddedTests, setNewlyAddedTests] = useState([]);
   const pId = patient?.patient_id || patient?.id;
-
+  const [resultView, setResultView] = useState(null);
   const fetchReports = async () => {
     if (!pId) return;
     setLoading(true);
@@ -114,6 +114,27 @@ const LabReports = ({ patient, onBack }) => {
 
   return (
     <div style={styles.container}>
+      {resultView ? (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <button 
+          onClick={() => setResultView(null)} 
+          style={{ marginBottom: '20px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', color: '#475569' }}
+        >
+          <ArrowLeft size={18} /> Back to Reports List
+        </button>
+        <div style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: '16px', padding: '20px' }}>
+          <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>{resultView.test_name} Results</h2>
+          <iframe 
+            src={resultView.report_file_url} 
+            width="100%" 
+            height="100%" 
+            style={{ border: 'none', borderRadius: '12px' }}
+            title="Lab Result"
+          />
+        </div>
+      </div>
+    ) : ( 
+    <>
       {/* SUCCESS TOAST */}
       {successMessage && (
         <div style={styles.toast}>
@@ -162,10 +183,12 @@ const LabReports = ({ patient, onBack }) => {
                 <option value="Urgent">Urgent</option>
               </select>
             </div>
+            
             <div style={{ overflowY: 'auto', flex: 1 }}>
   {filteredCatalog.map(test => {
     // Check if this specific test has already been added in the current session
     const isAlreadyAdded = newlyAddedTests.includes(test.test_name);
+    
 
     return (
       <div 
@@ -263,37 +286,53 @@ const LabReports = ({ patient, onBack }) => {
               </tr>
             </thead>
             <tbody>
-              {filteredReports.map((report) => (
-                <tr key={report.id}>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: '700', color: '#0f172a' }}>{report.test_name}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Ref: #{report.id}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ fontSize: '13px', color: '#64748b' }}>
-                      {new Date(report.requested_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>{report.category}</span>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.badge(report.status)}>
-                      {getStatusStyle(report.status).icon} 
-                      {report.status}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <button style={{ padding: '8px', background: 'none', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer' }}>
-                      <ExternalLink size={16} color="#3b82f6" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+  {filteredReports.map((report) => (
+    <tr 
+      key={report.id}
+      onClick={() => {
+        // Only open if completed and URL exists
+        if (report.status?.toLowerCase() === 'completed' && report.report_file_url) {
+          setResultView(report);
+        } else {
+          alert("This report is not yet completed or results are unavailable.");
+        }
+      }}
+      style={{ 
+        cursor: 'pointer', 
+        transition: 'background-color 0.2s',
+      }}
+      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+    >
+      <td style={styles.td}>
+        <div style={{ fontWeight: '700', color: '#0f172a' }}>{report.test_name}</div>
+        <div style={{ fontSize: '11px', color: '#94a3b8' }}>Ref: #{report.id}</div>
+      </td>
+      <td style={styles.td}>
+        <div style={{ fontSize: '13px', color: '#64748b' }}>
+          {new Date(report.requested_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+        </div>
+      </td>
+      <td style={styles.td}>
+        <span style={{ fontSize: '12px', color: '#64748b' }}>{report.category}</span>
+      </td>
+      <td style={styles.td}>
+        <div style={styles.badge(report.status)}>
+          {getStatusStyle(report.status).icon} 
+          {report.status}
+        </div>
+      </td>
+      <td style={styles.td}>
+        {/* Button is now purely decorative or removed as row is clickable */}
+        <ExternalLink size={16} color="#3b82f6" />
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         )}
       </div>
+      
 
       {/* FINISH SELECTION & RETURN */}
       {newlyAddedTests.length > 0 && (
@@ -304,8 +343,13 @@ const LabReports = ({ patient, onBack }) => {
           >
             <CheckCircle2 size={20} /> Finish Selection & Return
           </button>
+          
         </div>
+      
       )}
+      </>
+    )}
+    
     </div>
   );
 };
