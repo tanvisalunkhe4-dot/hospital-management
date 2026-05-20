@@ -56,84 +56,437 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
 
   const handleDownloadInvoice = (invoice) => {
     const printWindow = window.open('', '_blank');
+  
     const receiptHtml = `
-      <html>
-        <head>
-          <title>Invoice - ${invoice.invoice_number}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-            body { font-family: 'Inter', sans-serif; padding: 50px; color: #1e293b; line-height: 1.5; }
-            .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 4px solid #10b981; padding-bottom: 30px; margin-bottom: 40px; }
-            .hospital-info h1 { margin: 0; font-size: 28px; font-weight: 800; color: #0f172a; }
-            .hospital-info p { margin: 4px 0; color: #64748b; font-size: 13px; }
-            .invoice-title { text-align: right; }
-            .invoice-title h2 { margin: 0; font-size: 32px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: -1px; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-            .info-box h3 { font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-            .info-box p { margin: 4px 0; font-size: 14px; font-weight: 600; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th { background: #f8fafc; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 14px; text-align: left; border-bottom: 2px solid #e2e8f0; }
-            td { padding: 14px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
-            .text-right { text-align: right; }
-            .totals-container { display: flex; justify-content: flex-end; margin-top: 30px; }
-            .totals-table { width: 300px; }
-            .grand-total { border-top: 2px solid #10b981 !important; padding-top: 15px !important; }
-            .grand-total-label { font-size: 18px; font-weight: 800; color: #0f172a; }
-            .grand-total-value { font-size: 22px; font-weight: 900; color: #10b981; }
-            .footer { margin-top: 80px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-            .footer p { font-size: 12px; color: #94a3b8; margin: 5px 0; }
-          </style>
-        </head>
-        <body>
+    <html>
+      <head>
+        <title>Invoice - ${invoice.invoice_number}</title>
+  
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  
+          *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+          }
+  
+          body{
+            font-family:'Inter',sans-serif;
+            background:#f8fafc;
+            padding:30px;
+            color:#1e293b;
+            position:relative;
+          }
+  
+          /* WATERMARK */
+          body::before{
+            content:"NEXHEALTH";
+            position:fixed;
+            top:40%;
+            left:50%;
+            transform:translate(-50%, -50%) rotate(-30deg);
+            font-size:90px;
+            font-weight:800;
+            color:rgba(16,185,129,0.05);
+            z-index:0;
+            white-space:nowrap;
+          }
+  
+          .invoice-container{
+            position:relative;
+            z-index:2;
+            background:white;
+            max-width:1000px;
+            margin:auto;
+            border-radius:20px;
+            overflow:hidden;
+            box-shadow:0 10px 40px rgba(0,0,0,0.08);
+            border:1px solid #e2e8f0;
+          }
+  
+          /* HEADER */
+          .invoice-header{
+            background:linear-gradient(135deg,#059669,#10b981);
+            color:white;
+            padding:40px;
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+          }
+  
+          .hospital-section{
+            display:flex;
+            gap:18px;
+            align-items:center;
+          }
+  
+          .logo{
+            width:70px;
+            height:70px;
+            background:white;
+            border-radius:16px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:30px;
+            font-weight:800;
+            color:#10b981;
+          }
+  
+          .hospital-info h1{
+            font-size:32px;
+            font-weight:800;
+            margin-bottom:6px;
+          }
+  
+          .hospital-info p{
+            font-size:13px;
+            opacity:0.95;
+            margin:3px 0;
+          }
+  
+          .invoice-title{
+            text-align:right;
+          }
+  
+          .invoice-title h2{
+            font-size:40px;
+            font-weight:800;
+            margin-bottom:10px;
+            letter-spacing:1px;
+          }
+  
+          .invoice-title p{
+            font-size:14px;
+            margin:4px 0;
+          }
+  
+          /* BODY */
+          .content{
+            padding:40px;
+          }
+  
+          .info-grid{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:25px;
+            margin-bottom:35px;
+          }
+  
+          .card{
+            border:1px solid #e2e8f0;
+            border-radius:16px;
+            padding:22px;
+            background:#f8fafc;
+          }
+  
+          .card h3{
+            font-size:13px;
+            text-transform:uppercase;
+            letter-spacing:1px;
+            color:#64748b;
+            margin-bottom:15px;
+            border-bottom:1px solid #cbd5e1;
+            padding-bottom:8px;
+          }
+  
+          .card p{
+            margin:8px 0;
+            font-size:14px;
+            font-weight:500;
+          }
+  
+          /* TABLE */
+          table{
+            width:100%;
+            border-collapse:collapse;
+            margin-top:20px;
+          }
+  
+          thead{
+            background:#10b981;
+            color:white;
+          }
+  
+          th{
+            padding:16px;
+            font-size:13px;
+            text-transform:uppercase;
+            text-align:left;
+            letter-spacing:0.5px;
+          }
+  
+          td{
+            padding:18px 16px;
+            border-bottom:1px solid #e2e8f0;
+            font-size:14px;
+          }
+  
+          tbody tr:nth-child(even){
+            background:#f8fafc;
+          }
+  
+          .text-right{
+            text-align:right;
+          }
+  
+          /* TOTAL SECTION */
+          .totals-section{
+            display:flex;
+            justify-content:flex-end;
+            margin-top:35px;
+          }
+  
+          .totals-box{
+            width:340px;
+            border-radius:16px;
+            border:1px solid #d1fae5;
+            overflow:hidden;
+          }
+  
+          .totals-row{
+            display:flex;
+            justify-content:space-between;
+            padding:14px 20px;
+            border-bottom:1px solid #e2e8f0;
+            background:white;
+          }
+  
+          .totals-row.final{
+            background:#10b981;
+            color:white;
+            font-size:20px;
+            font-weight:800;
+          }
+  
+          /* QR + SIGN */
+          .bottom-section{
+            margin-top:50px;
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-end;
+          }
+  
+          .qr-box{
+            width:120px;
+            height:120px;
+            border:2px dashed #94a3b8;
+            border-radius:12px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:12px;
+            color:#64748b;
+          }
+  
+          .signature{
+            text-align:center;
+          }
+  
+          .signature-line{
+            width:220px;
+            border-top:2px solid #334155;
+            margin-bottom:8px;
+          }
+  
+          .signature p{
+            font-size:13px;
+            color:#475569;
+          }
+  
+          /* FOOTER */
+          .footer{
+            margin-top:50px;
+            border-top:1px solid #e2e8f0;
+            padding-top:20px;
+            text-align:center;
+          }
+  
+          .footer p{
+            font-size:12px;
+            color:#64748b;
+            margin:5px 0;
+          }
+  
+          /* PAGE NUMBER */
+          .page-number{
+            position:fixed;
+            bottom:15px;
+            right:20px;
+            font-size:12px;
+            color:#94a3b8;
+          }
+  
+          /* PRINT */
+          @media print{
+            body{
+              background:white;
+              padding:0;
+            }
+  
+            .invoice-container{
+              box-shadow:none;
+              border:none;
+              width:100%;
+            }
+          }
+  
+        </style>
+      </head>
+  
+      <body>
+  
+        <div class="invoice-container">
+  
+          <!-- HEADER -->
           <div class="invoice-header">
-            <div class="hospital-info">
-              <h1>Nex<span style="color:#10b981">Health</span></h1>
-              <p>Multispeciality Hospital & Care Center</p>
-              <p>Pune, Maharashtra, India</p>
+  
+            <div class="hospital-section">
+              <div class="logo">+</div>
+  
+              <div class="hospital-info">
+                <h1>NexHealth</h1>
+                <p>Multispeciality Hospital & Care Center</p>
+                <p>Pune, Maharashtra, India</p>
+                <p>support@nexhealth.com</p>
+                <p>+91 9876543210</p>
+              </div>
             </div>
+  
             <div class="invoice-title">
-              <h2>Medical Invoice</h2>
-              <p># ${invoice.invoice_number}</p>
-              <p>Date: ${new Date(invoice.created_at).toLocaleDateString('en-IN')}</p>
+              <h2>INVOICE</h2>
+              <p><strong>Invoice No:</strong> ${invoice.invoice_number}</p>
+              <p><strong>Date:</strong> ${new Date(invoice.created_at).toLocaleDateString('en-IN')}</p>
+              <p><strong>Status:</strong> Paid</p>
             </div>
+  
           </div>
-          <div class="info-grid">
-            <div class="info-box">
-              <h3>Patient Information</h3>
-              <p>Name: ${invoice.patient_name}</p>
-              <p>ID: #${invoice.patient_id || 'N/A'}</p>
+  
+          <!-- CONTENT -->
+          <div class="content">
+  
+            <!-- INFO GRID -->
+            <div class="info-grid">
+  
+              <div class="card">
+                <h3>Patient Information</h3>
+                <p><strong>Name:</strong> ${invoice.patient_name}</p>
+                <p><strong>Patient ID:</strong> #${invoice.patient_id || 'N/A'}</p>
+                <p><strong>Department:</strong> General Medicine</p>
+                <p><strong>Type:</strong> Outpatient</p>
+              </div>
+  
+              <div class="card">
+                <h3>Billing Information</h3>
+                <p><strong>Hospital ID:</strong> #${hosp_id}</p>
+                <p><strong>Payment Mode:</strong> Cash</p>
+                <p><strong>Billing Officer:</strong> Admin Desk</p>
+                <p><strong>Transaction:</strong> Successful</p>
+              </div>
+  
             </div>
-            <div class="info-box">
-              <h3>Hospital Details</h3>
-              <p>Hospital ID: #${hosp_id}</p>
-              <p>Type: Outpatient Billing</p>
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr><th>Description</th><th class="text-right">Total Amount</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Medical Consultation & Integrated Services</td><td class="text-right">₹${invoice.total_amount}</td></tr>
-            </tbody>
-          </table>
-          <div class="totals-container">
-            <table class="totals-table">
-              <tr class="grand-total">
-                <td class="grand-total-label">Total Due</td>
-                <td class="grand-total-value text-right">₹${invoice.total_amount}</td>
-              </tr>
+  
+            <!-- TABLE -->
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th class="text-right">Amount</th>
+                </tr>
+              </thead>
+  
+              <tbody>
+                <tr>
+                  <td>Doctor Consultation</td>
+                  <td>1</td>
+                  <td class="text-right">₹500</td>
+                </tr>
+  
+                <tr>
+                  <td>Lab Test & Diagnostics</td>
+                  <td>1</td>
+                  <td class="text-right">₹1200</td>
+                </tr>
+  
+                <tr>
+                  <td>Medical Services</td>
+                  <td>1</td>
+                  <td class="text-right">₹${invoice.total_amount}</td>
+                </tr>
+              </tbody>
             </table>
+  
+            <!-- TOTALS -->
+            <div class="totals-section">
+  
+              <div class="totals-box">
+  
+                <div class="totals-row">
+                  <span>Subtotal</span>
+                  <span>₹${invoice.total_amount}</span>
+                </div>
+  
+                <div class="totals-row">
+                  <span>GST (0%)</span>
+                  <span>₹0</span>
+                </div>
+  
+                <div class="totals-row final">
+                  <span>Total Due</span>
+                  <span>₹${invoice.total_amount}</span>
+                </div>
+  
+              </div>
+  
+            </div>
+  
+            <!-- BOTTOM -->
+            <div class="bottom-section">
+  
+              <div class="qr-box">
+                QR CODE
+              </div>
+  
+              <div class="signature">
+                <div class="signature-line"></div>
+                <p>Authorized Signature</p>
+              </div>
+  
+            </div>
+  
+            <!-- FOOTER -->
+            <div class="footer">
+              <p>Thank you for choosing NexHealth Hospital.</p>
+              <p>This is a computer generated invoice.</p>
+              <p>www.nexhealth.com</p>
+            </div>
+  
           </div>
-          <div class="footer"><p>Thank you for choosing NexHealth.</p></div>
-          <script>window.onload = function() { setTimeout(() => { window.print(); window.close(); }, 500); };</script>
-        </body>
-      </html>
+  
+        </div>
+  
+        <div class="page-number">
+          Page 1 of 1
+        </div>
+  
+        <script>
+          window.onload = function () {
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 700);
+          };
+        </script>
+  
+      </body>
+    </html>
     `;
+  
     printWindow.document.write(receiptHtml);
     printWindow.document.close();
   };
-
   const [showPrescription, setShowPrescription] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
