@@ -588,7 +588,7 @@ def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
     Captures normal completions, pre-priced pharmacy entries, and bypass edge cases.
     """
     # Allowed statuses that can be pulled into the receptionist checkout queue
-    allowed_statuses = ["Pending-Billing","Pending-Pharmacy", "Pending-Pharmacy", "Ready-to-Dispense"]
+    allowed_statuses = ["Pending-Billing","Pending-Pharmacy", "Ready-to-Dispense"]
 
     results = db.query(models.Appointment, models.Patient).join(
         models.Patient, models.Appointment.patient_id == models.Patient.id
@@ -632,11 +632,22 @@ def prepare_invoice(appt_id: int, skip_pharmacy: bool = False, db: Session = Dep
         ).all()
 
         for p in prescriptions:
+            # 1. Safely check all possible database field locations for the saved price
+            final_med_price = 0.0
+            
+            if hasattr(p, 'price') and p.price is not None and p.price > 0:
+                final_med_price = p.price
+            elif hasattr(p, 'price_at_request') and p.price_at_request is not None and p.price_at_request > 0:
+                final_med_price = p.price_at_request
+            elif hasattr(p, 'medicine') and hasattr(p.medicine, 'price') and p.medicine.price is not None:
+                # Absolute fallback to base inventory catalog pricing if order-specific pricing failed
+                final_med_price = p.medicine.price
+
             items.append({
                 "service_name": p.medicine_name,
-                "unit_price": p.price if p.price else 0.0,
+                "unit_price": float(final_med_price),
                 "type": "Pharmacy",
-                "quantity": p.quantity if hasattr(p, 'quantity') else 1
+                "quantity": p.quantity if hasattr(p, 'quantity') and p.quantity else 1
             })
             
     # Always pull laboratory requests regardless of pharmacy choice
