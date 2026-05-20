@@ -104,6 +104,7 @@ async def get_pharmacy_queue(
     return response
 
 # 2. UPDATE STATUS & DEDUCT STOCK (Confirm Pricing or Confirm Handover)
+# 2. UPDATE STATUS & RECORD PHARMACY PRICING (Routes to Receptionist Billing Pipeline)
 @router.patch("/verify/{appt_id}")
 async def verify_prescription(
     appt_id: int, 
@@ -115,6 +116,9 @@ async def verify_prescription(
         raise HTTPException(status_code=404, detail="Appointment not found")
     
     try:
+        # FORCE TARGET STATUS: Push to intermediate state for receptionist toggle handling
+        target_status = "Pharmacy-Priced"
+
         for med_item in data.medicines:
             db_med = db.query(Prescription).filter(Prescription.id == med_item.id).first()
             if not db_med:
@@ -137,19 +141,19 @@ async def verify_prescription(
                         detail=f"Action Denied: {db_med.medicine_name} is reserved for emergencies (Stock: {catalog_item.stock_quantity}, Reserve: {catalog_item.min_reserve_limit})."
                     )
 
-            # 3. Update the prescription record
+            # 3. Update the prescription record based on pharmacist input
             db_med.is_available = med_item.is_available
-            # Force price to 0 if unavailable, otherwise use the provided price
+            # Force price to 0 if unavailable, otherwise assign the verified retail price
             db_med.price = med_item.price if med_item.is_available else 0.0
 
-            # 4. STOCK DEDUCTION: Only happens when finally moving to Billing
-            if data.status == "Pending-Billing" and db_med.is_available and catalog_item:
+            # 4. STOCK DEDUCTION: Deduct now when verified and moving into the billing phase
+            if target_status == "Pharmacy-Priced" and db_med.is_available and catalog_item:
                 catalog_item.stock_quantity -= db_med.quantity
 
-        # 5. Commit changes
-        appt.status = data.status
+        # 5. Commit state changes
+        appt.status = target_status
         db.commit()
-        return {"status": "success", "message": f"Verified and moved to {data.status}"}
+        return {"status": "success", "message": f"Verified pricing and advanced to {target_status}"}
 
     except HTTPException as he:
         db.rollback()
@@ -157,6 +161,7 @@ async def verify_prescription(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
         # 3. GET BILLING QUEUE (For Receptionist Overview)
 @router.get("/billing-queue/{hospital_id}")
 async def get_billing_queue(hospital_id: int, db: Session = Depends(get_db)):

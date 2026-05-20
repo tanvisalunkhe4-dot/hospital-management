@@ -322,7 +322,6 @@ def reschedule_appointment(
         
 # --- INVOICE & BILLING ACTIONS ---
 
-
 @router.post("/invoices/generate", response_model=invoice_schema.InvoiceResponse)
 def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Depends(get_db)):
     try:
@@ -362,15 +361,27 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
             )
             db.add(db_item)
 
-        # 6. Queue Cleanup (Using safe getattr)
+        # 6. Queue Cleanup (Synchronized across clinical modules)
         appt_id = getattr(invoice_in, 'appointment_id', None)
         if appt_id:
-            # Update Appointment status to remove from "Ready for Billing"
-            db.query(models.Appointment).filter(models.Appointment.id == appt_id).update({"status": "Completed"})
+            # Update Appointment status to remove from front-desk billing workflows
+            db.query(models.Appointment).filter(
+                models.Appointment.id == appt_id
+            ).update({"status": "Completed"}, synchronize_session=False)
             
-            # Update Lab Requests to Billed
+            # Update Lab Requests state to Billed
             db.query(models.LabRequest).filter(
                 models.LabRequest.appointment_id == appt_id
+            ).update({"status": "Billed"}, synchronize_session=False)
+
+            # UPDATED: Clear associated prescriptions out of pharmacy queues
+            # Uses subquery check to capture matching Medical Records linked to this appointment id
+            medical_record_ids = db.query(models.MedicalRecord.id).filter(
+                models.MedicalRecord.appointment_id == appt_id
+            ).subquery()
+
+            db.query(models.Prescription).filter(
+                models.Prescription.record_id.in_(medical_record_ids)
             ).update({"status": "Billed"}, synchronize_session=False)
 
         db.commit()
@@ -392,8 +403,6 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
         db.rollback()
         print(f"INVOICE ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
-
-
 
 @router.get("/invoices/all", response_model=List[invoice_schema.InvoiceResponse])
 def get_all_invoices(hosp_id: int, db: Session = Depends(get_db)):
@@ -575,14 +584,17 @@ def finish_consultation(appt_id: int, hosp_id: int, db: Session = Depends(get_db
 @router.get("/billing/queue/{hosp_id}")
 def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
     """
-    Fetches all patients whose status is 'Pending-Billing'.
-    These are patients who have finished with the Doctor and Pharmacist.
+    Fetches patients eligible for front-desk checkout.
+    Captures normal completions, pre-priced pharmacy entries, and bypass edge cases.
     """
+    # Allowed statuses that can be pulled into the receptionist checkout queue
+    allowed_statuses = ["Pending-Billing","Pending-Pharmacy", "Pending-Pharmacy", "Ready-to-Dispense"]
+
     results = db.query(models.Appointment, models.Patient).join(
         models.Patient, models.Appointment.patient_id == models.Patient.id
     ).filter(
         models.Appointment.hospital_id == hosp_id,
-        models.Appointment.status == "Pending-Billing"  # Key status from Pharmacy
+        models.Appointment.status.in_(allowed_statuses)
     ).all()
 
     return [
@@ -590,53 +602,56 @@ def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
             "id": appt.id,
             "patient_id": patient.id,
             "patient_name": f"{patient.first_name} {patient.last_name}",
-            "status": appt.status,
+            "status": appt.status, # Returns the actual stage to Billing.jsx for UI warning logic
             "appointment_date": appt.appointment_date,
-            "invoice_number": "NEW", # Placeholder until generated
-            "total_amount": 0 # Will be calculated by the prepare-invoice endpoint
+            "invoice_number": "NEW", 
+            "total_amount": 0 
         } for appt, patient in results
     ]
 
+# receptionist.py
+
 @router.get("/billing/prepare/{appt_id}")
-def prepare_invoice(appt_id: int, db: Session = Depends(get_db)): # Removed 'async'
+def prepare_invoice(appt_id: int, skip_pharmacy: bool = False, db: Session = Depends(get_db)):
     appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
     if not appt:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
+    # Start with standard consultation fee
     items = [{
         "service_name": "Consultation Fee", 
         "unit_price": 500.0, 
         "type": "Consultation"
     }]
     
-    # 1. Pharmacy Items
-    prescriptions = db.query(models.Prescription).join(models.MedicalRecord).filter(
-        models.MedicalRecord.appointment_id == appt_id
-    ).all()
+    # Only pull and add pharmacy charges if the patient hasn't skipped internal fulfillment
+    if not skip_pharmacy:
+        prescriptions = db.query(models.Prescription).join(models.MedicalRecord).filter(
+            models.Prescription.medical_record_id == medical_record.id,
+            models.Prescription.is_available == True  # Crucial: Filter out pharmacist flagged out-of-stock items
+        ).all()
 
-    for p in prescriptions:
-        items.append({
-            "service_name": p.medicine_name,
-            "unit_price": p.price if p.price else 0.0,
-            "type": "Pharmacy"
-        })
-
-    # 2. Lab/Radiology Items
-    # We join LabTestCatalog to ensure we get a price even if price_at_request was missed
+        for p in prescriptions:
+            items.append({
+                "service_name": p.medicine_name,
+                "unit_price": p.price if p.price else 0.0,
+                "type": "Pharmacy",
+                "quantity": p.quantity if hasattr(p, 'quantity') else 1
+            })
+            
+    # Always pull laboratory requests regardless of pharmacy choice
     lab_requests = db.query(
         models.LabRequest, 
         models.LabTestCatalog.base_price
     ).outerjoin(
-        models.LabTestCatalog, 
+        models.LabTestCatalog, \
         models.LabRequest.test_name == models.LabTestCatalog.test_name
     ).filter(
         models.LabRequest.appointment_id == appt_id
     ).all()
 
     for request, catalog_price in lab_requests:
-        # Check price in request first, then catalog
         final_price = request.price_at_request if request.price_at_request else catalog_price
-        
         items.append({
             "service_name": request.test_name,
             "unit_price": final_price if final_price else 0.0,
@@ -647,5 +662,6 @@ def prepare_invoice(appt_id: int, db: Session = Depends(get_db)): # Removed 'asy
         "appt_id": appt.id,
         "patient_id": appt.patient_id,
         "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
-        "items": items
+        "items": items,
+        "skip_pharmacy_applied": skip_pharmacy
     }

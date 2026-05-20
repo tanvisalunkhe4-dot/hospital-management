@@ -9,6 +9,7 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedApptId, setSelectedApptId] = useState(null);
+  const [selectedApptStatus, setSelectedApptStatus] = useState(null);
   const [filterStatus, setFilterStatus] = useState(initialFilter);
   const [billingQueue, setBillingQueue] = useState([]);
   
@@ -23,13 +24,15 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
   const pendingCount = invoices.filter(i => i.status === 'Pending').length;
 
   const filteredInvoices = invoices.filter(inv => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = 
-      (inv.invoice_number?.toLowerCase() || "").includes(searchLower) || 
-      (inv.patient_name?.toLowerCase() || "").includes(searchLower) || 
-      (inv.patient_id?.toString() || "").includes(searchTerm);
+    // Ensure searchLower is always a safe string to prevent runtime errors
+    const searchLower = (searchTerm || "").toLowerCase();
   
-    const matchesStatus = filterStatus === "All" || inv.status === filterStatus;
+    const matchesSearch = 
+      (inv?.invoice_number || "").toLowerCase().includes(searchLower) || 
+      (inv?.patient_name || "").toLowerCase().includes(searchLower) || 
+      String(inv?.patient_id || "").includes(searchTerm || "");
+  
+    const matchesStatus = filterStatus === "All" || inv?.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
@@ -156,7 +159,7 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
               <Search size={18} color="#94a3b8" />
               <input type="text" placeholder="Search Patient..." style={searchInputStyle} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
            </div>
-           <button onClick={() => { setSelectedApptId(null); setShowModal(true); }} style={generateBtnStyle}>+ Manual Bill</button>
+           <button onClick={() => { setSelectedApptId(null); setSelectedApptStatus(null); setShowModal(true); }} style={generateBtnStyle}>+ Manual Bill</button>
         </div>
 
         {billingQueue.length > 0 && (
@@ -165,11 +168,25 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
             {billingQueue.map(queueItem => (
               <button 
                 key={queueItem.id}
-                onClick={() => { setSelectedApptId(queueItem.id); setShowModal(true); }}
-                style={queueButtonStyle}
+                onClick={() => { 
+                  setSelectedApptId(queueItem.id); 
+                  setSelectedApptStatus(queueItem.status);
+                  setShowModal(true); 
+                }}
+                style={{
+                  ...queueButtonStyle,
+                  background: queueItem.status === 'Pending-Pharmacy' ? '#fff7ed' : '#eff6ff',
+                  borderColor: queueItem.status === 'Pending-Pharmacy' ? '#ffedd5' : '#bfdbfe',
+                  color: queueItem.status === 'Pending-Pharmacy' ? '#c2410c' : '#1e40af'
+                }}
               >
-                <div style={{ width: '6px', height: '6px', background: '#3b82f6', borderRadius: '50%' }}></div>
-                {queueItem.patient_name} (ID: #{queueItem.patient_id})
+                <div style={{ 
+                  width: '6px', 
+                  height: '6px', 
+                  background: queueItem.status === 'Pending-Pharmacy' ? '#ea580c' : '#3b82f6', 
+                  borderRadius: '50%' 
+                }}></div>
+                {queueItem.patient_name} {queueItem.status === 'Pending-Pharmacy' ? '(Skipped Pharmacy)' : `(ID: #${queueItem.patient_id})`}
               </button>
             ))}
           </div>
@@ -228,8 +245,9 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
           <InvoiceModal 
             hosp_id={hosp_id} 
             apptId={selectedApptId}
-            onClose={() => { setShowModal(false); setSelectedApptId(null); }} 
-            onSuccess={() => { setShowModal(false); setSelectedApptId(null); refresh(); }} 
+            initialStatus={selectedApptStatus}
+            onClose={() => { setShowModal(false); setSelectedApptId(null); setSelectedApptStatus(null); }} 
+            onSuccess={() => { setShowModal(false); setSelectedApptId(null); setSelectedApptStatus(null); refresh(); }} 
           />
         )}
         {showPrescription && (
@@ -244,28 +262,89 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
 };
 
 /* --- Stat Card Component --- */
-const StatCard = ({ icon, label, value, trend, isActive }) => (
-    <div style={{ 
-      background: 'white', padding: '24px', borderRadius: '20px', 
-      border: isActive ? `2px solid #10b981` : `1px solid #e2e8f0`, 
-      boxShadow: isActive ? '0 10px 15px -3px rgba(16, 185, 129, 0.1)' : '0 1px 3px rgba(0,0,0,0.02)',
-      transform: isActive ? 'scale(1.02)' : 'scale(1)', transition: 'all 0.2s'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+const StatCard = ({ icon, label, value, trend, isActive }) => {
+  // Define custom styles for each trend type
+  const getTrendStyle = (type) => {
+    switch (type) {
+      case 'Monthly':
+        return { background: '#f0fdf4', color: '#16a34a' }; // Subtle Green
+      case 'Attention':
+        return { background: '#fff7ed', color: '#ea580c' }; // Subtle Orange
+      case 'Live':
+        return { background: '#f0f9ff', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '4px' }; // Subtle Blue
+      default:
+        return { background: '#f1f5f9', color: '#64748b' };
+    }
+  };
+
+  const trendStyle = getTrendStyle(trend);
+
+  return (
+    <div 
+      style={{ 
+        flex: 1, 
+        background: 'white', 
+        padding: '24px', 
+        borderRadius: '20px', 
+        border: isActive ? '2px solid #059669' : '1px solid #e2e8f0',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+        position: 'relative',
+        transition: 'all 0.2s ease'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
         <div style={{ padding: '10px', background: '#f8fafc', borderRadius: '12px' }}>{icon}</div>
-        <span style={{ fontSize: '11px', fontWeight: '700', color: isActive ? 'white' : '#10b981', background: isActive ? '#10b981' : '#f0fdf4', padding: '4px 8px', borderRadius: '6px' }}>{trend}</span>
+        
+        {/* --- ADDED TREND BADGE HERE --- */}
+        <span 
+  style={{ 
+    fontSize: '11px', 
+    fontWeight: '700', 
+    padding: '4px 8px', 
+    borderRadius: '20px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    ...trendStyle
+  }}
+>
+  {trend === 'Live' && (
+    <>
+      {/* Injects a temporary pulse keyframe animation */}
+      <style>{`
+        @keyframes livePulse {
+          0% { transform: scale(0.95); opacity: 0.5; }
+          50% { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(0.95); opacity: 0.5; }
+        }
+      `}</style>
+      <span 
+        style={{ 
+          width: '6px', 
+          height: '6px', 
+          background: '#0284c7', 
+          borderRadius: '50%', 
+          display: 'inline-block', 
+          animation: 'livePulse 2s infinite ease-in-out' 
+        }}
+      />
+    </>
+  )}
+  {trend}
+</span>
       </div>
+      
       <p style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', margin: 0 }}>{label}</p>
       <h4 style={{ fontSize: '24px', fontWeight: '800', color: '#1e293b', margin: '4px 0 0' }}>{value}</h4>
     </div>
-);
-
-/* --- Invoice Modal Component (Updated with Availability Logic) --- */
-const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId }) => {
+  );
+};
+/* --- Invoice Modal Component --- */
+const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId, initialStatus }) => {
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
+  const [skipPharmacy, setSkipPharmacy] = useState(initialStatus === "Pending-Pharmacy");
 
   useEffect(() => {
       if (apptId) {
@@ -276,20 +355,22 @@ const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId }) => {
                   setPatientId(data.patient_id); 
                   setPatientName(data.patient_name);
                   const formattedItems = [
-                    { service_name: 'Consultation Fee', unit_price: data.consultation_fee, type: 'Consultation', quantity: 1, is_available: true },
+                    { service_name: 'Consultation Fee', unit_price: data.consultation_fee, type: 'Consultation', quantity: 1, is_available: true, status: 'Ready-to-Dispense' },
                     ...data.medicines.map(m => ({
                       service_name: m.name,
                       unit_price: m.unit_price,
                       type: 'Pharmacy',
                       quantity: m.qty,
-                      is_available: m.is_available 
+                      is_available: m.is_available,
+                      status: initialStatus || 'Ready-to-Dispense'
                     })),
                     ...(data.labs || []).map(l => ({
                       service_name: l.test,
                       unit_price: l.price,
                       type: 'Laboratory',
                       quantity: 1,
-                      is_available: true
+                      is_available: true,
+                      status: 'Ready-to-Dispense'
                     }))
                   ];
                   setItems(formattedItems); 
@@ -298,19 +379,24 @@ const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId }) => {
       } else {
           setPatientId('');
           setPatientName('');
-          setItems([{ service_name: 'Consultation Fee', unit_price: 500, type: 'Consultation', quantity: 1, is_available: true }]);
+          setItems([{ service_name: 'Consultation Fee', unit_price: 500, type: 'Consultation', quantity: 1, is_available: true, status: 'Ready-to-Dispense' }]);
       }
-  }, [apptId, hosp_id]);
+  }, [apptId, hosp_id, initialStatus]);
 
   const calculateTotal = () => items
-    .filter(item => item.is_available !== false) 
+    .filter(item => {
+      if (skipPharmacy && item.type === 'Pharmacy') return false;
+      return item.is_available !== false;
+    }) 
     .reduce((acc, item) => acc + (item.unit_price * (item.quantity || 1)), 0);
 
   const handleSubmit = async (e) => {
       e.preventDefault();
       try {
-          // Filter out items that are not available before sending to backend
-          const billableItems = items.filter(item => item.is_available !== false);
+          const billableItems = items.filter(item => {
+            if (skipPharmacy && item.type === 'Pharmacy') return false;
+            return item.is_available !== false;
+          });
 
           const res = await fetch(`http://localhost:8000/api/v1/receptionist/invoices/generate`, {
               method: 'POST',
@@ -335,16 +421,35 @@ const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId }) => {
 
   return (
       <div style={modalOverlay}>
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={modalContent}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ ...modalContent, maxWidth: '480px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontWeight: '800', color: '#1e293b' }}>
                       {loading ? 'Fetching Details...' : 'Finalize Invoice'}
                   </h3>
-                  <div onClick={onClose} style={{ cursor: 'pointer', padding: '4px', borderRadius: '50%', background: '#f1f5f9' }}>
+                  <div onClick={onClose} style={{ cursor: 'pointer', padding: '4px', borderRadius: '50%', background: '#f1f5f9', display: 'flex' }}>
                       <X size={20} color="#64748b" />
                   </div>
               </div>
               
+              {/* PHARMACY WARNING STATEMENTS ADDED HERE */}
+              {initialStatus === 'Pending-Pharmacy' && (
+                <div style={{ padding: '12px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '10px' }}>
+                  <Clock size={18} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <p style={{ margin: 0, fontSize: '13px', color: '#b45309', fontWeight: '500' }}>
+                    <strong>Pharmacy Pending:</strong> The pharmacist hasn't verified medication pricing yet. Proceeding now will exclude medicine charges.
+                  </p>
+                </div>
+              )}
+
+              {initialStatus === 'Pharmacy-Priced' && (
+                <div style={{ padding: '12px', backgroundColor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '10px' }}>
+                  <CheckCircle size={18} color="#7c3aed" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <p style={{ margin: 0, fontSize: '13px', color: '#6d28d9', fontWeight: '500' }}>
+                    <strong>Rx Verified & Priced:</strong> The pharmacist has verified medication values. All custom itemized prices are synced and ready for billing layout collection.
+                  </p>
+                </div>
+              )}
+
               {loading ? (
                   <div style={{ textAlign: 'center', padding: '60px' }}>
                       <Loader2 className="animate-spin" color="#059669" size={32} />
@@ -359,44 +464,96 @@ const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId }) => {
                               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>ID: #{patientId}</span>
                           </div>
                       </div>
+
+                      {initialStatus === "Pending-Pharmacy" && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          backgroundColor: '#fff7ed',
+                          padding: '14px',
+                          borderRadius: '14px',
+                          border: '1px solid #ffedd5'
+                        }}>
+                          <input 
+                            type="checkbox" 
+                            id="skipPharmacyToggle"
+                            checked={skipPharmacy} 
+                            onChange={(e) => setSkipPharmacy(e.target.checked)}
+                            style={{ width: '18px', height: '18px', accentColor: '#ea580c', cursor: 'pointer' }}
+                          />
+                          <label htmlFor="skipPharmacyToggle" style={{ fontSize: '13px', fontWeight: '700', color: '#c2410c', cursor: 'pointer', userSelect: 'none' }}>
+                            Skip Pharmacy (Patient purchasing outside)
+                          </label>
+                        </div>
+                      )}
                       
                       <div>
                           <label style={labelStyle}>BILLING SUMMARY</label>
-                          <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {items.map((item, idx) => (
-                                  <div key={idx} style={{
-                                    ...itemRowStyle,
-                                    opacity: item.is_available === false ? 0.6 : 1,
-                                    border: item.is_available === false ? '1px dashed #fda4af' : '1px solid #f1f5f9',
-                                    background: item.is_available === false ? '#fff1f2' : '#ffffff'
-                                  }}>
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                          <span style={{ 
-                                            fontSize: '14px', 
-                                            fontWeight: '700', 
-                                            color: item.is_available === false ? '#e11d48' : '#334155' 
-                                          }}>
-                                            {item.service_name}
-                                          </span>
-                                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                            <span style={getTypeBadgeStyle(item.type)}>{item.type || 'General'}</span>
-                                            {item.quantity > 1 && <span style={{ fontSize: '10px', color: '#94a3b8' }}>x{item.quantity}</span>}
+                          <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+                              {items.map((item, idx) => {
+                                  const isSkippedPharmacyItem = skipPharmacy && item.type === 'Pharmacy';
+                                  const isUnavailable = item.is_available === false;
+                                  const isDisabled = isSkippedPharmacyItem || isUnavailable;
+
+                                  return (
+                                      <div key={idx} style={{
+                                        ...itemRowStyle,
+                                        opacity: isDisabled ? 0.5 : 1,
+                                        border: isSkippedPharmacyItem ? '1px dashed #cbd5e1' : isUnavailable ? '1px dashed #fda4af' : '1px solid #f1f5f9',
+                                        background: isSkippedPharmacyItem ? '#f8fafc' : isUnavailable ? '#fff1f2' : '#ffffff',
+                                        textDecoration: isSkippedPharmacyItem ? 'line-through' : 'none'
+                                      }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                              <span style={{ 
+                                                fontSize: '14px', 
+                                                fontWeight: '700', 
+                                                color: isUnavailable ? '#e11d48' : '#334155' 
+                                              }}>
+                                                {item.service_name}
+                                              </span>
+                                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                <span style={getTypeBadgeStyle(item.type)}>{item.type || 'General'}</span>
+                                                {item.quantity > 1 && !isSkippedPharmacyItem && <span style={{ fontSize: '10px', color: '#94a3b8' }}>x{item.quantity}</span>}
+                                                
+                                                {/* INTEGRATED STATUS BADGE DISPLAY */}
+                                                {item.type === 'Pharmacy' && !isDisabled && (
+                                                  <span style={{
+                                                    padding: '2px 8px',
+                                                    borderRadius: '50px',
+                                                    fontSize: '10px',
+                                                    fontWeight: '700',
+                                                    backgroundColor: 
+                                                      item.status === 'Ready-to-Dispense' ? '#ecfdf5' :
+                                                      item.status === 'Pharmacy-Priced' ? '#f5f3ff' :
+                                                      item.status === 'Pending-Pharmacy' ? '#fef3c7' : '#f1f5f9',
+                                                    color: 
+                                                      item.status === 'Ready-to-Dispense' ? '#10b981' :
+                                                      item.status === 'Pharmacy-Priced' ? '#7c3aed' :
+                                                      item.status === 'Pending-Pharmacy' ? '#d97706' : '#64748b'
+                                                  }}>
+                                                    {item.status === 'Pharmacy-Priced' ? 'Rx Priced' : item.status}
+                                                  </span>
+                                                )}
+                                              </div>
                                           </div>
+                                          
+                                          {isUnavailable ? (
+                                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#e11d48' }}>OUT OF STOCK</span>
+                                          ) : isSkippedPharmacyItem ? (
+                                            <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b' }}>OMITTED</span>
+                                          ) : (
+                                            <span style={{ fontWeight: '800', color: '#1e293b' }}>
+                                              ₹{(item.unit_price * (item.quantity || 1)).toLocaleString()}
+                                            </span>
+                                          )}
                                       </div>
-                                      
-                                      {item.is_available === false ? (
-                                        <span style={{ fontSize: '11px', fontWeight: '900', color: '#e11d48' }}>OUT OF STOCK</span>
-                                      ) : (
-                                        <span style={{ fontWeight: '800', color: '#1e293b' }}>
-                                          ₹{(item.unit_price * (item.quantity || 1)).toLocaleString()}
-                                        </span>
-                                      )}
-                                  </div>
-                              ))}
+                                  );
+                              })}
                           </div>
                       </div>
 
-                      <div style={{ marginTop: '10px', borderTop: '2px dashed #e2e8f0', paddingTop: '20px' }}>
+                      <div style={{ marginTop: '4px', borderTop: '2px dashed #e2e8f0', paddingTop: '16px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px', color: '#64748b' }}>
                               <span>Subtotal</span>
                               <span>₹{calculateTotal().toLocaleString()}</span>
@@ -523,7 +680,7 @@ const PrescriptionDetailModal = ({ invoice, onClose }) => {
   );
 };
 
-/* --- Global Styles --- */
+/* --- Remaining Style Declarations --- */
 const itemRowStyle = {
   display: 'flex', 
   justifyContent: 'space-between', 
@@ -555,16 +712,16 @@ const labelStyle = { fontSize: '11px', fontWeight: '800', color: '#64748b', marg
 const thStyle = { padding: '16px', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' };
 const tdStyle = { padding: '16px', fontSize: '14px', color: '#475569' };
 const tableCardStyle = { background: 'white', padding: '24px', borderRadius: '24px', border: `1px solid #e2e8f0`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
-const statusBadgeBlue = { fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', background: '#eff6ff', color: '#1e40af' };
-const statusBadgeGreen = { fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', background: '#ecfdf5', color: '#059669' };
-const payBtnStyle = { display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' };
 const searchWrapperStyle = { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'white', padding: '0 16px', borderRadius: '12px', border: '1px solid #e2e8f0' };
 const searchInputStyle = { width: '100%', padding: '12px 0', border: 'none', outline: 'none', fontSize: '14px' };
 const generateBtnStyle = { padding: '14px', background: '#059669', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const backBtnStyle = { border: 'none', background: 'none', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '10px' };
 const modalOverlay = { position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
 const modalContent = { background: 'white', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '450px' };
-const viewRxButtonStyle = { padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px', fontWeight: '700', color: '#475569', cursor: 'pointer' };
-const queueButtonStyle = { padding: '6px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '20px', fontSize: '12px', color: '#1e40af', cursor: 'pointer', fontWeight: '700', display: 'flex', gap: '6px', alignItems: 'center' };
+const viewRxButtonStyle = { padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', fontWeight: '600', color: '#475569', cursor: 'pointer' };
+const statusBadgeGreen = { padding: '4px 8px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '12px', fontWeight: '700' };
+const statusBadgeBlue = { padding: '4px 8px', background: '#dbeafe', color: '#1e40af', borderRadius: '6px', fontSize: '12px', fontWeight: '700' };
+const payBtnStyle = { padding: '6px 12px', background: '#059669', color: 'white', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' };
+const queueButtonStyle = { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', border: '1px solid', fontSize: '12px', fontWeight: '700', cursor: 'pointer' };
 
 export default Billing;
