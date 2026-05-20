@@ -65,8 +65,7 @@ app.include_router(doctor_router.router)
 app.include_router(nurse.router)
 
 app.include_router(pharmacy.router)
-app.include_router(Lab.router)
-# Patient Portal with specific prefix
+app.include_router(Lab.router, prefix="/api/v1/lab")# Patient Portal with specific prefix
 app.include_router(
     patient_router, 
     prefix="/api/v1/patient", 

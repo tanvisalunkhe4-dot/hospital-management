@@ -9,7 +9,7 @@ const TestProcessing = () => {
   const [resultValues, setResultValues] = useState({});
   const [processingState, setProcessingState] = useState({}); 
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
-
+  const [selectedFiles, setSelectedFiles] = useState({}); // Stores file objects by sample ID
   useEffect(() => {
     fetchCollectedSamples();
   }, []);
@@ -50,32 +50,48 @@ const TestProcessing = () => {
     }));
   };
 
+
   const handleResultSubmit = async (sample) => {
     const data = resultValues[sample.id] || {};
-    
-    // Extract all fields except the 'note'
     const { note, ...parameters } = data;
-  
+    
+    // Create FormData
+    const formData = new FormData();
+    
+    // 1. Combine all metadata into 'result_data' to match the FastAPI Form() field
+    const metadata = {
+      test_results: parameters,
+      note: note || "",
+      result_summary: `Test completed with ${Object.keys(parameters).length} parameters.`,
+      status: 'Completed'
+    };
+    
+    formData.append('result_data', JSON.stringify(metadata));
+    
+    // 2. Append the file if selected
+    if (selectedFiles[sample.id]) {
+      formData.append('file', selectedFiles[sample.id]);
+    }
+    
     setSubmittingId(sample.id);
     try {
-      await axios.put(`http://localhost:8000/api/v1/lab/requests/${sample.id}/complete`, {
-        test_results: { 
-            parameters: parameters, // This stores all dynamic fields
-            note: note || ""
-        },
-        result_summary: `Test completed with ${Object.keys(parameters).length} parameters.`,
-        status: 'Completed' 
-      });
-  
+      // 3. IMPORTANT: Do not set Content-Type header. 
+      // Axios/Browser will automatically set it to 'multipart/form-data' 
+      // including the required boundary parameter.
+      await axios.put(
+        `http://localhost:8000/api/v1/lab/requests/${sample.id}/complete`, 
+        formData
+      );
+    
       setSamples(prev => prev.filter(s => s.id !== sample.id));
       setToast({ visible: true, message: 'Test finalized!', type: 'success' });
     } catch (error) {
+      console.error("Submission error:", error.response?.data || error);
       setToast({ visible: true, message: 'Failed to update record.', type: 'error' });
     } finally {
       setSubmittingId(null);
     }
   };
-
 
   const handleCancelProcessing = (id) => {
     setProcessingState(prev => {
@@ -123,17 +139,41 @@ const TestProcessing = () => {
     const name = testName?.toUpperCase() || "";
     
     if (name.includes("CBC") || name.includes("BLOOD COUNT")) 
-      return ['Hemoglobin', 'RBC', 'WBC', 'Platelets'];
+      return [
+        { name: 'Hemoglobin', min: 12, max: 16 },
+        { name: 'RBC', min: 4.5, max: 5.9 },
+        { name: 'WBC', min: 4500, max: 11000 },
+        { name: 'Platelets', min: 150000, max: 450000 }
+      ];
+      
     if (name.includes("LIPID")) 
-      return ['HDL', 'LDL', 'Triglycerides', 'Cholesterol'];
+      return [
+        { name: 'HDL', min: 40, max: 60 },
+        { name: 'LDL', min: 0, max: 100 },
+        { name: 'Triglycerides', min: 0, max: 150 },
+        { name: 'Cholesterol', min: 0, max: 200 }
+      ];
+  
     if (name.includes("GLUCOSE") || name.includes("BLOOD SUGAR")) 
-      return ['Fasting', 'PP'];
+      return [
+        { name: 'Fasting', min: 70, max: 99 },
+        { name: 'PP', min: 70, max: 140 }
+      ];
+  
     if (name.includes("THYROID"))
-      return ['T3', 'T4', 'TSH'];
-    if (name.includes("HbA1c"))
-      return ['Average Glucose', 'Percentage'];
-
-    return ['Observation']; // Default for unrecognized tests
+      return [
+        { name: 'T3', min: 80, max: 200 },
+        { name: 'T4', min: 5, max: 12 },
+        { name: 'TSH', min: 0.4, max: 4.0 }
+      ];
+  
+    if (name.includes("HBA1C"))
+      return [
+        { name: 'Average Glucose', min: 70, max: 125 },
+        { name: 'Percentage', min: 4, max: 5.6 }
+      ];
+  
+    return [{ name: 'Observation', min: 0, max: 99999 }];
   };
   
   return (
@@ -177,7 +217,7 @@ const TestProcessing = () => {
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={thStyle}>Accession & Time</th>
                 <th style={thStyle}>Patient & Priority</th>
-                <th style={thStyle}>Equipment</th>
+                <th style={thStyle}>Test</th>
                 <th style={thStyle}>Status</th>
                 <th style={{...thStyle, textAlign: 'right'}}>Action</th>
               </tr>
@@ -200,12 +240,35 @@ const TestProcessing = () => {
                       <div style={{ fontWeight: '700' }}>{sample.patient_name}</div>
                       <span style={{ fontSize: '9px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px', color: p.color, background: p.bg }}>{p.label}</span>
                     </td>
-                    <td style={tdStyle}><span style={{ padding: '4px 8px', background: '#f1f5f9', borderRadius: '6px', fontSize: '11px', fontWeight: '600' }}><HardDrive size={12} style={{display:'inline'}}/> {sample.assigned_machine || 'N/A'}</span></td>
                     <td style={tdStyle}>
-                       <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 8px', borderRadius: '6px', background: isStarted ? '#fefce8' : '#f1f5f9', color: isStarted ? '#854d0e' : '#64748b' }}>
-                         {isStarted ? 'Processing' : 'Pending'}
-                       </span>
-                    </td>
+          <span style={{ 
+            padding: '4px 8px', 
+            background: '#e0f2fe', 
+            borderRadius: '6px', 
+            fontSize: '11px', 
+            fontWeight: '700',
+            color: '#0369a1' 
+          }}>
+            {sample.test_name}
+          </span>
+        </td>
+                    {/* Replace your current status <td> with this logic */}
+<td style={tdStyle}>
+  <span style={{ 
+    fontSize: '11px', 
+    fontWeight: '700', 
+    padding: '4px 8px', 
+    borderRadius: '6px', 
+    background: 
+      sample.status === 'Verified' ? '#dbeafe' : 
+      isStarted ? '#fefce8' : '#f1f5f9', 
+    color: 
+      sample.status === 'Verified' ? '#1e40af' : 
+      isStarted ? '#854d0e' : '#64748b' 
+  }}>
+    {sample.status === 'Verified' ? 'Verified' : (isStarted ? 'Processing' : 'Pending')}
+  </span>
+</td>
                     <td style={{...tdStyle, textAlign: 'right'}}>
                       {!isStarted ? (
                         <button onClick={() => handleStartTest(sample.id)} style={btnPrimary}>
@@ -234,20 +297,37 @@ const TestProcessing = () => {
     </div>
     
     {/* Input Grid */}
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-                {getTemplateFields(sample.test_name).map((field) => (
-                  <div key={field} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '10px', fontWeight: '700', color: '#64748b' }}>{field}</label>
-                    <input 
-                      type="number" 
-                      placeholder="0.00"
-                      value={resultValues[sample.id]?.[field] || ''}
-                      onChange={(e) => updateResult(sample.id, field, e.target.value)} 
-                      style={{ padding: '6px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }} 
-                    />
-                  </div>
-      ))}
-    </div>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+  {getTemplateFields(sample.test_name).map((field) => {
+    // 1. Calculate validation status
+    const val = parseFloat(resultValues[sample.id]?.[field.name]);
+    const isAbnormal = val && (val < field.min || val > field.max);
+
+    return (
+      <div key={field.name} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {/* 2. Use field.name for the label */}
+        <label style={{ fontSize: '10px', fontWeight: '700', color: isAbnormal ? '#ef4444' : '#64748b' }}>
+          {field.name} {isAbnormal ? '⚠️' : ''}
+        </label>
+        
+        {/* 3. Use field.name for value and onChange */}
+        <input 
+          type="number" 
+          placeholder="0.00"
+          value={resultValues[sample.id]?.[field.name] || ''}
+          onChange={(e) => updateResult(sample.id, field.name, e.target.value)} 
+          style={{ 
+            padding: '6px', 
+            borderRadius: '6px', 
+            border: `1px solid ${isAbnormal ? '#ef4444' : '#cbd5e1'}`,
+            backgroundColor: isAbnormal ? '#fef2f2' : 'white',
+            fontSize: '12px' 
+          }} 
+        />
+      </div>
+    );
+  })}
+</div>
 
     {/* Notes */}
     <textarea 
@@ -256,7 +336,17 @@ const TestProcessing = () => {
       style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', marginBottom: '12px', resize: 'vertical' }}
       rows={2}
     />
-
+   <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+  <label style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', display: 'block', marginBottom: '8px' }}>
+    ATTACH DIAGNOSTIC IMAGES
+  </label>
+  <input 
+    type="file" 
+    accept="image/*"
+    onChange={(e) => setSelectedFiles(prev => ({ ...prev, [sample.id]: e.target.files[0] }))}
+    style={{ fontSize: '12px', width: '100%', padding: '8px', border: '1px dashed #cbd5e1', borderRadius: '6px' }}
+  />
+</div>
     {/* Replace your Finalize button block with this: */}
 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
   <button 

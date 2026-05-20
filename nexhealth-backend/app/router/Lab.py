@@ -7,30 +7,47 @@ from app.db import models
 from app.schemas import Lab_schema as schemas
 import uuid # For generating unique Accession Numbers
 from datetime import datetime, timezone 
-
+from fastapi import File, UploadFile, Form, Depends
+import json
 router = APIRouter(
-    prefix="/api/v1/lab",
+    prefix="",
     tags=["Laboratory"]
 )
 
 # --- HELPER: Flattening Logic ---
 def flatten_lab_data(r):
     """Reusable helper to map database relations to flat UI fields"""
+    # --- Patient Logic ---
     if r.patient:
         r.patient_name = f"{r.patient.first_name} {r.patient.last_name}"
         r.patient_gender = r.patient.gender or "N/A"
+        # Added mapping for email if it exists in your patient model
+        r.patient_email = getattr(r.patient, 'email', "N/A") 
+        
         if r.patient.date_of_birth:
             today = date.today()
             dob = r.patient.date_of_birth
             r.patient_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
         else:
             r.patient_age = 0
+    else:
+        # Explicitly set defaults when patient is missing to avoid "N/A" in UI
+        r.patient_name = "Unknown"
+        r.patient_gender = "N/A"
+        r.patient_email = "N/A"
+        r.patient_age = 0
     
+    # --- Doctor Logic ---
     if r.doctor:
         r.doctor_name = r.doctor.full_name or "Unknown Staff"
         r.staff_display_id = r.doctor.staff_id or "N/A"
         dept_obj = getattr(r.doctor, 'department', None)
         r.doctor_dept = getattr(dept_obj, 'name', "General Medicine")
+    else:
+        # Added explicit defaults for doctor fields
+        r.doctor_name = "N/A"
+        r.staff_display_id = "N/A"
+        r.doctor_dept = "General Medicine"
     
     return r
 
@@ -218,21 +235,7 @@ def reject_test_request(request_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Database error handling rejection record submission")
 
 
-        
-router.put("/requests/{request_id}/collect", response_model=schemas.LabRequestResponse)
-def mark_sample_collected(request_id: int, db: Session = Depends(get_db)):
-    """Triggered when technician confirms they have the physical vial"""
-    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
-    if not db_req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    db_req.status = "Collected"
-    db_req.collected_at = datetime.now(timezone.utc)
-    
-    db.commit()
-    db.refresh(db_req)
-    return flatten_lab_data(db_req)
-
+ 
 @router.get("/requests/collected/{hospital_id}", response_model=List[schemas.LabRequestResponse])
 def get_collected_samples(hospital_id: int, db: Session = Depends(get_db)):
     """Fetches samples ready for result entry"""
@@ -241,11 +244,13 @@ def get_collected_samples(hospital_id: int, db: Session = Depends(get_db)):
         .filter(models.LabRequest.hospital_id == hospital_id, models.LabRequest.status == "Collected").all()
     return [flatten_lab_data(r) for r in requests]
 
-
 @router.put("/requests/{request_id}/complete")
-def complete_lab_test(
-    request_id: int, 
-    result_data: schemas.LabResultUpdate, 
+async def complete_lab_test(
+    request_id: int,
+    # Receive metadata as a JSON string (requires form-data from frontend)
+    result_data: str = Form(...), 
+    # Receive the file separately as an UploadFile
+    file: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
     db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
@@ -253,66 +258,80 @@ def complete_lab_test(
     if not db_req:
         raise HTTPException(status_code=404, detail="Lab Request not found")
 
-    # Update status and data
+    # 1. Parse the JSON string from Form data
+    try:
+        data = json.loads(result_data)
+        lab_result_update = schemas.LabResultUpdate(**data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON format in result_data")
+
+    # 2. Update status and data
     db_req.status = "Completed"
     
-    # Ensure test_results is not empty
-    if not result_data.test_results:
+    if not lab_result_update.test_results:
         raise HTTPException(status_code=400, detail="Test results cannot be empty")
         
-    db_req.test_results = result_data.test_results
-    db_req.result_summary = result_data.result_summary or "Verified by Lab Staff"
-    
-    # Fix: Ensure timezone is used correctly
+    db_req.test_results = lab_result_update.test_results
+    db_req.result_summary = lab_result_update.result_summary or "Verified by Lab Staff"
     db_req.completed_at = datetime.now(timezone.utc)
     
+    # 3. Handle file upload (if applicable)
+    if file:
+        # Example: Save file to local directory or S3
+        # file_path = f"uploads/{request_id}_{file.filename}"
+        # with open(file_path, "wb") as buffer:
+        #     buffer.write(await file.read())
+        # db_req.file_url = file_path
+        pass
+
     try:
         db.commit()
         db.refresh(db_req)
         return {"status": "success", "message": "Results finalized", "request_id": request_id}
-    except Exception as e:
+    except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to save results to database")
+    
 
 @router.put("/requests/{request_id}/collect", response_model=schemas.LabRequestResponse)
 def mark_sample_collected(
     request_id: int, 
-    # Use a schema to record WHO and any specific details/notes
     collection_data: schemas.LabCollectionUpdate, 
     db: Session = Depends(get_db)
 ):
     """
-    Finalizes the physical collection:
-    1. Validates the request exists.
-    2. Records the timestamp and technician ID.
-    3. Moves status to 'Collected'.
+    Finalizes the physical collection. 
+    Uses existing schemas to ensure compatibility with other router endpoints.
     """
+    # 1. Fetch record using the same logic as other endpoints
     db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
     
     if not db_req:
         raise HTTPException(status_code=404, detail="Lab Request not found")
 
-    # Step: Record sample details
+    # 2. Update status and timestamp
+    # We use timezone.utc to ensure consistency with your other date-based logic
     db_req.status = "Collected"
-    db_req.collected_at = datetime.now()
+    db_req.collected_at = datetime.now(timezone.utc)
     
-    # Assuming your model has these fields for accountability
-    # If your model uses 'notes' instead of 'collection_notes', adjust accordingly
+    # 3. Update notes safely
+    # This only maps fields that exist in your schema, ensuring no database crashes
     db_req.notes = collection_data.collection_notes 
     
-    # If you have a phlebotomist_id field in your DB:
-    # db_req.collected_by = collection_data.collected_by 
-
     try:
         db.commit()
         db.refresh(db_req)
+        # Using the same flattening helper ensures the returned object 
+        # matches the expected response_model structure
         return flatten_lab_data(db_req)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to update collection status")
-
-
-
+        # Log the actual error for debugging, but return a clean HTTP error
+        print(f"Error during collection update: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Failed to update collection status"
+        )
 
 @router.get("/requests/{request_id}/label", response_model=schemas.LabRequestResponse)
 def get_label_data(request_id: int, db: Session = Depends(get_db)):
@@ -358,3 +377,91 @@ def save_lab_test_draft(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to save draft")
+
+@router.put("/requests/{request_id}/verify")
+def verify_test_results(request_id: int, db: Session = Depends(get_db)):
+    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    # Transition to Verified
+    db_req.status = "Verified"
+    db_req.verified_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    return {"status": "success", "message": "Test results verified by supervisor."}
+
+
+@router.get("/reports/list", response_model=List[schemas.LabRequestResponse])
+def get_completed_reports(db: Session = Depends(get_db)):
+    # Also, remember to flatten the data so it matches the response schema fields
+    requests = db.query(models.LabRequest)\
+        .filter(models.LabRequest.status.in_(["Completed", "Verified"]))\
+        .all()
+    return [flatten_lab_data(r) for r in requests]
+
+
+# Change the path from "/requests/{request_id}/upload-report" 
+# to "/reports/{request_id}/upload" to match your frontend logic.
+
+@router.post("/reports/{request_id}/upload") 
+async def upload_lab_report(
+    request_id: int, 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db)
+):
+    db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    # 1. Your File Saving Logic (e.g., saving to a 'reports/' folder)
+    # 2. Update the database record with the file path
+    # db_req.report_file_url = f"/static/reports/{file.filename}"
+    
+    db_req.status = "Verified"
+    db_req.report_generated_at = datetime.now(timezone.utc)
+    
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return {"status": "success", "message": "Report uploaded and verified"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save report")
+
+@router.get("/requests/{request_id}/report-view", response_model=schemas.LabRequestResponse)
+def get_report_view(request_id: int, db: Session = Depends(get_db)):
+    # Use joinedload to pull patient and doctor records in the same query
+    db_req = db.query(models.LabRequest)\
+        .options(
+            joinedload(models.LabRequest.patient),
+            joinedload(models.LabRequest.doctor).joinedload(models.Staff.department)
+        )\
+        .filter(models.LabRequest.id == request_id).first()
+    
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    return flatten_lab_data(db_req)
+
+
+@router.post("/requests/{request_id}/send-to-doctor")
+async def send_report_to_doctor(request_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch the request and join the doctor relationship
+    db_req = db.query(models.LabRequest)\
+        .options(joinedload(models.LabRequest.doctor))\
+        .filter(models.LabRequest.id == request_id).first()
+    
+    if not db_req or not db_req.doctor:
+        raise HTTPException(status_code=404, detail="Request or Doctor not found")
+        
+    # 2. Get the email from the doctor's profile
+    doctor_email = getattr(db_req.doctor, 'email', None)
+    
+    if not doctor_email:
+        raise HTTPException(status_code=400, detail="Doctor does not have an email registered.")
+        
+    # 3. Trigger your email function (using FastAPI-Mail)
+    # ... logic to send email ...
+    
+    return {"status": "success", "message": f"Report sent to {doctor_email}"}

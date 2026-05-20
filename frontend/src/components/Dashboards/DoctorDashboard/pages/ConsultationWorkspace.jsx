@@ -94,9 +94,12 @@ const calculateTotalQty = (freq, durationStr) => {
   return dosesPerDay * days;
 };
 
+const [partialTranscript, setPartialTranscript] = useState("");
+const [finalTranscript, setFinalTranscript] = useState("");
 const [liveTranscript, setLiveTranscript] = useState("");
 
 const toggleScribe = async () => {
+
   if (isListening) {
     if (recorderRef.current) recorderRef.current.stop();
     if (socketRef.current) socketRef.current.close();
@@ -112,18 +115,23 @@ const toggleScribe = async () => {
       // Inside toggleScribe
       socketRef.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
+      
         if (data.type === "partial_transcript") {
-          const incoming = data.text.trim();
-          setLiveTranscript(incoming);
-          
-          setRawTranscript((prev) => {
-            if (!prev.trim()) return incoming;
-            if (prev.endsWith(incoming)) return prev;
-            return prev.trim() + " " + incoming;
-          }); 
+          setPartialTranscript(data.text);
+        }
+      
+        if (data.type === "final_transcript") {
+      
+          setFinalTranscript((prev) => {
+            return prev + " " + data.text;
+          });
+      
+          setPartialTranscript("");
         }
       };
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+
+      const mediaRecorder = new MediaRecorder(stream);
       recorderRef.current = mediaRecorder;
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
@@ -142,7 +150,7 @@ const toggleScribe = async () => {
         finalizeNotesWithGemini(); 
       };
 
-      mediaRecorder.start(1000); // 1 second chunks for stability
+      mediaRecorder.start(250); 
       setIsListening(true);
     } catch (err) {
       alert("Mic error.");
@@ -153,15 +161,17 @@ const toggleScribe = async () => {
 
 const finalizeNotesWithGemini = async () => {
   console.log("Sending to AI Scribe:", rawTranscript);
-  if (!rawTranscript.trim()) return;
 
+  const fullTranscript = `${finalTranscript} ${partialTranscript}`;
+
+if (!fullTranscript.trim()) return;
   setIsProcessing(true);
   setLiveTranscript(""); 
   
   try {
       const response = await axios.post(
           'http://127.0.0.1:8000/api/v1/doctor/consultation/scribe-process-text', 
-          { raw_text: rawTranscript }, 
+          { raw_text: fullTranscript }, 
           { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` } }
       );
       
@@ -389,7 +399,10 @@ const handleFinalize = async () => {
         backgroundColor: '#f8fafc', padding: '15px', borderRadius: '12px',
         lineHeight: '1.6', border: '1px solid #f1f5f9'
       }}>
-        {rawTranscript || <span style={{color: '#94a3b8'}}>Waiting for audio...</span>}
+       {finalTranscript} 
+<span style={{ color: '#2563eb' }}>
+   {partialTranscript}
+</span>
         {isListening && (
           <p style={{ color: '#ef4444', fontWeight: '600', marginTop: '10px' }}>
             ● LIVE: {liveTranscript}

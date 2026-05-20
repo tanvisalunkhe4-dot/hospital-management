@@ -546,7 +546,10 @@ class LabRequest(Base):
     # --- STATUS & LIFECYCLE ---
     # Transitions: Pending -> Accepted -> Collected -> Processing -> Completed
     status = Column(String, default="Pending")
-
+    report_file_url = Column(String, nullable=True)        # Path to the stored PDF file
+    report_generated_at = Column(DateTime, nullable=True)  # Timestamp of PDF generation
+    report_sent_at = Column(DateTime, nullable=True)       # Timestamp when sent to doctor
+    report_delivery_status = Column(String, default="Not Sent") # e.g., "Not Sent", "Sent", "Viewed"
     # --- NEW: RESULTS DATA STORAGE ---
     # Stores numerical/text findings: e.g., {"Hb": "14.2", "WBC": "7000"}
     test_results = Column(JSONB, nullable=True) 
