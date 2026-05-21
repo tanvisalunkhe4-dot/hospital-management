@@ -28,9 +28,11 @@ router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
 class ScribeTextRequest(BaseModel):
     raw_text: str
+
 class LabTestItem(BaseModel):
     test_name: str
     priority: str = "NORMAL"
+
 class FinalizeConsultationRequest(BaseModel):
     summary: str
     prescriptions: List[Dict[str, Any]]
@@ -38,7 +40,7 @@ class FinalizeConsultationRequest(BaseModel):
     appointment_id: int  
     lab_tests: List[LabTestItem]
 
-
+# Standardized fallback constants
 STATUS_VITALS_TAKEN = "Vitals Taken"
 STATUS_SCHEDULED = "Scheduled"
 STATUS_CHECKED_IN = "Checked In"
@@ -107,7 +109,7 @@ def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
         .filter(
             models.Appointment.doctor_id == doctor.id,
             models.Appointment.status == STATUS_IN_CONSULTATION,
-            models.Appointment.appointment_date == date.today() # Strict Date Filter
+            models.Appointment.appointment_date == date.today()
         )
         .first()
     )
@@ -121,19 +123,19 @@ def check_active_consultation(staff_id: str, db: Session = Depends(get_db)):
         }
     return None
 
-
 @router.post("/consultation/start/{appointment_id}")
 def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
-    # 1. Get the appointment the doctor is trying to start
     target_appt = db.query(models.Appointment).filter(models.Appointment.id == appointment_id).first()
-    
+    if not target_appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
     if target_appt.status == STATUS_IN_CONSULTATION:
         return {"status": "already_started"}
-    # 2. Check if the doctor ALREADY has a session active TODAY
+
     active_session = db.query(models.Appointment).filter(
         models.Appointment.doctor_id == target_appt.doctor_id,
-        models.Appointment.status == "In Consultation",
-        models.Appointment.appointment_date == date.today(), # <--- THE CRITICAL ADDITION
+        models.Appointment.status == STATUS_IN_CONSULTATION,
+        models.Appointment.appointment_date == date.today(),
         models.Appointment.id != appointment_id 
     ).first()
 
@@ -143,17 +145,12 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
             detail="You already have an active consultation in progress for today."
         )
 
-    # 3. If no active session today, proceed to start the new one
     target_appt.status = STATUS_IN_CONSULTATION
     db.commit()
     return {"status": "started"}
 
-
-
-
 @router.get("/medical-records/all")
 def get_all_records(db: Session = Depends(get_db)):
-    """Fetches full clinical history for the Doctor's record archive."""
     results = (
         db.query(
             models.MedicalRecord.id,
@@ -168,7 +165,7 @@ def get_all_records(db: Session = Depends(get_db)):
 
     return [
         {
-            "id": f"NX-{r.id}", # Standardized Autonex ID format
+            "id": f"NX-{r.id}",
             "patient_name": f"{r.first_name} {r.last_name}",
             "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
             "diagnosis": r.diagnosis,
@@ -196,19 +193,16 @@ def get_latest_vitals(patient_id: int, db: Session = Depends(get_db)):
         "blood_pressure": latest_vital.blood_pressure,
         "pulse_rate": latest_vital.pulse_rate,
         "temperature": latest_vital.temperature,
-        "sp_o2": latest_vital.sp_o2 or "--" # From your Vitals model
+        "sp_o2": latest_vital.sp_o2 or "--"
     }
-
 
 @router.post("/consultation/scribe-process")
 async def handle_ai_scribe(file: UploadFile = File(...)):
-    # 1. Save temporary audio file
     temp_file = f"temp_{file.filename}"
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # 2. Audio -> Text (Whisper)
         raw_text = transcribe_audio(temp_file)
         
         if not raw_text.strip():
@@ -217,26 +211,22 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
                 "clinical_note": "No audio detected. Please ensure your microphone is working."
             }
 
-        # 3. Text -> Structured AI Summary (Gemini 2.0 Flash)
         clinical_summary = await generate_medical_summary(raw_text)
-        
         return {
             "raw_transcript": raw_text,
             "clinical_note": clinical_summary
         }
-        
     except Exception as e:
         print(f"Scribe Router Error: {e}")
         return {
             "raw_transcript": "Error during processing",
             "clinical_note": "AI Summarization failed. Please enter notes manually."
         }
-    
     finally:
-        # 4. Clean up the audio file immediately to save disk space
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
+# --- WORKFLOW CRITICAL FINALIZE ENDPOINT ---
 @router.post("/consultation/finish/{appointment_id}")
 async def finish_consultation(
     appointment_id: int,
@@ -244,7 +234,6 @@ async def finish_consultation(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # 1. Resolve Staff record
     staff_record = db.query(models.Staff).filter(
         models.Staff.email.ilike(current_user.email)
     ).first()
@@ -252,7 +241,6 @@ async def finish_consultation(
     if not staff_record:
         raise HTTPException(status_code=404, detail="Staff profile not found")
 
-    # 2. Resolve specific Doctor Profile for MedicalRecord FK
     doctor_profile = db.query(models.Doctor).filter(
         models.Doctor.staff_ref_id == staff_record.id
     ).first()
@@ -260,7 +248,6 @@ async def finish_consultation(
     if not doctor_profile:
         raise HTTPException(status_code=404, detail="Doctor profile not found")
 
-    # 3. Fetch Appointment
     appointment = db.query(models.Appointment).filter(
         models.Appointment.id == appointment_id
     ).first()
@@ -268,12 +255,11 @@ async def finish_consultation(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    # 4. Security Check
-    if appointment.doctor_id != staff_record.id:
+    # FIX 1: Support checking against both structural setup patterns (Staff ID or Doctor Profile ID)
+    if appointment.doctor_id not in [staff_record.id, doctor_profile.id]:
         raise HTTPException(status_code=403, detail="Unauthorized: Not your appointment")
 
     try:
-        # 5. Save the Medical Record
         new_record = models.MedicalRecord(
             patient_id=appointment.patient_id,
             doctor_id=doctor_profile.id,
@@ -283,53 +269,47 @@ async def finish_consultation(
             treatment_plan="See Prescription"
         )
         db.add(new_record)
-        
-        # 6. Flush to get the record ID for prescriptions
         db.flush() 
 
-        # 7. Save Prescriptions
+        # Process Prescriptions safely
         for med in data.prescriptions:
-            # Get raw values
             freq_str = med.get("frequency", "1-0-1")
             duration_str = med.get("duration", "5 Days")
             route = med.get("route", "Oral")
-            name = (med.get("name") or med.get("medicine_name")).lower()
+            name = (med.get("name") or med.get("medicine_name", "")).lower()
 
-            # 1. Parse Duration (Extract the number from "5 Days")
             try:
                 days = int(''.join(filter(str.isdigit, duration_str)))
             except:
-                days = 5 # Default fallback
+                days = 5
 
-            # 2. Parse Frequency (Sum the 1s in "1-1-1")
-            # This turns "1-1-1" into 3, and "1-0-1" into 2
             try:
                 per_day = sum(int(x) for x in freq_str.split('-') if x.isdigit())
             except:
-                per_day = 2 # Default fallback
+                per_day = 2
 
-            # 3. Calculate Final Quantity
-            # Logic: If it's a Tablet/Capsule, multiply. If it's a Syrup/Liquid, keep it as 1 bottle.
             if any(unit in name for unit in ["tablet", "tab", "capsule", "cap"]):
                 final_qty = per_day * days
             else:
-                final_qty = 1 # Assume 1 bottle for syrups/drops/infusions
+                final_qty = 1 
 
             new_prescription = models.Prescription(
                 medical_record_id=new_record.id,
                 hospital_id=data.hospital_id,
                 medicine_name=med.get("name") or med.get("medicine_name"),
                 dosage=med.get("dosage"),
-                quantity=final_qty,  # <--- Now correctly calculated (e.g., 15)
+                quantity=final_qty,  
                 frequency=freq_str,
                 duration=duration_str,
                 instructions=med.get("instructions", ""),
-                route=route
+                route=route,
+                is_available=True, # Added initialization fallback explicitly
+                price=0.0
             )
             db.add(new_prescription)
-        # 8. Save Lab Requests
+
+        # Process Lab Requests safely
         for test_obj in data.lab_tests:
-            # test_obj is an instance of LabTestItem
             test_info = db.query(models.LabTestCatalog).filter(
                 models.LabTestCatalog.test_name == test_obj.test_name
             ).first()
@@ -338,18 +318,26 @@ async def finish_consultation(
                 hospital_id=data.hospital_id,
                 patient_id=appointment.patient_id,
                 appointment_id=appointment_id,
-                doctor_id=staff_record.id,
+                doctor_id=doctor_profile.id, # Ensured structural profile ownership references match
                 test_name=test_obj.test_name,
                 price_at_request=test_info.base_price if test_info else 0.0,
                 status="Pending",
-                priority=test_obj.priority # Use the priority from the request object
+                priority=test_obj.priority
             )
             db.add(new_lab_request)
-        # 9. Update Status for Pharmacy Queue
-        appointment.status = "Pending-Pharmacy"
+
+        # FIX 2: State-Machine Fallback Route Logic
+        # If no prescriptions were provided, pass straight to front-desk billing pipeline 
+        if len(data.prescriptions) == 0:
+            appointment.status = "Pharmacy-Verified"
+        else:
+            appointment.status = "Pending-Pharmacy"
         
         db.commit()
-        return {"status": "success", "message": "Consultation sent to Pharmacy"}
+        return {
+            "status": "success", 
+            "message": f"Consultation finalized. Workflow routed to: {appointment.status}"
+        }
 
     except Exception as e:
         db.rollback()
@@ -357,50 +345,37 @@ async def finish_consultation(
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- AI Scribe Logic (Streaming & Finalization) ---
-
 model = WhisperModel("base", device="cpu", compute_type="int8")
 
 @router.websocket("/ws/scribe/stream")
 async def websocket_scribe_stream(websocket: WebSocket):
     await websocket.accept()
-    
-    # Store the EBML header from the very first packet
     initial_header = None
-    # Current working buffer for the chunk
     current_chunk = bytearray()
     
     try:
         while True:
             chunk = await websocket.receive_bytes()
-            
-            # 1. Capture the header from the first packet ever received
             if initial_header is None:
                 initial_header = chunk
-            
             current_chunk.extend(chunk)
 
-            # 2. Process when we have ~0.5MB of new data
             if len(current_chunk) > 16000: 
                 try:
-                    # 3. CRITICAL FIX: Prepend the initial header to the current chunk
                     processing_buffer = initial_header + current_chunk
-                    
                     audio_fp = io.BytesIO(processing_buffer)
                     audio_segment = AudioSegment.from_file(audio_fp, format="webm")
                     
-                    # Convert to WAV for Whisper
                     wav_io = io.BytesIO()
                     audio_segment.export(wav_io, format="wav")
                     wav_io.seek(0)
 
-                    # Transcribe
                     segments, _ = model.transcribe(
                         wav_io, 
                         beam_size=5,
                         vad_filter=True,
                         initial_prompt="A medical consultation regarding patient symptoms and diagnosis."
                     )
-                    
                     transcript = " ".join([segment.text for segment in segments]).strip()
 
                     if transcript:
@@ -408,27 +383,16 @@ async def websocket_scribe_stream(websocket: WebSocket):
                             "type": "partial_transcript",
                             "text": transcript
                         })
-                        
-                        # 4. Clear the chunk but keep the header for the next round
                         current_chunk = bytearray()
-                    
                 except Exception as e:
                     print(f"Slice decoding skipped (waiting for more data): {e}")
                     continue
-
     except WebSocketDisconnect:
         print("Scribe WebSocket disconnected.")
 
 @router.get("/search-medicines")
-def search_medicines(
-    q: str = Query(..., min_length=2), 
-    db: Session = Depends(get_db)
-):
-    results = db.query(MedicineCatalog).filter(
-        MedicineCatalog.name.ilike(f"%{q}%")
-    ).limit(10).all()
-    
-    return results
+def search_medicines(q: str = Query(..., min_length=2), db: Session = Depends(get_db)):
+    return db.query(MedicineCatalog).filter(MedicineCatalog.name.ilike(f"%{q}%")).limit(10).all()
 
 @router.post("/consultation/scribe-process-text")
 async def process_scribe_text(request: ScribeTextRequest):
@@ -441,22 +405,16 @@ async def process_scribe_text(request: ScribeTextRequest):
         print(f"Gemini Processing Error: {e}")
         return {"clinical_note": request.raw_text}
 
-
 @router.post("/lab-requests")
 async def create_lab_request(data: dict, db: Session = Depends(get_db)):
-    print(f"DEBUG: Incoming Data -> {data}")
-
     if not data.get("patient_id") or not data.get("hospital_id"):
         raise HTTPException(status_code=400, detail="Missing Patient or Hospital ID")
 
-    # 1. FETCH BASE PRICE FROM CATALOG
     test_info = db.query(models.LabTestCatalog).filter(
         models.LabTestCatalog.test_name == data.get("test_name")
     ).first()
-    
     initial_price = test_info.base_price if test_info else 0.0
 
-    # 2. CREATE THE REQUEST
     new_request = models.LabRequest(
         hospital_id=data.get("hospital_id"),
         patient_id=data.get("patient_id"),
@@ -480,13 +438,11 @@ async def create_lab_request(data: dict, db: Session = Depends(get_db)):
         }
     except Exception as e:
         db.rollback()
-        print(f"SQL ERROR: {str(e)}") 
         raise HTTPException(status_code=500, detail="Database error occurred")
 
 @router.get("/lab-test-catalog")
 def get_lab_catalog(db: Session = Depends(get_db)):
-    tests = db.query(models.LabTestCatalog).filter(models.LabTestCatalog.is_active == True).all()
-    return tests
+    return db.query(models.LabTestCatalog).filter(models.LabTestCatalog.is_active == True).all()
 
 @router.get("/patient/{patient_id}/lab-reports")
 def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
@@ -501,45 +457,27 @@ def get_patient_lab_reports(patient_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    reports = []
-    for request, p_name in results:
-        report_data = {
-            "id": request.id,
-            "test_name": request.test_name,
-            "category": request.category,
-            "status": request.status,
-            "requested_at": request.requested_at,
-            "patient_name": p_name,
-            "priority": request.priority
-        }
-        reports.append(report_data)
-    
-    return reports
+    return [
+        {
+            "id": r.LabRequest.id,
+            "test_name": r.LabRequest.test_name,
+            "category": r.LabRequest.category,
+            "status": r.LabRequest.status,
+            "requested_at": r.LabRequest.requested_at,
+            "patient_name": r.patient_name,
+            "priority": r.LabRequest.priority
+        } for r in results
+    ]
 
 @router.patch("/lab-reports/{request_id}/accept")
 def accept_lab_report(request_id: int, db: Session = Depends(get_db)):
-    """
-    Updates the LabRequest status to 'Accepted' 
-    to acknowledge the doctor has reviewed the report.
-    """
-    # 1. Fetch the existing lab request
-    lab_request = db.query(models.LabRequest).filter(
-        models.LabRequest.id == request_id
-    ).first()
-
+    lab_request = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
     if not lab_request:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail="Lab request not found."
-        )
+        raise HTTPException(status_code=404, detail="Lab request not found.")
 
-    # 2. Update status
-    # Assuming 'Accepted' is the desired status once the doctor reviews it
     lab_request.status = "Accepted" 
-    
     try:
         db.commit()
-        db.refresh(lab_request)
         return {
             "status": "success", 
             "message": f"Report {lab_request.test_name} accepted successfully.",

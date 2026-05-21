@@ -13,7 +13,10 @@ const PrescriptionQueue = () => {
     try {
       const token = sessionStorage.getItem('token');
       const hospitalId = sessionStorage.getItem('hospital_id');
+      
+      // PRODUCT LOGIC: Query strictly for Stage 1 (Verification/Pricing)
       const res = await axios.get(`http://localhost:8000/api/v1/pharmacy/pending/${hospitalId}`, {
+        params: { status: "Pending-Pharmacy" }, 
         headers: { Authorization: `Bearer ${token}` }
       });
       setPendingOrders(res.data);
@@ -41,8 +44,9 @@ const PrescriptionQueue = () => {
     <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h2 style={{ margin: 0, color: '#1e293b' }}>Dispensing Queue</h2>
-          <p style={{ color: '#64748b', fontSize: '14px' }}>Verify and prepare medications for patients.</p>
+          {/* Aligned semantic header to distinctly differentiate from Handover Desk */}
+          <h2 style={{ margin: 0, fontWeight: '800', color: '#1e293b' }}>Verification & Pricing Desk</h2>
+          <p style={{ color: '#64748b', fontSize: '14px' }}>Verify medication inventory and configure accurate itemized pricing summaries.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', background: 'white', padding: '8px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
           <Search size={18} color="#94a3b8" />
@@ -61,6 +65,7 @@ const PrescriptionQueue = () => {
           <PrescriptionCard 
             key={order.appt_id} 
             order={order} 
+            mode="verify" // Explicitly lock card state behavior to Pricing Matrix input layouts
             onVerifySuccess={() => handleRemoveFromQueue(order.appt_id)} 
           />
         ))}

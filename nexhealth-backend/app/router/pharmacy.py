@@ -42,6 +42,7 @@ class PurchaseCreate(BaseModel):
     medicine_name: str
     quantity_ordered: int
     unit_cost: float
+
 # --- Endpoints ---
 
 # 1. GET PENDING FOR PHARMACY (Queue for Pricing & Dispensing)
@@ -103,7 +104,7 @@ async def get_pharmacy_queue(
     
     return response
 
-# 2. UPDATE STATUS & DEDUCT STOCK (Confirm Pricing or Confirm Handover)
+
 # 2. UPDATE STATUS & RECORD PHARMACY PRICING (Routes to Receptionist Billing Pipeline)
 @router.patch("/verify/{appt_id}")
 async def verify_prescription(
@@ -116,41 +117,22 @@ async def verify_prescription(
         raise HTTPException(status_code=404, detail="Appointment not found")
     
     try:
-        # FORCE TARGET STATUS: Push to intermediate state for receptionist toggle handling
-        target_status = "Pharmacy-Priced"
+        # NEW WORKFLOW STATUS: Standardize to "Pharmacy-Verified"
+        target_status = "Pharmacy-Verified"
 
         for med_item in data.medicines:
             db_med = db.query(Prescription).filter(Prescription.id == med_item.id).first()
             if not db_med:
                 continue
 
-            # 1. Fetch the catalog item immediately for every item
-            catalog_item = db.query(MedicineCatalog).filter(
-                MedicineCatalog.name == db_med.medicine_name,
-                MedicineCatalog.hospital_id == appt.hospital_id
-            ).first()
-
-            # 2. THE HARD STOP: Run this check whenever 'is_available' is True
-            if med_item.is_available and catalog_item:
-                projected_stock = catalog_item.stock_quantity - db_med.quantity
-                
-                # If the pharmacist tries to mark it 'Available' but it's reserved
-                if projected_stock < catalog_item.min_reserve_limit:
-                    raise HTTPException(
-                        status_code=400, 
-                        detail=f"Action Denied: {db_med.medicine_name} is reserved for emergencies (Stock: {catalog_item.stock_quantity}, Reserve: {catalog_item.min_reserve_limit})."
-                    )
-
-            # 3. Update the prescription record based on pharmacist input
+            # Update availability flag and persist verified baseline price
             db_med.is_available = med_item.is_available
-            # Force price to 0 if unavailable, otherwise assign the verified retail price
-            db_med.price = med_item.price if med_item.is_available else 0.0
+            db_med.price = med_item.price 
 
-            # 4. STOCK DEDUCTION: Deduct now when verified and moving into the billing phase
-            if target_status == "Pharmacy-Priced" and db_med.is_available and catalog_item:
-                catalog_item.stock_quantity -= db_med.quantity
+            # NOTE: Stock subtraction logic has been removed from this stage!
+            # Inventory deduction will happen when receptionist commits final invoice layout checkout.
 
-        # 5. Commit state changes
+        # Advance appointment to front desk billing state
         appt.status = target_status
         db.commit()
         return {"status": "success", "message": f"Verified pricing and advanced to {target_status}"}
@@ -162,12 +144,13 @@ async def verify_prescription(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-        # 3. GET BILLING QUEUE (For Receptionist Overview)
+
+# 3. GET BILLING QUEUE (For Receptionist Overview)
 @router.get("/billing-queue/{hospital_id}")
 async def get_billing_queue(hospital_id: int, db: Session = Depends(get_db)):
     orders = db.query(Appointment).filter(
         Appointment.hospital_id == hospital_id,
-        Appointment.status == "Pending-Billing"
+        Appointment.status == "Pharmacy-Verified"
     ).all()
     
     return [{
@@ -178,6 +161,7 @@ async def get_billing_queue(hospital_id: int, db: Session = Depends(get_db)):
         "status": a.status
     } for a in orders]
 
+
 # 4. FINAL BILL GENERATION (The "Source of Truth" for Invoice)
 @router.get("/final-bill/{appt_id}")
 async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
@@ -187,14 +171,12 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
 
     consultation_fee = 500.0 
     
-    # We fetch ALL prescriptions linked to this appointment
     prescriptions = db.query(Prescription).join(MedicalRecord).filter(
         MedicalRecord.appointment_id == appt_id
     ).all()
     
     labs = db.query(LabRequest).filter(LabRequest.appointment_id == appt_id).all()
 
-    # MATH: Only sum up medications that were marked as AVAILABLE
     total_meds = sum((p.price * p.quantity) for p in prescriptions if p.is_available)
     total_labs = sum(l.price_at_request for l in labs if l.price_at_request)
 
@@ -205,11 +187,12 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
         "consultation_fee": consultation_fee,
         "medicines": [
             {
+                "id": p.id,
                 "name": p.medicine_name, 
                 "unit_price": p.price, 
                 "qty": p.quantity, 
-                "subtotal": p.price * p.quantity, # Correct multiplication for tablets/syrups
-                "is_available": p.is_available     # Tells UI to show "Out of Stock" if False
+                "subtotal": p.price * p.quantity, 
+                "is_available": p.is_available     
             } for p in prescriptions
         ],
         "labs": [
@@ -221,7 +204,8 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
         "total_amount": consultation_fee + total_meds + total_labs
     }
 
-# --- ADD THIS NEW ENDPOINT FOR SEARCH SUGGESTIONS ---
+
+# 5. SEARCH MASTER CATALOG
 @router.get("/search-master")
 async def search_master_catalog(q: str, db: Session = Depends(get_db)):
     """Searches the global Kaggle database (where hospital_id is NULL) as the pharmacist types."""
@@ -236,17 +220,16 @@ async def search_master_catalog(q: str, db: Session = Depends(get_db)):
     return [{"id": m.id, "name": m.name, "manufacturer": m.manufacturer, "category": m.category} for m in results]
 
 
+# 6. INVENTORY CONFIGURATION
 @router.post("/inventory/{hospital_id}")
 async def add_to_inventory(hospital_id: int, medicine: MedicineCreate, db: Session = Depends(get_db)):
     try:
-        # Step 1: Check if this medicine is already assigned to your specific hospital
         local_item = db.query(MedicineCatalog).filter(
             MedicineCatalog.name == medicine.name,
             MedicineCatalog.hospital_id == hospital_id
         ).first()
         
         if local_item:
-            # If it already exists locally, simply update the stock and parameters (No Duplicates)
             local_item.stock_quantity += medicine.stock_quantity
             local_item.min_reserve_limit = medicine.min_reserve_limit
             local_item.price = medicine.price
@@ -255,22 +238,19 @@ async def add_to_inventory(hospital_id: int, medicine: MedicineCreate, db: Sessi
             db.commit()
             return {"status": "success", "message": f"Updated stock for existing inventory item: {medicine.name}"}
 
-        # Step 2: If it's a first-time activation, fetch the structural template (Kaggle dataset reference row)
         global_item = db.query(MedicineCatalog).filter(
             MedicineCatalog.name == medicine.name,
             MedicineCatalog.hospital_id == None
         ).first()
 
-        # Step 3: CLONE instead of modify. Create a brand new dedicated tracking row for this hospital branch
         new_medicine = MedicineCatalog(
-            hospital_id=hospital_id,          # Explicitly isolate to this hospital context
+            hospital_id=hospital_id,          
             name=medicine.name,
             stock_quantity=medicine.stock_quantity,
             min_reserve_limit=medicine.min_reserve_limit,
             price=medicine.price,
             expiry_date=medicine.expiry_date,
             
-            # Inherit catalog attributes dynamically from master reference template if found
             salt_composition=global_item.salt_composition if global_item else None,
             strength=global_item.strength if global_item else None,
             category=global_item.category if global_item else "General",
@@ -284,18 +264,17 @@ async def add_to_inventory(hospital_id: int, medicine: MedicineCreate, db: Sessi
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/inventory-alerts/{hospital_id}")
 async def get_inventory_alerts(hospital_id: int, db: Session = Depends(get_db)):
-    # 1. Low Stock Alerts: Genuinely checks across ALL medicines belonging to this hospital ID
     low_stock = db.query(MedicineCatalog).filter(
-        MedicineCatalog.hospital_id == hospital_id, # <-- Strictly targets your hospital's stock row
+        MedicineCatalog.hospital_id == hospital_id, 
         MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit
     ).order_by(MedicineCatalog.stock_quantity.asc()).limit(100).all()
 
-    # 2. Expiry Alerts: Strictly restricted to this hospital ID
     thirty_days_from_now = datetime.now().date() + timedelta(days=30)
     expiring_soon = db.query(MedicineCatalog).filter(
-        MedicineCatalog.hospital_id == hospital_id, # <-- Keeps data isolated
+        MedicineCatalog.hospital_id == hospital_id, 
         MedicineCatalog.expiry_date <= thirty_days_from_now
     ).limit(50).all()
 
@@ -305,7 +284,7 @@ async def get_inventory_alerts(hospital_id: int, db: Session = Depends(get_db)):
                 "name": m.name,
                 "current_stock": m.stock_quantity,
                 "reserve_limit": m.min_reserve_limit,
-                "price": m.price, # <-- ADDED: Passes pricing context to frontend edit modal
+                "price": m.price, 
                 "expiry_date": m.expiry_date.strftime("%Y-%m-%d") if m.expiry_date else "",
                 "status": "Critical" if m.stock_quantity == 0 else "Low"
             } for m in low_stock
@@ -319,16 +298,15 @@ async def get_inventory_alerts(hospital_id: int, db: Session = Depends(get_db)):
         ]
     }
 
+
 @router.get("/inventory-stats/{hospital_id}")
 async def get_inventory_stats(hospital_id: int, db: Session = Depends(get_db)):
-    # Total unique medicines activated for this specific hospital unit
     total_catalog = db.query(MedicineCatalog).filter(
         MedicineCatalog.hospital_id == hospital_id
     ).count()
     
-    # Real-time alert counts exclusively calculated for this hospital
     critical_alerts = db.query(MedicineCatalog).filter(
-        MedicineCatalog.hospital_id == hospital_id, # <-- Isolates calculation targets
+        MedicineCatalog.hospital_id == hospital_id, 
         MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit
     ).count()
 
@@ -336,6 +314,7 @@ async def get_inventory_stats(hospital_id: int, db: Session = Depends(get_db)):
         "total_medicines": total_catalog,
         "low_stock_alerts": critical_alerts
     }
+
 
 # A. Add a new supplier vendor
 @router.post("/suppliers/{hospital_id}")
@@ -353,18 +332,18 @@ async def add_supplier(hospital_id: int, payload: SupplierCreate, db: Session = 
     db.refresh(db_supplier)
     return {"message": "Supplier registered successfully", "supplier_id": db_supplier.id}
 
+
 # B. Get all suppliers for the current hospital unit
 @router.get("/suppliers/{hospital_id}")
 async def get_suppliers(hospital_id: int, db: Session = Depends(get_db)):
     return db.query(Supplier).filter(Supplier.hospital_id == hospital_id).all()
 
-# C. Record a Purchase Order (And increment inventory stock automatically!)
+
+# C. Record a Purchase Order 
 @router.post("/purchase/{hospital_id}")
 async def record_purchase(hospital_id: int, payload: PurchaseCreate, db: Session = Depends(get_db)):
-    # 1. Calculate total cost transaction
     total = payload.quantity_ordered * payload.unit_cost
     
-    # 2. Log purchase history entry
     order = PurchaseOrder(
         hospital_id=hospital_id,
         supplier_id=payload.supplier_id,
@@ -376,7 +355,6 @@ async def record_purchase(hospital_id: int, payload: PurchaseCreate, db: Session
     )
     db.add(order)
     
-    # 3. CRITICAL LOOP: Find the medication row inside this hospital and add the incoming stock
     catalog_item = db.query(MedicineCatalog).filter(
         MedicineCatalog.hospital_id == hospital_id,
         MedicineCatalog.name.ilike(payload.medicine_name)
@@ -386,18 +364,18 @@ async def record_purchase(hospital_id: int, payload: PurchaseCreate, db: Session
         catalog_item.stock_quantity += payload.quantity_ordered
         catalog_item.price = payload.unit_cost * 1.25
     else:
-        # If medicine doesn't exist yet, register it as a fresh record automatically
         new_item = MedicineCatalog(
             hospital_id=hospital_id,
             name=payload.medicine_name,
             stock_quantity=payload.quantity_ordered,
-            min_reserve_limit=10, # default safety fallback margin
-            price=payload.unit_cost * 1.25 # markup automatically for patient pricing retail
+            min_reserve_limit=10, 
+            price=payload.unit_cost * 1.25 
         )
         db.add(new_item)
         
     db.commit()
     return {"message": "Purchase completed successfully. Inventory stock replenished!"}
+
 
 # D. Fetch running transaction purchase history statement ledger
 @router.get("/purchase-history/{hospital_id}")
@@ -416,35 +394,30 @@ async def get_purchase_history(hospital_id: int, db: Session = Depends(get_db)):
      
     return [dict(r._mapping) for r in results]
 
+
 @router.get("/overview-metrics/{hospital_id}")
 async def get_overview_metrics(hospital_id: int, db: Session = Depends(get_db)):
-    # 1. Count pending prescriptions waiting for verification
     pending_count = db.query(Appointment).filter(
         Appointment.hospital_id == hospital_id,
         Appointment.status == "Pending-Pharmacy"
     ).count()
 
-    # 2. Count items ready for handover dispensing
     ready_count = db.query(Appointment).filter(
         Appointment.hospital_id == hospital_id,
         Appointment.status == "Ready-to-Dispense"
     ).count()
 
-    # 3. Count low stock items (where stock is less than or equal to reserve safety limit)
     low_stock = db.query(MedicineCatalog).filter(
         MedicineCatalog.hospital_id == hospital_id,
         MedicineCatalog.stock_quantity <= MedicineCatalog.min_reserve_limit,
         MedicineCatalog.stock_quantity > 0
     ).count()
 
-    # 4. Count out-of-stock critical rows
     out_of_stock = db.query(MedicineCatalog).filter(
         MedicineCatalog.hospital_id == hospital_id,
         MedicineCatalog.stock_quantity == 0
     ).count()
 
-    # 5. Count total registered supply partners
-    # Note: If you haven't imported the Supplier model here yet, ensure it's imported at the top!
     total_suppliers = db.query(Supplier).filter(Supplier.hospital_id == hospital_id).count()
 
     return {

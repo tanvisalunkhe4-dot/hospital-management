@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from app.db import models
 from app.schemas import patient_schema, appointment_schema, invoice_schema
 from app.schemas.appointment_schema import FinalizeSchema, RescheduleRequestSchema
@@ -9,10 +9,11 @@ from app.db.session import get_db
 from passlib.context import CryptContext
 import logging
 import datetime 
+from sqlalchemy import select
 from typing import List
-from sqlalchemy import desc
 from app.constants import STATUS_SCHEDULED, STATUS_CHECKED_IN, STATUS_IN_CONSULTATION, STATUS_COMPLETED
 from app.status import normalize_appointment_status
+
 # Setup for logging and database operations
 router = APIRouter(prefix="/api/v1/receptionist", tags=["receptionist"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -37,11 +38,7 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
     try:
         processed_abha_id = patient_in.abha_id.strip() if patient_in.abha_id and patient_in.abha_id.strip() != "" else None
 
-        # --- UPDATED LOGIC ---
-        # We use **patient_in.dict() to catch ALL fields (including email) automatically
         patient_data = patient_in.dict(exclude_unset=True)
-        
-        # Override specific logic fields
         patient_data.update({
             "user_id": None, 
             "abha_id": processed_abha_id,
@@ -49,7 +46,6 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         })
 
         new_patient = models.Patient(**patient_data)
-        
         db.add(new_patient)
         db.commit()
         db.refresh(new_patient)
@@ -61,8 +57,9 @@ def register_patient(patient_in: patient_schema.PatientCreate, db: Session = Dep
         db.rollback() 
         logger.error(f"DATABASE ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error during registration.")
-# --- APPOINTMENT BOOKING ---
 
+
+# --- APPOINTMENT BOOKING ---
 @router.post("/book-appointment", response_model=appointment_schema.AppointmentResponse)
 def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int, db: Session = Depends(get_db)):
     # 1. Verify Patient exists
@@ -74,9 +71,7 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
     if not patient:
         raise HTTPException(status_code=404, detail="Patient record not found.")
 
-        print(f"DEBUG: Received doctor_id: {appt_in.doctor_id} for Patient: {appt_in.patient_id}")
-
-    # 1.5 Verify the doctor is active (soft-delete aware)
+    # 1.5 Verify the doctor is active
     doctor = db.query(models.Staff).filter(
         models.Staff.id == appt_in.doctor_id,
         models.Staff.hospital_id == hosp_id,
@@ -85,13 +80,7 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
     if not doctor:
         raise HTTPException(status_code=400, detail="Selected doctor is not available (inactive or invalid).")
 
-
-
-   
     try:
-        # 2. Create the appointment 
-        # Note: Ensure 'doctor_name' exists in your models.Appointment. 
-        # If it still fails, check models.py for the correct field name.
         new_appt = models.Appointment(
             patient_id=appt_in.patient_id,
             hospital_id=hosp_id,
@@ -108,45 +97,33 @@ def book_appointment(appt_in: appointment_schema.AppointmentCreate, hosp_id: int
         return new_appt
     except Exception as e:
         db.rollback()
-        print(f"DEBUG ERROR: {str(e)}") # This will show in your terminal
-        raise HTTPException(status_code=500, detail="Database Error: Check if doctor_name column exists.")
-# --- DASHBOARD & UTILITIES ---
+        raise HTTPException(status_code=500, detail=f"Database Error during booking: {str(e)}")
 
+
+# --- DASHBOARD STATS ---
 @router.get("/stats/{hosp_id}")
 async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Fetches real-time statistics for the receptionist dashboard, 
-    including patient counts, today's appointments, and live queue status.
-    """
     today = datetime.date.today()
     
-    # 1. Total registered patients in this hospital
-    patient_count = db.query(models.Patient).filter(
-        models.Patient.hospital_id == hosp_id
-    ).count()
+    patient_count = db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).count()
     
-    # 2. All valid appointments scheduled for today
     appt_count = db.query(models.Appointment).filter(
         models.Appointment.hospital_id == hosp_id,
         models.Appointment.appointment_date == today,
         models.Appointment.status != "Cancelled"
     ).count()
 
-    # 3. Live Consultations: Only those actively in the building (Checked In or currently with Doctor)
-    # This specifically uses the constants defined above to avoid NameErrors.
     live_queue = db.query(models.Appointment).filter(
         models.Appointment.hospital_id == hosp_id,
         models.Appointment.appointment_date == today,
         models.Appointment.status.in_([STATUS_CHECKED_IN, STATUS_IN_CONSULTATION])
     ).count()
 
-    # 4. Financial Summary: Total paid invoices
     total_collections = db.query(func.sum(models.Invoice.total_amount)).filter(
         models.Invoice.hospital_id == hosp_id,
         models.Invoice.status == "Paid"
     ).scalar() or 0
 
-    # 5. Financial Summary: Count of pending payments
     unpaid_count = db.query(models.Invoice).filter(
         models.Invoice.hospital_id == hosp_id,
         models.Invoice.status == "Pending"
@@ -155,20 +132,20 @@ async def get_dashboard_stats(hosp_id: int, db: Session = Depends(get_db)):
     return {
         "total_patients": patient_count,
         "appointments_today": appt_count,
-        "total_collections": float(total_collections), # Ensure JSON compatibility
+        "total_collections": float(total_collections), 
         "pending_bills": unpaid_count,
         "consultations": live_queue 
     }
 
+
+# --- PATIENT AND APPOINTMENT LOOKUPS ---
 @router.get("/patients/search", response_model=list[patient_schema.PatientResponse])
 def search_patients(query: str, hosp_id: int, db: Session = Depends(get_db)):
-    # .all() is critical here to return a LIST of objects
-    results = db.query(models.Patient).filter(
+    return db.query(models.Patient).filter(
         models.Patient.hospital_id == hosp_id,
         (models.Patient.first_name.ilike(f"%{query}%")) | 
         (models.Patient.phone_number.contains(query))
     ).all()
-    return results
 
 @router.get("/patients/recent", response_model=list[patient_schema.PatientResponse])
 def get_recent_patients(hosp_id: int, db: Session = Depends(get_db)):
@@ -176,13 +153,9 @@ def get_recent_patients(hosp_id: int, db: Session = Depends(get_db)):
         models.Patient.hospital_id == hosp_id
     ).order_by(models.Patient.id.desc()).limit(5).all()
 
-# --- DASHBOARD & UTILITIES (Updated Section) ---
-
 @router.get("/appointments/today")
 def get_todays_appointments(hosp_id: int, db: Session = Depends(get_db)):
     today = datetime.date.today()
-    
-    # We join Appointment and Patient to get the name
     results = db.query(models.Appointment, models.Patient).join(
         models.Patient, models.Appointment.patient_id == models.Patient.id
     ).filter(
@@ -221,8 +194,8 @@ def get_upcoming_appointments(hosp_id: int, db: Session = Depends(get_db)):
 def get_all_patients(hosp_id: int, db: Session = Depends(get_db)):
     return db.query(models.Patient).filter(models.Patient.hospital_id == hosp_id).all()
 
-# --- APPOINTMENT ACTIONS ---
 
+# --- APPOINTMENT WORKFLOW ACTIONS ---
 @router.patch("/appointments/{appt_id}", response_model=appointment_schema.AppointmentResponse)
 def update_appointment(appt_id: int, hosp_id: int, appt_update: appointment_schema.AppointmentUpdate, db: Session = Depends(get_db)):
     appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id, models.Appointment.hospital_id == hosp_id).first()
@@ -260,7 +233,6 @@ def delete_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)
 
 @router.patch("/appointments/{appt_id}/check-in")
 def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
-    """Moves patient from Scheduled to the Doctor's Live Queue."""
     appt = db.query(models.Appointment).filter(
         models.Appointment.id == appt_id, 
         models.Appointment.hospital_id == hosp_id
@@ -273,7 +245,7 @@ def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail=f"Cannot check-in. Patient is already {appt.status}.")
 
     try:
-        appt.status = STATUS_CHECKED_IN  # Synchronized with doctor_10.py
+        appt.status = STATUS_CHECKED_IN  
         db.commit()
         db.refresh(appt)
         return {"message": "Patient checked in successfully", "status": appt.status}
@@ -281,19 +253,9 @@ def check_in_appointment(appt_id: int, hosp_id: int, db: Session = Depends(get_d
         db.rollback()
         logger.error(f"CHECK-IN ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update check-in status.")
-@router.patch("/appointments/{appt_id}/reschedule")
 
-def reschedule_appointment(
-    appt_id: int, 
-    hosp_id: int, 
-    payload: dict, 
-    db: Session = Depends(get_db)
-):
-    """
-    Globally handles rescheduling for any appointment.
-    Moves the patient back to 'Scheduled' status so it works for 
-    both upcoming and already checked-in patients.
-    """
+@router.patch("/appointments/{appt_id}/reschedule")
+def reschedule_appointment(appt_id: int, hosp_id: int, payload: dict, db: Session = Depends(get_db)):
     appt = db.query(models.Appointment).filter(
         models.Appointment.id == appt_id, 
         models.Appointment.hospital_id == hosp_id
@@ -303,12 +265,8 @@ def reschedule_appointment(
         raise HTTPException(status_code=404, detail="Appointment not found")
 
     try:
-        # Update with the new date/time from the frontend modal
         appt.appointment_date = payload.get("appointment_date", appt.appointment_date)
         appt.appointment_time = payload.get("appointment_time", appt.appointment_time)
-        
-        # Reset status to Scheduled so they leave the Waiting Room 
-        # and appear in the regular schedule for the new time
         appt.status = "Scheduled" 
         
         db.commit()
@@ -319,28 +277,162 @@ def reschedule_appointment(
         logger.error(f"RESCHEDULE ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to reschedule appointment.")
 
-        
-# --- INVOICE & BILLING ACTIONS ---
+@router.patch("/appointments/{appt_id}/approve")
+def approve_appointment_request(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(
+        models.Appointment.id == appt_id,
+        models.Appointment.hospital_id == hosp_id
+    ).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment request not found")
+
+    appt.status = "Scheduled"
+    db.commit()
+    db.refresh(appt)
+    return {"message": "Appointment approved successfully", "status": appt.status}
+
+@router.patch("/appointments/{appt_id}/finalize")
+async def finalize_request(appt_id: int, action: FinalizeSchema, db: Session = Depends(get_db)):
+    appointment = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    if action.decision == "approve_cancel":
+        appointment.status = "Cancelled"
+    elif action.decision == "approve_reschedule":
+        appointment.status = "Scheduled"
+    
+    db.commit()
+    return {"message": f"Action {action.decision} successful"}
+
+@router.patch("/appointments/{appt_id}/finish")
+def finish_consultation(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(
+        models.Appointment.id == appt_id, 
+        models.Appointment.hospital_id == hosp_id
+    ).first()
+
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    try:
+        appt.status = "Completed"
+        db.commit()
+        return {"message": "Consultation finished. Status is now Completed."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to finish consultation.")
+
+
+# --- INVOICE & REAL-TIME BILLING PIPELINE ---
+
+@router.get("/billing/queue/{hosp_id}")
+def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches patients eligible for front-desk checkout.
+    Captures pre-priced pharmacy entries, normal consultation completions, and fallback parameters.
+    """
+    allowed_statuses = ["Pharmacy-Verified", "Pending-Billing", "Ready-to-Dispense", "Pending-Pharmacy"]
+
+    results = db.query(models.Appointment, models.Patient).join(
+        models.Patient, models.Appointment.patient_id == models.Patient.id
+    ).filter(
+        models.Appointment.hospital_id == hosp_id,
+        models.Appointment.status.in_(allowed_statuses)
+    ).all()
+
+    return [
+        {
+            "id": appt.id,
+            "patient_id": patient.id,
+            "patient_name": f"{patient.first_name} {patient.last_name}",
+            "status": appt.status, 
+            "appointment_date": appt.appointment_date,
+            "invoice_number": "NEW", 
+            "total_amount": 0 
+        } for appt, patient in results
+    ]
+
+
+@router.get("/billing/prepare/{appt_id}")
+def prepare_invoice(appt_id: int, skip_pharmacy: bool = False, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    items = [{
+        "service_name": "Consultation Fee", 
+        "unit_price": 500.0, 
+        "type": "Consultation",
+        "quantity": 1
+    }]
+    
+    if not skip_pharmacy:
+        # Secure relational lookup via structured model schemas
+        prescriptions = db.query(models.Prescription).join(
+            models.MedicalRecord, models.Prescription.medical_record_id == models.MedicalRecord.id
+        ).filter(
+            models.MedicalRecord.appointment_id == appt_id,
+            models.Prescription.is_available == True  
+        ).all()
+
+        for p in prescriptions:
+            final_med_price = 0.0
+            if hasattr(p, 'price') and p.price is not None and p.price > 0:
+                final_med_price = p.price
+            elif hasattr(p, 'price_at_request') and p.price_at_request is not None and p.price_at_request > 0:
+                final_med_price = p.price_at_request
+
+            items.append({
+                "service_name": p.medicine_name,
+                "unit_price": float(final_med_price),
+                "type": "Pharmacy",
+                "quantity": p.quantity if p.quantity else 1
+            })
+            
+    lab_requests = db.query(
+        models.LabRequest, 
+        models.LabTestCatalog.base_price
+    ).outerjoin(
+        models.LabTestCatalog, 
+        models.LabRequest.test_name == models.LabTestCatalog.test_name
+    ).filter(
+        models.LabRequest.appointment_id == appt_id
+    ).all()
+
+    for request, catalog_price in lab_requests:
+        final_price = request.price_at_request if request.price_at_request else catalog_price
+        items.append({
+            "service_name": request.test_name,
+            "unit_price": final_price if final_price else 0.0,
+            "type": "Laboratory",
+            "quantity": 1
+        })
+
+    return {
+        "appt_id": appt.id,
+        "patient_id": appt.patient_id,
+        "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
+        "items": items,
+        "skip_pharmacy_applied": skip_pharmacy
+    }
+
 
 @router.post("/invoices/generate", response_model=invoice_schema.InvoiceResponse)
 def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Depends(get_db)):
     try:
-        # 1. Verify Patient
         patient = db.query(models.Patient).filter(models.Patient.id == invoice_in.patient_id).first()
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
 
-        # 2. Numbering Logic
         last_invoice = db.query(models.Invoice).order_by(models.Invoice.id.desc()).first()
         next_id = (last_invoice.id + 1) if last_invoice else 1
         inv_number = f"INV-{datetime.date.today().year}-{next_id:04d}"
 
-        # 3. Calculation Logic
         subtotal = sum(item.unit_price * (item.quantity or 1) for item in invoice_in.items)
-        # Apply tax and discount to the total_amount directly
         final_total = (subtotal * (1 + (invoice_in.tax_rate or 0.05))) - (invoice_in.discount or 0)
 
-        # 4. Create Main Invoice
         new_invoice = models.Invoice(
             invoice_number=inv_number,
             patient_id=invoice_in.patient_id,
@@ -351,7 +443,6 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
         db.add(new_invoice)
         db.flush() 
 
-        # 5. Create Invoice Items
         for item in invoice_in.items:
             db_item = models.InvoiceItem(
                 invoice_id=new_invoice.id,
@@ -361,29 +452,42 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
             )
             db.add(db_item)
 
-        # 6. Queue Cleanup (Synchronized across clinical modules)
+            # DEFERRED STOCK DEDUCTION LOOP: Execute stock reductions on final cashier execution
+            if getattr(item, 'type', None) == "Pharmacy" or item.service_name != "Consultation Fee":
+                catalog_item = db.query(models.MedicineCatalog).filter(
+                    models.MedicineCatalog.hospital_id == invoice_in.hospital_id,
+                    models.MedicineCatalog.name == item.service_name
+                ).first()
+                if catalog_item:
+                    catalog_item.stock_quantity -= (item.quantity or 1)
+
         appt_id = getattr(invoice_in, 'appointment_id', None)
         if appt_id:
-            # Update Appointment status to remove from front-desk billing workflows
+            # Check if this invoice includes any pharmacy/medicine items
+            has_pharmacy_items = any(
+                getattr(item, 'type', None) == "Pharmacy" or "mg" in item.service_name.lower()
+                for item in invoice_in.items
+            )
+
+            # Determine next workflow step
+            # If they have medications to pick up, send them to the dispensing desk.
+            # Otherwise, they are fully done.
+            next_status = "Ready-to-Dispense" if has_pharmacy_items else "Completed"
             db.query(models.Appointment).filter(
                 models.Appointment.id == appt_id
-            ).update({"status": "Completed"}, synchronize_session=False)
+            ).update({"status": next_status}, synchronize_session=False)
             
-            # Update Lab Requests state to Billed
             db.query(models.LabRequest).filter(
                 models.LabRequest.appointment_id == appt_id
             ).update({"status": "Billed"}, synchronize_session=False)
 
-            # UPDATED: Clear associated prescriptions out of pharmacy queues
-            # Uses subquery check to capture matching Medical Records linked to this appointment id
             medical_record_ids = db.query(models.MedicalRecord.id).filter(
                 models.MedicalRecord.appointment_id == appt_id
             ).subquery()
 
             db.query(models.Prescription).filter(
-                models.Prescription.record_id.in_(medical_record_ids)
-            ).update({"status": "Billed"}, synchronize_session=False)
-
+                models.Prescription.medical_record_id.in_(select(medical_record_ids))
+            ).update({"is_available": False}, synchronize_session=False)
         db.commit()
         db.refresh(new_invoice)
 
@@ -401,8 +505,9 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
 
     except Exception as e:
         db.rollback()
-        print(f"INVOICE ERROR: {str(e)}")
+        logger.error(f"INVOICE GENERATION FAULT: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
 
 @router.get("/invoices/all", response_model=List[invoice_schema.InvoiceResponse])
 def get_all_invoices(hosp_id: int, db: Session = Depends(get_db)):
@@ -445,14 +550,10 @@ def mark_invoice_as_paid(invoice_id: int, hosp_id: int, db: Session = Depends(ge
         db.rollback()
         raise HTTPException(status_code=500, detail="Payment processing failed.")
 
+
+# --- PROFILE & LOOKUP MANAGEMENT ---
 @router.patch("/patients/{patient_id}", response_model=PatientResponse)
-def update_patient_profile(
-    patient_id: int,
-    patient_in: PatientUpdate,
-    hosp_id: int,
-    db: Session = Depends(get_db)
-):
-    # 1. Fetch the patient record
+def update_patient_profile(patient_id: int, patient_in: PatientUpdate, hosp_id: int, db: Session = Depends(get_db)):
     patient_record = db.query(models.Patient).filter(
         models.Patient.id == patient_id, 
         models.Patient.hospital_id == hosp_id
@@ -461,38 +562,26 @@ def update_patient_profile(
     if not patient_record:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    # 2. Update fields dynamically
     update_data = patient_in.model_dump(exclude_unset=True)
-    
     try:
         for field, value in update_data.items():
             if hasattr(patient_record, field):
-                # Handle Date Conversion for SQL
                 if field == "date_of_birth" and isinstance(value, str) and value:
-                    value = datetime.strptime(value, "%Y-%m-%d")
-                
-                # Special handling for ABHA ID to clear empty strings
+                    value = datetime.datetime.strptime(value, "%Y-%m-%d")
                 if field == "abha_id" and (value == "" or value is None):
                     value = None
-                
                 setattr(patient_record, field, value)
             
-        # 3. Commit changes
         db.commit()
         db.refresh(patient_record)
         return patient_record
-
     except Exception as e:
         db.rollback()
         logger.error(f"UPDATE ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Database update failed: {str(e)}")
 
-    # --- DOCTOR LOOKUP FOR APPOINTMENTS ---
 @router.get("/doctors/{hosp_id}")
 def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Fetches all staff members with the role 'Doctor' for a specific hospital.
-    """
     doctors = db.query(models.Staff).filter(
         models.Staff.hospital_id == hosp_id,
         models.Staff.role.ilike("Doctor"),
@@ -507,172 +596,6 @@ def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
             "id": doc.id,
             "staff_id": doc.staff_id,
             "full_name": doc.full_name,
-            # If specialization doesn't exist, we use a fallback or remove it
             "specialization": getattr(doc, 'specialization', 'General Physician') 
         } for doc in doctors
     ]
-
-# In app/router/receptionist.py
-
-@router.patch("/appointments/{appt_id}/approve")
-def approve_appointment_request(
-    appt_id: int, 
-    hosp_id: int, 
-    db: Session = Depends(get_db)
-):
-    # 1. Fetch the appointment
-    appt = db.query(models.Appointment).filter(
-        models.Appointment.id == appt_id,
-        models.Appointment.hospital_id == hosp_id
-    ).first()
-
-    if not appt:
-        raise HTTPException(status_code=404, detail="Appointment request not found")
-
-    # 2. Update status to Scheduled
-    appt.status = "Scheduled"
-    
-    db.commit()
-    db.refresh(appt)
-    
-    return {"message": "Appointment approved successfully", "status": appt.status}
-
-
-@router.patch("/appointments/{appt_id}/finalize")
-async def finalize_request(appt_id: int, action: FinalizeSchema, db: Session = Depends(get_db)):
-    appointment = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    if action.decision == "approve_cancel":
-        appointment.status = "Cancelled"
-    elif action.decision == "approve_reschedule":
-        appointment.status = "Scheduled"
-        # Update to the new time stored in notes
-    
-    db.commit()
-    return {"message": f"Action {action.decision} successful"}
-
-@router.patch("/appointments/{appt_id}/finish")
-def finish_consultation(appt_id: int, hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Called when the doctor is done. 
-    1. Turns the status to 'Completed' (Blue).
-    2. Generates a basic invoice for the Billing section.
-    """
-    appt = db.query(models.Appointment).filter(
-        models.Appointment.id == appt_id, 
-        models.Appointment.hospital_id == hosp_id
-    ).first()
-
-    if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-
-    try:
-        # 1. Update the status
-        appt.status = "Completed"
-        
-        
-        db.commit()
-        
-        return {"message": "Consultation finished. Status is now Completed (Blue)."}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to finish consultation.")
-
-
-@router.get("/billing/queue/{hosp_id}")
-def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
-    """
-    Fetches patients eligible for front-desk checkout.
-    Captures normal completions, pre-priced pharmacy entries, and bypass edge cases.
-    """
-    # Allowed statuses that can be pulled into the receptionist checkout queue
-    allowed_statuses = ["Pending-Billing","Pending-Pharmacy", "Ready-to-Dispense"]
-
-    results = db.query(models.Appointment, models.Patient).join(
-        models.Patient, models.Appointment.patient_id == models.Patient.id
-    ).filter(
-        models.Appointment.hospital_id == hosp_id,
-        models.Appointment.status.in_(allowed_statuses)
-    ).all()
-
-    return [
-        {
-            "id": appt.id,
-            "patient_id": patient.id,
-            "patient_name": f"{patient.first_name} {patient.last_name}",
-            "status": appt.status, # Returns the actual stage to Billing.jsx for UI warning logic
-            "appointment_date": appt.appointment_date,
-            "invoice_number": "NEW", 
-            "total_amount": 0 
-        } for appt, patient in results
-    ]
-
-# receptionist.py
-
-@router.get("/billing/prepare/{appt_id}")
-def prepare_invoice(appt_id: int, skip_pharmacy: bool = False, db: Session = Depends(get_db)):
-    appt = db.query(models.Appointment).filter(models.Appointment.id == appt_id).first()
-    if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-
-    # Start with standard consultation fee
-    items = [{
-        "service_name": "Consultation Fee", 
-        "unit_price": 500.0, 
-        "type": "Consultation"
-    }]
-    
-    # Only pull and add pharmacy charges if the patient hasn't skipped internal fulfillment
-    if not skip_pharmacy:
-        prescriptions = db.query(models.Prescription).join(models.MedicalRecord).filter(
-            models.Prescription.medical_record_id == medical_record.id,
-            models.Prescription.is_available == True  # Crucial: Filter out pharmacist flagged out-of-stock items
-        ).all()
-
-        for p in prescriptions:
-            # 1. Safely check all possible database field locations for the saved price
-            final_med_price = 0.0
-            
-            if hasattr(p, 'price') and p.price is not None and p.price > 0:
-                final_med_price = p.price
-            elif hasattr(p, 'price_at_request') and p.price_at_request is not None and p.price_at_request > 0:
-                final_med_price = p.price_at_request
-            elif hasattr(p, 'medicine') and hasattr(p.medicine, 'price') and p.medicine.price is not None:
-                # Absolute fallback to base inventory catalog pricing if order-specific pricing failed
-                final_med_price = p.medicine.price
-
-            items.append({
-                "service_name": p.medicine_name,
-                "unit_price": float(final_med_price),
-                "type": "Pharmacy",
-                "quantity": p.quantity if hasattr(p, 'quantity') and p.quantity else 1
-            })
-            
-    # Always pull laboratory requests regardless of pharmacy choice
-    lab_requests = db.query(
-        models.LabRequest, 
-        models.LabTestCatalog.base_price
-    ).outerjoin(
-        models.LabTestCatalog, \
-        models.LabRequest.test_name == models.LabTestCatalog.test_name
-    ).filter(
-        models.LabRequest.appointment_id == appt_id
-    ).all()
-
-    for request, catalog_price in lab_requests:
-        final_price = request.price_at_request if request.price_at_request else catalog_price
-        items.append({
-            "service_name": request.test_name,
-            "unit_price": final_price if final_price else 0.0,
-            "type": "Laboratory" 
-        })
-
-    return {
-        "appt_id": appt.id,
-        "patient_id": appt.patient_id,
-        "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
-        "items": items,
-        "skip_pharmacy_applied": skip_pharmacy
-    }

@@ -48,10 +48,12 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
   };
 
   useEffect(() => {
+    if (hosp_id){
     fetch(`http://localhost:8000/api/v1/receptionist/billing/queue/${hosp_id}`)
       .then(res => res.json())
       .then(data => setBillingQueue(data))
       .catch(err => console.error("Queue fetch failed:", err));
+    }
   }, [hosp_id, invoices]);
 
   const handleDownloadInvoice = (invoice) => {
@@ -516,33 +518,38 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
         </div>
 
         {billingQueue.length > 0 && (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '12px', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
-            <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', alignSelf: 'center', marginRight: '5px' }}>READY FOR BILLING:</span>
-            {billingQueue.map(queueItem => (
-              <button 
-                key={queueItem.id}
-                onClick={() => { 
-                  setSelectedApptId(queueItem.id); 
-                  setSelectedApptStatus(queueItem.status);
-                  setShowModal(true); 
-                }}
-                style={{
-                  ...queueButtonStyle,
-                  background: queueItem.status === 'Pending-Pharmacy' ? '#fff7ed' : '#eff6ff',
-                  borderColor: queueItem.status === 'Pending-Pharmacy' ? '#ffedd5' : '#bfdbfe',
-                  color: queueItem.status === 'Pending-Pharmacy' ? '#c2410c' : '#1e40af'
-                }}
-              >
-                <div style={{ 
-                  width: '6px', 
-                  height: '6px', 
-                  background: queueItem.status === 'Pending-Pharmacy' ? '#ea580c' : '#3b82f6', 
-                  borderRadius: '50%' 
-                }}></div>
-                {queueItem.patient_name} {queueItem.status === 'Pending-Pharmacy' ? '(Skipped Pharmacy)' : `(ID: #${queueItem.patient_id})`}
-              </button>
-            ))}
-          </div>
+  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '12px', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
+    <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', alignSelf: 'center', marginRight: '5px' }}>READY FOR BILLING:</span>
+    {billingQueue.map(queueItem => {
+      // Determines if the user skipped pharmacy routing entirely by checking prescription contents
+      const isLabOnly = !queueItem.prescriptions || queueItem.prescriptions.length === 0;
+
+      return (
+        <button 
+          key={queueItem.id}
+          onClick={() => { 
+            setSelectedApptId(queueItem.id); 
+            setSelectedApptStatus(queueItem.status);
+            setShowModal(true); 
+          }}
+          style={{
+            ...queueButtonStyle,
+            background: isLabOnly ? '#fff7ed' : '#eff6ff',
+            borderColor: isLabOnly ? '#ffedd5' : '#bfdbfe',
+            color: isLabOnly ? '#c2410c' : '#1e40af'
+          }}
+        >
+          <div style={{ 
+            width: '6px', 
+            height: '6px', 
+            background: isLabOnly ? '#ea580c' : '#3b82f6', 
+            borderRadius: '50%' 
+          }}></div>
+          {queueItem.patient_name} {isLabOnly ? '(Lab Diagnostics Only)' : '(Pharmacy Cleared)'}
+        </button>
+      );
+    })}
+  </div>
         )}
       </div>
 
@@ -693,84 +700,101 @@ const StatCard = ({ icon, label, value, trend, isActive }) => {
 };
 /* --- Invoice Modal Component --- */
 const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId, initialStatus }) => {
-  const [patientId, setPatientId] = useState('');
-  const [patientName, setPatientName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState([]);
-  const [skipPharmacy, setSkipPharmacy] = useState(initialStatus === "Pending-Pharmacy");
+  /* PLACE THIS ENTIRE UPDATE INSIDE INVOICEMODAL OVERRIDING THE OLD USEEFFECT AND SUBMIT CODE */
+const [patientId, setPatientId] = useState('');
+const [patientName, setPatientName] = useState('');
+const [loading, setLoading] = useState(false);
+const [items, setItems] = useState([]);
+const [skipPharmacy, setSkipPharmacy] = useState(false);
 
-  useEffect(() => {
-      if (apptId) {
-          setLoading(true);
-          fetch(`http://localhost:8000/api/v1/pharmacy/final-bill/${apptId}`)
-              .then(res => res.json())
-              .then(data => {
-                  setPatientId(data.patient_id); 
-                  setPatientName(data.patient_name);
-                  const formattedItems = [
-                    { service_name: 'Consultation Fee', unit_price: data.consultation_fee, type: 'Consultation', quantity: 1, is_available: true, status: 'Ready-to-Dispense' },
-                    ...data.medicines.map(m => ({
-                      service_name: m.name,
-                      unit_price: m.unit_price,
-                      type: 'Pharmacy',
-                      quantity: m.qty,
-                      is_available: m.is_available,
-                      status: initialStatus || 'Ready-to-Dispense'
-                    })),
-                    ...(data.labs || []).map(l => ({
-                      service_name: l.test,
-                      unit_price: l.price,
-                      type: 'Laboratory',
-                      quantity: 1,
-                      is_available: true,
-                      status: 'Ready-to-Dispense'
-                    }))
-                  ];
-                  setItems(formattedItems); 
-              })
-              .finally(() => setLoading(false));
-      } else {
-          setPatientId('');
-          setPatientName('');
-          setItems([{ service_name: 'Consultation Fee', unit_price: 500, type: 'Consultation', quantity: 1, is_available: true, status: 'Ready-to-Dispense' }]);
-      }
-  }, [apptId, hosp_id, initialStatus]);
+useEffect(() => {
+    if (apptId) {
+        setLoading(true);
+        fetch(`http://localhost:8000/api/v1/pharmacy/final-bill/${apptId}`)
+            .then(res => res.json())
+            .then(data => {
+                setPatientId(data.patient_id); 
+                setPatientName(data.patient_name);
+                
+                const formattedItems = [
+                  { service_name: 'Consultation Fee', unit_price: data.consultation_fee || 500, type: 'Consultation', quantity: 1, is_available: true },
+                  ...(data.medicines || []).map(m => ({
+                    service_name: m.name,
+                    unit_price: m.unit_price,
+                    type: 'Pharmacy',
+                    quantity: m.qty || 1,
+                    is_available: m.is_available ?? true
+                  })),
+                  ...(data.labs || []).map(l => ({
+                    service_name: l.test,
+                    unit_price: l.price,
+                    type: 'Laboratory',
+                    quantity: 1,
+                    is_available: true
+                  }))
+                ];
+                setItems(formattedItems); 
+            })
+            .catch(err => console.error("Error gathering bill details:", err))
+            .finally(() => setLoading(false));
+    } else {
+        setPatientId('');
+        setPatientName('');
+        setItems([{ service_name: 'Consultation Fee', unit_price: 500, type: 'Consultation', quantity: 1, is_available: true }]);
+    }
+}, [apptId, hosp_id]);
 
-  const calculateTotal = () => items
-    .filter(item => {
-      if (skipPharmacy && item.type === 'Pharmacy') return false;
-      return item.is_available !== false;
-    }) 
-    .reduce((acc, item) => acc + (item.unit_price * (item.quantity || 1)), 0);
+const calculateTotal = () => items
+  .filter(item => item.is_available !== false) 
+  .filter(item => !(skipPharmacy && item.type === 'Pharmacy'))
+  .reduce((acc, item) => acc + (item.unit_price * (item.quantity || 1)), 0);
 
   const handleSubmit = async (e) => {
-      e.preventDefault();
-      try {
-          const billableItems = items.filter(item => {
-            if (skipPharmacy && item.type === 'Pharmacy') return false;
-            return item.is_available !== false;
-          });
+    e.preventDefault();
+    try {
+        // 1. Filter out items that are unavailable or skipped via the pharmacy checkout toggle
+        const billableItems = items
+          .filter(item => item.is_available !== false)
+          .filter(item => !(skipPharmacy && item.type === 'Pharmacy'));
 
-          const res = await fetch(`http://localhost:8000/api/v1/receptionist/invoices/generate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  patient_id: parseInt(patientId), 
-                  hospital_id: parseInt(hosp_id),
-                  appointment_id: apptId ? parseInt(apptId) : null,
-                  items: billableItems.map(item => ({
-                    service_name: item.service_name,
-                    unit_price: item.unit_price,
-                    type: item.type,
-                    quantity: item.quantity || 1
-                  })), 
-                  discount: 0, 
-                  tax_rate: 0.05 
-              })
-          });
-          if (res.ok) onSuccess();
-      } catch (err) { console.error("Billing failed:", err); }
-  };
+        // 2. Map items to fit your SQLAlchemy InvoiceItem structural schema columns perfectly
+        const payloadItems = billableItems.map(item => {
+            const qty = parseInt(item.quantity || 1);
+            const price = parseFloat(item.unit_price || 0);
+            
+            return {
+                service_name: item.service_name,
+                unit_price: price,
+                subtotal: price * qty // Calculate subtotal explicitly as expected by InvoiceItem
+            };
+        });
+
+        // 3. Send the structurally synchronized payload to your FastAPI server
+        const res = await fetch(`http://localhost:8000/api/v1/receptionist/invoices/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                patient_id: parseInt(patientId), 
+                hospital_id: parseInt(hosp_id),
+                appointment_id: apptId ? parseInt(apptId) : null,
+                total_amount: parseFloat(calculateTotal()), // Maps directly to Invoice.total_amount
+                items: payloadItems, // Clean matching InvoiceItem list arrays
+                discount: 0, 
+                tax_rate: 0.00 
+            })
+        });
+
+        if (res.ok) {
+            onSuccess(); // Automatically flags parent board refresh layouts and hides modal frame
+        } else {
+            const errorData = await res.json();
+            console.error("FastAPI Schema Rejection Parameters:", errorData);
+        }
+    } catch (err) { 
+        console.error("Billing network request processing failed:", err); 
+    }
+};
+const isLabOnlyProfile = items.filter(i => i.type === 'Pharmacy').length === 0;
 
   return (
       <div style={modalOverlay}>
@@ -784,27 +808,31 @@ const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId, initialStatus }) =>
                   </div>
               </div>
               
-              {/* PHARMACY WARNING STATEMENTS ADDED HERE */}
-              {initialStatus === 'Pending-Pharmacy' && (
-                <div style={{ padding: '12px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '10px' }}>
-                  <Clock size={18} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
-                  <p style={{ margin: 0, fontSize: '13px', color: '#b45309', fontWeight: '500' }}>
-                    <strong>Pharmacy Pending:</strong> The pharmacist hasn't verified medication pricing yet. Proceeding now will exclude medicine charges.
-                  </p>
-                </div>
-              )}
-
-              {initialStatus === 'Pharmacy-Priced' && (
-                <div style={{ padding: '12px', backgroundColor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '10px' }}>
-                  <CheckCircle size={18} color="#7c3aed" style={{ marginTop: '2px', flexShrink: 0 }} />
-                  <p style={{ margin: 0, fontSize: '13px', color: '#6d28d9', fontWeight: '500' }}>
-                    <strong>Rx Verified & Priced:</strong> The pharmacist has verified medication values. All custom itemized prices are synced and ready for billing layout collection.
+              {/* STATUS NOTICES BAR */}
+              {!loading && apptId && (
+                <div style={{ 
+                  padding: '12px', 
+                  backgroundColor: isLabOnlyProfile ? '#fff7ed' : '#ecfdf5', 
+                  border: '1px solid',
+                  borderColor: isLabOnlyProfile ? '#ffedd5' : '#d1fae5', 
+                  borderRadius: '12px', 
+                  marginBottom: '20px', 
+                  display: 'flex', 
+                  gap: '10px' 
+                }}>
+                  <CheckCircle size={18} color={isLabOnlyProfile ? '#ea580c' : '#10b981'} style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <p style={{ margin: 0, fontSize: '13px', color: isLabOnlyProfile ? '#c2410c' : '#065f46', fontWeight: '500' }}>
+                    {isLabOnlyProfile ? (
+                      <span><strong>Bypassed Pharmacy:</strong> Direct Lab Diagnostics case. Loaded consultation and laboratory line items.</span>
+                    ) : (
+                      <span><strong>Pharmacy Verified:</strong> Prices and medication list compiled securely by the pharmacy desk.</span>
+                    )}
                   </p>
                 </div>
               )}
 
               {loading ? (
-                  <div style={{ textAlign: 'center', padding: '60px' }}>
+                  <div style={{ textAling: 'center', padding: '60px' }}>
                       <Loader2 className="animate-spin" color="#059669" size={32} />
                       <p style={{ marginTop: '12px', color: '#64748b', fontSize: '14px' }}>Loading record...</p>
                   </div>
@@ -818,83 +846,61 @@ const InvoiceModal = ({ hosp_id, onClose, onSuccess, apptId, initialStatus }) =>
                           </div>
                       </div>
 
-                      {initialStatus === "Pending-Pharmacy" && (
+                      {/* --- EXPLICIT TOGGLE LOGIC: ONLY SHOWS IF MEDICINES ACTUALLY EXIST --- */}
+                      {!isLabOnlyProfile && (
                         <div style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '12px',
-                          backgroundColor: '#fff7ed',
+                          backgroundColor: skipPharmacy ? '#fff1f2' : '#f8fafc',
                           padding: '14px',
                           borderRadius: '14px',
-                          border: '1px solid #ffedd5'
+                          border: skipPharmacy ? '1px solid #fecdd3' : '1px solid #e2e8f0',
+                          transition: 'all 0.2s'
                         }}>
                           <input 
                             type="checkbox" 
                             id="skipPharmacyToggle"
                             checked={skipPharmacy} 
                             onChange={(e) => setSkipPharmacy(e.target.checked)}
-                            style={{ width: '18px', height: '18px', accentColor: '#ea580c', cursor: 'pointer' }}
+                            style={{ width: '18px', height: '18px', accentColor: '#e11d48', cursor: 'pointer' }}
                           />
-                          <label htmlFor="skipPharmacyToggle" style={{ fontSize: '13px', fontWeight: '700', color: '#c2410c', cursor: 'pointer', userSelect: 'none' }}>
-                            Skip Pharmacy (Patient purchasing outside)
+                          <label htmlFor="skipPharmacyToggle" style={{ fontSize: '13px', fontWeight: '700', color: skipPharmacy ? '#e11d48' : '#64748b', cursor: 'pointer', userSelect: 'none' }}>
+                            Skip Pharmacy Billing (Patient purchasing outside)
                           </label>
                         </div>
                       )}
                       
+                   {/* SUMMARY MAP WITH MUTING VISUAL EFFECT IF SKIPPED */}
                       <div>
                           <label style={labelStyle}>BILLING SUMMARY</label>
                           <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
                               {items.map((item, idx) => {
-                                  const isSkippedPharmacyItem = skipPharmacy && item.type === 'Pharmacy';
                                   const isUnavailable = item.is_available === false;
-                                  const isDisabled = isSkippedPharmacyItem || isUnavailable;
+                                  const isSkippedPharmacy = skipPharmacy && item.type === 'Pharmacy';
 
                                   return (
                                       <div key={idx} style={{
                                         ...itemRowStyle,
-                                        opacity: isDisabled ? 0.5 : 1,
-                                        border: isSkippedPharmacyItem ? '1px dashed #cbd5e1' : isUnavailable ? '1px dashed #fda4af' : '1px solid #f1f5f9',
-                                        background: isSkippedPharmacyItem ? '#f8fafc' : isUnavailable ? '#fff1f2' : '#ffffff',
-                                        textDecoration: isSkippedPharmacyItem ? 'line-through' : 'none'
+                                        opacity: (isUnavailable || isSkippedPharmacy) ? 0.4 : 1,
+                                        border: isUnavailable ? '1px dashed #fda4af' : isSkippedPharmacy ? '1px dashed #cbd5e1' : '1px solid #f1f5f9',
+                                        background: isUnavailable ? '#fff1f2' : isSkippedPharmacy ? '#f8fafc' : '#ffffff',
+                                        textDecoration: (isUnavailable || isSkippedPharmacy) ? 'line-through' : 'none'
                                       }}>
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                              <span style={{ 
-                                                fontSize: '14px', 
-                                                fontWeight: '700', 
-                                                color: isUnavailable ? '#e11d48' : '#334155' 
-                                              }}>
+                                              <span style={{ fontSize: '14px', fontWeight: '700', color: isUnavailable ? '#e11d48' : '#334155' }}>
                                                 {item.service_name}
                                               </span>
                                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                 <span style={getTypeBadgeStyle(item.type)}>{item.type || 'General'}</span>
-                                                {item.quantity > 1 && !isSkippedPharmacyItem && <span style={{ fontSize: '10px', color: '#94a3b8' }}>x{item.quantity}</span>}
-                                                
-                                                {/* INTEGRATED STATUS BADGE DISPLAY */}
-                                                {item.type === 'Pharmacy' && !isDisabled && (
-                                                  <span style={{
-                                                    padding: '2px 8px',
-                                                    borderRadius: '50px',
-                                                    fontSize: '10px',
-                                                    fontWeight: '700',
-                                                    backgroundColor: 
-                                                      item.status === 'Ready-to-Dispense' ? '#ecfdf5' :
-                                                      item.status === 'Pharmacy-Priced' ? '#f5f3ff' :
-                                                      item.status === 'Pending-Pharmacy' ? '#fef3c7' : '#f1f5f9',
-                                                    color: 
-                                                      item.status === 'Ready-to-Dispense' ? '#10b981' :
-                                                      item.status === 'Pharmacy-Priced' ? '#7c3aed' :
-                                                      item.status === 'Pending-Pharmacy' ? '#d97706' : '#64748b'
-                                                  }}>
-                                                    {item.status === 'Pharmacy-Priced' ? 'Rx Priced' : item.status}
-                                                  </span>
-                                                )}
+                                                {item.quantity > 1 && <span style={{ fontSize: '11px', color: '#64748b' }}>Qty: {item.quantity}</span>}
                                               </div>
                                           </div>
                                           
                                           {isUnavailable ? (
                                             <span style={{ fontSize: '11px', fontWeight: '900', color: '#e11d48' }}>OUT OF STOCK</span>
-                                          ) : isSkippedPharmacyItem ? (
-                                            <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b' }}>OMITTED</span>
+                                          ) : isSkippedPharmacy ? (
+                                            <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8' }}>₹0 (SKIPPED)</span>
                                           ) : (
                                             <span style={{ fontWeight: '800', color: '#1e293b' }}>
                                               ₹{(item.unit_price * (item.quantity || 1)).toLocaleString()}
@@ -1070,7 +1076,7 @@ const searchInputStyle = { width: '100%', padding: '12px 0', border: 'none', out
 const generateBtnStyle = { padding: '14px', background: '#059669', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const backBtnStyle = { border: 'none', background: 'none', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '10px' };
 const modalOverlay = { position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
-const modalContent = { background: 'white', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '450px' };
+const modalContent = { background: 'white', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '850px' };
 const viewRxButtonStyle = { padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', fontWeight: '600', color: '#475569', cursor: 'pointer' };
 const statusBadgeGreen = { padding: '4px 8px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '12px', fontWeight: '700' };
 const statusBadgeBlue = { padding: '4px 8px', background: '#dbeafe', color: '#1e40af', borderRadius: '6px', fontSize: '12px', fontWeight: '700' };
