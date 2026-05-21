@@ -150,27 +150,35 @@ def start_consultation(appointment_id: int, db: Session = Depends(get_db)):
 
 
 
-
 @router.get("/medical-records/all")
-def get_all_records(db: Session = Depends(get_db)):
-    """Fetches full clinical history for the Doctor's record archive."""
-    results = (
-        db.query(
-            models.MedicalRecord.id,
-            models.Patient.first_name,
-            models.Patient.last_name,
-            models.MedicalRecord.diagnosis,
-            models.MedicalRecord.created_at,
-        )
-        .join(models.Patient, models.MedicalRecord.patient_id == models.Patient.id)
-        .all()
-    )
+def get_all_records(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user) # 1. Get logged in user
+):
+    # 2. Get the current doctor's ID based on the logged-in user
+    staff_record = db.query(models.Staff).filter(
+        models.Staff.email.ilike(current_user.email)
+    ).first()
+    
+    doctor_profile = db.query(models.Doctor).filter(
+        models.Doctor.staff_ref_id == staff_record.id
+    ).first()
+
+    if not doctor_profile:
+        return [] # Or handle as error
+
+    # 3. Filter records where doctor_id matches
+    results = db.query(models.MedicalRecord).filter(
+        models.MedicalRecord.doctor_id == doctor_profile.id
+    ).all()
 
     return [
         {
-            "id": f"NX-{r.id}", # Standardized Autonex ID format
-            "patient_name": f"{r.first_name} {r.last_name}",
-            "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
+            "id": f"NX-{r.id}",
+            "record_id": f"NX-{r.id}",
+            "patient_id": r.patient_id, # Ensure this is returned
+            "patient_name": f"{r.patient.first_name} {r.patient.last_name}",
+            "visit_date": r.created_at.strftime("%Y-%m-%d"),
             "diagnosis": r.diagnosis,
         }
         for r in results
@@ -548,3 +556,38 @@ def accept_lab_report(request_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to update report status.")
+
+@router.get("/patient/{patient_id}/history")
+def get_patient_medical_history(patient_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches history, allergies, and conditions for a specific patient.
+    """
+    # 1. Fetch Patient Basic Info
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    # 2. Fetch Visit History (Medical Records)
+    history = db.query(models.MedicalRecord).filter(
+        models.MedicalRecord.patient_id == patient_id
+    ).order_by(desc(models.MedicalRecord.created_at)).all()
+
+    # 3. Format Response
+    return {
+        "patient_info": {
+            "name": f"{patient.first_name} {patient.last_name}",
+            "age": patient.age if hasattr(patient, 'age') else "N/A",
+            "blood_group": patient.blood_group if hasattr(patient, 'blood_group') else "N/A"
+        },
+        "allergies": [], # Replace with your actual Allergy model query if you have one
+        "chronic_conditions": [], # Replace with your actual Condition model query
+        "visit_history": [
+            {
+                "id": f"NX-{r.id}",
+                "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
+                "diagnosis": r.diagnosis,
+                "notes": r.treatment_plan
+            }
+            for r in history
+        ]
+    }
