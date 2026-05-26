@@ -384,11 +384,25 @@ def prepare_invoice(appt_id: int, skip_pharmacy: bool = False, db: Session = Dep
             elif hasattr(p, 'price_at_request') and p.price_at_request is not None and p.price_at_request > 0:
                 final_med_price = p.price_at_request
 
+            # --- NEW: Fetch actual stock quantity from MedicineCatalog ---
+            catalog_item = db.query(models.MedicineCatalog).filter(
+                models.MedicineCatalog.hospital_id == appt.hospital_id,
+                models.MedicineCatalog.name == p.medicine_name
+            ).first()
+            
+            # Default to an available stock quantity or the exact catalog stock if found
+            current_stock = catalog_item.stock_quantity if catalog_item else (p.quantity or 1)
+            min_reserve = catalog_item.min_reserve_limit if catalog_item else 0
+            is_under_reserve = current_stock <= min_reserve
+
             items.append({
                 "service_name": p.medicine_name,
                 "unit_price": float(final_med_price),
                 "type": "Pharmacy",
-                "quantity": p.quantity if p.quantity else 1
+                "quantity": p.quantity if p.quantity else 1,
+                "stock_quantity": current_stock,
+                "min_reserve_limit": min_reserve,
+                "is_out_of_stock": is_under_reserve
             })
             
     lab_requests = db.query(

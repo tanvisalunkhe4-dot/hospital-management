@@ -8,7 +8,7 @@ const PrescriptionCard = ({ order, onVerifySuccess, mode = "verify" }) => {
   const [meds, setMeds] = useState(
     order.prescriptions.map(m => ({
       ...m,
-      is_available: m.is_out_of_stock ? false : (m.is_available ?? true),
+      is_available: mode === "dispense" ? true : (m.is_out_of_stock ? false : (m.is_available ?? true)),
       price: m.price || 0,
       quantity: m.quantity || 1
     }))

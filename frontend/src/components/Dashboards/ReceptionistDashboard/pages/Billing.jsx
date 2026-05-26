@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Receipt, Clock, CheckCircle, 
-  Download, ArrowLeft, X, CreditCard, Loader2
+  Download, ArrowLeft, X, CreditCard, Loader2, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -521,34 +521,40 @@ const Billing = ({ invoices, hosp_id, onBack, refresh, initialFilter = "All" }) 
   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '12px', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
     <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', alignSelf: 'center', marginRight: '5px' }}>READY FOR BILLING:</span>
     {billingQueue.map(queueItem => {
-      // Determines if the user skipped pharmacy routing entirely by checking prescription contents
-      const isLabOnly = !queueItem.prescriptions || queueItem.prescriptions.length === 0;
+  // Check the status from the server to know if pricing is verified
+  const isAwaitingPharmacist = queueItem.status === 'Pending-Pharmacy';
 
-      return (
-        <button 
-          key={queueItem.id}
-          onClick={() => { 
-            setSelectedApptId(queueItem.id); 
-            setSelectedApptStatus(queueItem.status);
-            setShowModal(true); 
-          }}
-          style={{
-            ...queueButtonStyle,
-            background: isLabOnly ? '#fff7ed' : '#eff6ff',
-            borderColor: isLabOnly ? '#ffedd5' : '#bfdbfe',
-            color: isLabOnly ? '#c2410c' : '#1e40af'
-          }}
-        >
-          <div style={{ 
-            width: '6px', 
-            height: '6px', 
-            background: isLabOnly ? '#ea580c' : '#3b82f6', 
-            borderRadius: '50%' 
-          }}></div>
-          {queueItem.patient_name} {isLabOnly ? '(Lab Diagnostics Only)' : '(Pharmacy Cleared)'}
-        </button>
-      );
-    })}
+  return (
+    <button 
+      key={queueItem.id}
+      disabled={isAwaitingPharmacist} // Locks the button so receptionist cannot proceed prematurely
+      onClick={() => { 
+        setSelectedApptId(queueItem.id); 
+        setSelectedApptStatus(queueItem.status);
+        setShowModal(true); 
+      }}
+      style={{
+        ...queueButtonStyle, // Reuses your exact minimalist button styles
+        cursor: isAwaitingPharmacist ? 'not-allowed' : 'pointer',
+        // Changes background colors cleanly without taking up extra space
+        background: isAwaitingPharmacist ? '#fff7ed' : '#eff6ff',
+        borderColor: isAwaitingPharmacist ? '#fed7aa' : '#bfdbfe',
+        color: isAwaitingPharmacist ? '#c2410c' : '#1e40af'
+      }}
+    >
+      {/* Dynamic Indicator Dot color */}
+      <div style={{ 
+        width: '6px', 
+        height: '6px', 
+        background: isAwaitingPharmacist ? '#ea580c' : '#3b82f6', 
+        borderRadius: '50%' 
+      }}></div>
+      
+      {/* Patient Name + Minimalist Status String right next to it */}
+      {queueItem.patient_name} {isAwaitingPharmacist ? '(Awaiting Pricing)' : '(Pharmacy Cleared)'}
+    </button>
+  );
+})}
   </div>
         )}
       </div>
@@ -723,7 +729,8 @@ useEffect(() => {
                     unit_price: m.unit_price,
                     type: 'Pharmacy',
                     quantity: m.qty || 1,
-                    is_available: m.is_available ?? true
+                    is_available: m.is_available ?? true,
+                    is_out_of_stock: m.is_out_of_stock || false
                   })),
                   ...(data.labs || []).map(l => ({
                     service_name: l.test,
@@ -872,64 +879,75 @@ const isLabOnlyProfile = items.filter(i => i.type === 'Pharmacy').length === 0;
                       )}
                       
                    {/* SUMMARY MAP WITH MUTING VISUAL EFFECT IF SKIPPED */}
-                      <div>
-                          <label style={labelStyle}>BILLING SUMMARY</label>
-                          <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
-                              {items.map((item, idx) => {
-                                  const isUnavailable = item.is_available === false;
-                                  const isSkippedPharmacy = skipPharmacy && item.type === 'Pharmacy';
+                  <div>
+                      <label style={labelStyle}>BILLING SUMMARY</label>
+                      <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+                          {items.map((item, idx) => {
+                              const isUnavailable = item.is_available === false;
+                              const isSkippedPharmacy = skipPharmacy && item.type === 'Pharmacy';
+                              // Evaluates if item is out of stock via backend attribute
+                              const isOutOfStock = item.is_out_of_stock === true;
 
-                                  return (
-                                      <div key={idx} style={{
-                                        ...itemRowStyle,
-                                        opacity: (isUnavailable || isSkippedPharmacy) ? 0.4 : 1,
-                                        border: isUnavailable ? '1px dashed #fda4af' : isSkippedPharmacy ? '1px dashed #cbd5e1' : '1px solid #f1f5f9',
-                                        background: isUnavailable ? '#fff1f2' : isSkippedPharmacy ? '#f8fafc' : '#ffffff',
-                                        textDecoration: (isUnavailable || isSkippedPharmacy) ? 'line-through' : 'none'
-                                      }}>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                              <span style={{ fontSize: '14px', fontWeight: '700', color: isUnavailable ? '#e11d48' : '#334155' }}>
+                              return (
+                                  <div key={idx} style={{
+                                    ...itemRowStyle,
+                                    // Mute if unavailable or skipped, highlight light red if out of stock
+                                    opacity: (isUnavailable || isSkippedPharmacy) ? 0.4 : 1,
+                                    border: isUnavailable ? '1px dashed #fda4af' : isOutOfStock ? '1px solid #fecaca' : isSkippedPharmacy ? '1px dashed #cbd5e1' : '1px solid #f1f5f9',
+                                    background: isUnavailable ? '#fff1f2' : isOutOfStock ? '#fef2f2' : isSkippedPharmacy ? '#f8fafc' : '#ffffff',
+                                    textDecoration: (isUnavailable || isSkippedPharmacy) ? 'line-through' : 'none'
+                                  }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                              <span style={{ fontSize: '14px', fontWeight: '700', color: isUnavailable ? '#e11d48' : isOutOfStock ? '#dc2626' : '#334155' }}>
                                                 {item.service_name}
                                               </span>
-                                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                <span style={getTypeBadgeStyle(item.type)}>{item.type || 'General'}</span>
-                                                {item.quantity > 1 && <span style={{ fontSize: '11px', color: '#64748b' }}>Qty: {item.quantity}</span>}
-                                              </div>
+                                              {/* Out of stock caution badge */}
+                                              {isOutOfStock && !isUnavailable && !isSkippedPharmacy && (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '700' }}>
+                                                  <AlertTriangle size={10} /> Out of Stock Warning
+                                                </span>
+                                              )}
                                           </div>
-                                          
-                                          {isUnavailable ? (
-                                            <span style={{ fontSize: '11px', fontWeight: '900', color: '#e11d48' }}>OUT OF STOCK</span>
-                                          ) : isSkippedPharmacy ? (
-                                            <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8' }}>₹0 (SKIPPED)</span>
-                                          ) : (
-                                            <span style={{ fontWeight: '800', color: '#1e293b' }}>
-                                              ₹{(item.unit_price * (item.quantity || 1)).toLocaleString()}
-                                            </span>
-                                          )}
+                                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <span style={getTypeBadgeStyle(item.type)}>{item.type || 'General'}</span>
+                                            {item.quantity > 1 && <span style={{ fontSize: '11px', color: '#64748b' }}>Qty: {item.quantity}</span>}
+                                          </div>
                                       </div>
-                                  );
-                              })}
-                          </div>
+                                      
+                                      {isUnavailable ? (
+                                        <span style={{ fontSize: '11px', fontWeight: '900', color: '#e11d48' }}>OUT OF STOCK</span>
+                                      ) : isSkippedPharmacy ? (
+                                        <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8' }}>₹0 (SKIPPED)</span>
+                                      ) : (
+                                        <span style={{ fontWeight: '800', color: isOutOfStock ? '#dc2626' : '#1e293b' }}>
+                                          ₹{(item.unit_price * (item.quantity || 1)).toLocaleString()}
+                                        </span>
+                                      )}
+                                  </div>
+                              );
+                          })}
                       </div>
+                  </div>
 
-                      <div style={{ marginTop: '4px', borderTop: '2px dashed #e2e8f0', paddingTop: '16px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px', color: '#64748b' }}>
-                              <span>Subtotal</span>
-                              <span>₹{calculateTotal().toLocaleString()}</span>
-                          </div>
-                          <div style={{ padding: '16px', background: '#ecfdf5', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontWeight: '800', color: '#065f46' }}>TOTAL PAYABLE</span>
-                              <span style={{ fontSize: '22px', fontWeight: '900', color: '#065f46' }}>₹{calculateTotal().toLocaleString()}</span>
-                          </div>
+                  <div style={{ marginTop: '4px', borderTop: '2px dashed #e2e8f0', paddingTop: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px', color: '#64748b' }}>
+                          <span>Subtotal</span>
+                          <span>₹{calculateTotal().toLocaleString()}</span>
                       </div>
-                      
-                      <button type="submit" style={generateBtnStyle}>
-                          <CreditCard size={18} style={{ marginRight: '8px' }} /> Confirm & Generate Invoice
-                      </button>
-                  </form>
-              )}
-          </motion.div>
-      </div>
+                      <div style={{ padding: '16px', background: '#ecfdf5', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: '800', color: '#065f46' }}>TOTAL PAYABLE</span>
+                          <span style={{ fontSize: '22px', fontWeight: '900', color: '#065f46' }}>₹{calculateTotal().toLocaleString()}</span>
+                      </div>
+                  </div>
+                  
+                  <button type="submit" style={generateBtnStyle}>
+                      <CreditCard size={18} style={{ marginRight: '8px' }} /> Confirm & Generate Invoice
+                  </button>
+              </form>
+          )}
+      </motion.div>
+  </div>
   );
 };
 

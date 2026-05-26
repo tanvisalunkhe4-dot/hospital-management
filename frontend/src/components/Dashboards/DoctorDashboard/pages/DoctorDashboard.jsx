@@ -10,6 +10,8 @@ import DoctorOverview from "./DoctorOverview";
 import PatientQueue from "./PatientQueue";
 import ConsultationWorkspace from "./ConsultationWorkspace";
 import LabReports from "./LabReports";
+import MedicalRecords from "./MedicalRecords";
+import { Medal } from "lucide-react";
 // A small reusable table component for Records/Reports
 const DataView = ({ title, icon, data, columns }) => (
   <div style={viewContainerStyle}>
@@ -49,7 +51,6 @@ const DataView = ({ title, icon, data, columns }) => (
 const DoctorDashboard = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [records, setRecords] = useState([]);
   const [prescription, setPrescription] = useState([]);
 const [clinicalSummary, setClinicalSummary] = useState("");
 const [rawTranscript, setRawTranscript] = useState("");
@@ -59,14 +60,7 @@ const [prescribedTests, setPrescribedTests] = useState([]);
   const activeStaffId = userData?.staff_id;
   const doctorName = userData?.full_name || "Doctor";
 
-  useEffect(() => {
-    if (activeTab === 'records') {
-      fetch('http://localhost:8000/api/v1/doctor/medical-records/all')
-        .then(res => res.json())
-        .then(data => setRecords(data))
-        .catch(err => console.error("Failed to fetch records:", err));
-    }
-  }, [activeTab]);
+  
 
   useEffect(() => {
   const checkActiveSession = async () => {
@@ -187,14 +181,11 @@ const handleStartConsultation = (patient) => {
 )}
            
        
-            {activeTab === 'records' && (
-              <DataView 
-                title="Electronic Medical Records" 
-                icon={<FileText color="#10b981" />} 
-                data={records} 
-                columns={["Record ID", "Patient Name", "Visit Date", "Diagnosis"]}
-              />
-            )}
+            
+           {activeTab === 'records' && (
+  <MedicalRecords />
+)}
+
            {activeTab === 'reports' && (
   selectedPatient ? (
     <LabReports 

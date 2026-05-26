@@ -180,21 +180,38 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
     total_meds = sum((p.price * p.quantity) for p in prescriptions if p.is_available)
     total_labs = sum(l.price_at_request for l in labs if l.price_at_request)
 
+    # 🌟 NEW FIX: Map inventory indicators dynamically so Billing.jsx can view them!
+    medicines_payload = []
+    for p in prescriptions:
+        catalog_item = db.query(MedicineCatalog).filter(
+            MedicineCatalog.name == p.medicine_name,
+            MedicineCatalog.hospital_id == appt.hospital_id
+        ).first()
+
+        is_out_of_stock = False
+        if catalog_item:
+            # If stock drops below reserve or cannot fulfill order quantity
+            if (catalog_item.stock_quantity - p.quantity) < catalog_item.min_reserve_limit:
+                is_out_of_stock = True
+        else:
+            is_out_of_stock = True
+
+        medicines_payload.append({
+            "id": p.id,
+            "name": p.medicine_name, 
+            "unit_price": p.price, 
+            "qty": p.quantity, 
+            "subtotal": p.price * p.quantity, 
+            "is_available": p.is_available,
+            "is_out_of_stock": is_out_of_stock  # 🌟 Sending this down cleanly to UI mappings
+        })
+
     return {
         "patient_id": appt.patient_id,
         "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
         "doctor_name": appt.doctor_name if hasattr(appt, 'doctor_name') else "Doctor",
         "consultation_fee": consultation_fee,
-        "medicines": [
-            {
-                "id": p.id,
-                "name": p.medicine_name, 
-                "unit_price": p.price, 
-                "qty": p.quantity, 
-                "subtotal": p.price * p.quantity, 
-                "is_available": p.is_available     
-            } for p in prescriptions
-        ],
+        "medicines": medicines_payload,
         "labs": [
             {
                 "test": l.test_name, 
@@ -208,7 +225,6 @@ async def get_bill_details(appt_id: int, db: Session = Depends(get_db)):
 # 5. SEARCH MASTER CATALOG
 @router.get("/search-master")
 async def search_master_catalog(q: str, db: Session = Depends(get_db)):
-    """Searches the global Kaggle database (where hospital_id is NULL) as the pharmacist types."""
     if not q or len(q) < 3:
         return []
     
