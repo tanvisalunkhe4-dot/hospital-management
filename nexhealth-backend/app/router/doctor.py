@@ -591,3 +591,32 @@ def get_patient_medical_history(patient_id: int, db: Session = Depends(get_db)):
             for r in history
         ]
     }
+
+@router.get("/reports/pending-review/{staff_id}")
+def get_reports_for_doctor_review(staff_id: str, db: Session = Depends(get_db)):
+    """
+    Fetches reports that have been 'Verified' by the Lab, 
+    so the doctor can review them.
+    """
+    doctor = resolve_staff_record(staff_id, db)
+    
+    # We look for LabRequests where the doctor_id matches 
+    # AND the status is 'Verified'
+    reports = db.query(models.LabRequest)\
+        .filter(
+            models.LabRequest.doctor_id == doctor.id,
+            models.LabRequest.status == "Verified"
+        )\
+        .order_by(desc(models.LabRequest.report_generated_at))\
+        .all()
+    
+    return [
+        {
+            "id": r.id,
+            "patient_name": f"{r.patient.first_name} {r.patient.last_name}",
+            "test_name": r.test_name,
+            "report_url": r.report_file_url,
+            "generated_at": r.report_generated_at
+        }
+        for r in reports
+    ]

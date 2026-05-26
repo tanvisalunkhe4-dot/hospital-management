@@ -1,13 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import LabSidebar from '../components/LabSidebar';
 import LabHeader from '../components/LabHeader';
 import TestRequests from './TestRequests';
 import SampleCollection from './SampleCollection';
 import TestProcessing from './TestProcessing'; 
 import ReportManager from './ReportManager';
+import LabRecords from './LabRecords';
 
 const LabDashboard = () => {
   const [activeTab, setActiveTab] = useState('requests');
+  const location = useLocation();
+
+  // Sync state with URL path whenever location changes
+  useEffect(() => {
+    if (location.pathname.includes('/requests')) setActiveTab('requests');
+    else if (location.pathname.includes('/samples')) setActiveTab('samples');
+    else if (location.pathname.includes('/processing')) setActiveTab('processing');
+    else if (location.pathname.includes('/reports')) setActiveTab('reports');
+    else if (location.pathname.includes('/history')) setActiveTab('history');
+  }, [location]);
 
   // Helper to map tab IDs to display labels
   const getTabLabel = (tab) => {
@@ -46,7 +58,11 @@ const LabDashboard = () => {
               {activeTab === 'requests' && <TestRequests setActiveTab={setActiveTab} />}              
               {activeTab === 'samples' && <SampleCollection />}
               {activeTab === 'processing' && <TestProcessing />}
-              {activeTab === 'reports' && <ReportManager />}
+              
+              {/* Pass setActiveTab to ReportManager so it can trigger the history tab */}
+              {activeTab === 'reports' && <ReportManager setActiveTab={setActiveTab} />}
+              
+              {activeTab === 'history' && <LabRecords />}
             </div>
           </div>
         </main>
