@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw, Activity, FileCheck, ClipboardList, Clock, CheckCircle2, Send, FileUp, Eye } from 'lucide-react';
 import axios from 'axios';
 import ReportView from '../components/ReportView';
+import { useNavigate } from 'react-router-dom'; 
 
 const StatCard = ({ title, value, icon, color }) => (
   <div style={{ 
@@ -17,6 +18,7 @@ const StatCard = ({ title, value, icon, color }) => (
 );
 
 const ReportManager = () => {
+  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewReport, setPreviewReport] = useState(null);
@@ -61,12 +63,31 @@ const ReportManager = () => {
 
 
   const handleSendToDoctor = async (reportId) => {
+    // 1. Maintain existing lookup logic
+    const report = reports.find(r => r.id === reportId);
+    
+    // 2. Maintain existing validation logic
+    if (!report.report_file_url) {
+      alert("Cannot send report: No file has been uploaded yet.");
+      return;
+    }
+  
+    // 3. Maintain existing confirmation logic
     if (!confirm("Confirm sending report to the referring physician?")) return;
+    
     try {
+      // 4. Perform the API request
       await axios.post(`http://localhost:8000/api/v1/lab/requests/${reportId}/send-to-doctor`);
       alert("Report sent successfully.");
-      fetchReports();
-    } catch (err) { alert(err.response?.data?.detail || "Failed to send."); }
+      
+      // 5. Navigate to the path defined in your App.js route
+      // Using /lab-dashboard/history matches your App.js routing configuration
+      navigate('/lab-dashboard/history'); 
+      
+    } catch (err) { 
+      // 6. Maintain existing error handling
+      alert(err.response?.data?.detail || "Failed to send."); 
+    }
   };
 
   useEffect(() => { fetchReports(); }, []);
@@ -168,6 +189,7 @@ const ReportManager = () => {
     onChange={(e) => handleFileUpload(e.target.files[0], report.id)}
   />
   <button 
+  disabled={loading}
     onClick={() => document.getElementById(`fileInput-${report.id}`).click()} 
     style={{
       display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 12px',
@@ -175,7 +197,7 @@ const ReportManager = () => {
       color: '#64748b', cursor: 'pointer', fontWeight: '600', fontSize: '12px'
     }}
   >
-    <FileUp size={14}/> Upload
+    <FileUp size={14}/> {loading ? "Uploading..." : "Upload"}
   </button>
 </td>
 

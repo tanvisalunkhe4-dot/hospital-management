@@ -8,6 +8,14 @@ from app.schemas import Lab_schema as schemas
 import uuid # For generating unique Accession Numbers
 from datetime import datetime, timezone 
 from fastapi import File, UploadFile, Form, Depends
+import os
+import shutil
+from pathlib import Path
+
+
+UPLOAD_DIR = "uploads/reports"
+Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+
 import json
 router = APIRouter(
     prefix="",
@@ -410,24 +418,38 @@ async def upload_lab_report(
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
+    # 1. Fetch the record
     db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
     if not db_req:
         raise HTTPException(status_code=404, detail="Request not found")
     
-    # 1. Your File Saving Logic (e.g., saving to a 'reports/' folder)
-    # 2. Update the database record with the file path
-    # db_req.report_file_url = f"/static/reports/{file.filename}"
+    # 2. Save the file
+    # Creating a unique filename using request_id to prevent overwrites
+    file_path = os.path.join(UPLOAD_DIR, f"{request_id}_{file.filename}")
     
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to save file to server storage")
+
+    # 3. Update the database record
+    db_req.report_file_url = file_path # Save the path to your database
     db_req.status = "Verified"
     db_req.report_generated_at = datetime.now(timezone.utc)
     
+    # 4. Commit changes
     try:
         db.commit()
         db.refresh(db_req)
         return {"status": "success", "message": "Report uploaded and verified"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to save report")
+        # Clean up the file if DB commit fails
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail="Failed to save report metadata to database")
+
 
 @router.get("/requests/{request_id}/report-view", response_model=schemas.LabRequestResponse)
 def get_report_view(request_id: int, db: Session = Depends(get_db)):
@@ -464,4 +486,54 @@ async def send_report_to_doctor(request_id: int, db: Session = Depends(get_db)):
     # 3. Trigger your email function (using FastAPI-Mail)
     # ... logic to send email ...
     
-    return {"status": "success", "message": f"Report sent to {doctor_email}"}
+    # 4. ARCHIVE LOGIC: Update status so it appears in LabHistory
+    # This prevents the record from appearing in the 'Reports' (Active) view 
+    # and allows it to appear in the 'Lab Records' (Archive) view.
+    db_req.status = "Sent"
+    
+    try:
+        db.commit()
+        db.refresh(db_req)
+        return {"status": "success", "message": f"Report sent to {doctor_email}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to archive the report.")
+
+
+@router.get("/doctor/{doctor_id}/reports/pending", response_model=List[schemas.LabRequestResponse])
+def get_reports_for_doctor(doctor_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches completed/verified reports specifically for a logged-in doctor.
+    """
+    requests = db.query(models.LabRequest)\
+        .options(
+            joinedload(models.LabRequest.patient), 
+            joinedload(models.LabRequest.doctor)
+        )\
+        .filter(
+            models.LabRequest.doctor_id == doctor_id,
+            models.LabRequest.status.in_(["Verified", "Completed", "Sent"])
+        )\
+        .all()
+    
+    return [flatten_lab_data(r) for r in requests]
+
+
+
+@router.get("/reports/history", response_model=List[schemas.LabRequestResponse])
+def get_lab_history(db: Session = Depends(get_db)):
+    """
+    Fetches all laboratory records that have been sent to physicians
+    and are now stored in the digital archive.
+    """
+    # Fetch requests that have been sent to the doctor
+    requests = db.query(models.LabRequest)\
+        .options(
+            joinedload(models.LabRequest.patient), 
+            joinedload(models.LabRequest.doctor)
+        )\
+        .filter(models.LabRequest.status == "Sent")\
+        .all()
+    
+    # Flatten the data so the frontend receives the expected field names
+    return [flatten_lab_data(r) for r in requests]

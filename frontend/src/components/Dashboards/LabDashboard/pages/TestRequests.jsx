@@ -11,7 +11,6 @@ const containerStyle = {
 };const headerSection = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px' };
 const titleStyle = { fontSize: '28px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' };
 const subtitleStyle = { fontSize: '14px', color: '#64748b', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' };
-
 const searchWrapper = { position: 'relative', display: 'flex', alignItems: 'center' };
 const searchIcon = { position: 'absolute', left: '16px', color: '#94a3b8' };
 const searchInput = { 
@@ -97,7 +96,8 @@ const TestRequests = ({ setActiveTab }) => { // Add setActiveTab here
   const [selectedSample, setSelectedSample] = useState("");
   const specimenOptions = ["Venous Blood", "Capillary Blood", "Urine", "Swab", "Sputum", "Serum", "CSF"];
   const [viewMode, setViewMode] = useState(false); 
-  
+  const [priorityFilter, setPriorityFilter] = useState("All"); // All, Urgent, Normal
+
   const handleOpenModal = (req, isViewOnly = false) => {
     setSelectedRequest(req);
     setSelectedSample(""); 
@@ -198,10 +198,14 @@ const handleReject = async (requestId) => {
   }
 };
 
-  const filteredRequests = requests.filter(req => 
-    req.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    req.patient_id?.toString().includes(searchQuery)
-  );
+const filteredRequests = requests.filter(req => {
+  const matchesSearch = req.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        req.patient_id?.toString().includes(searchQuery);
+  const matchesPriority = priorityFilter === "All" || 
+                          (req.priority || "Normal").toLowerCase() === priorityFilter.toLowerCase();
+  
+  return matchesSearch && matchesPriority;
+});
 
   return (
     <div style={containerStyle}>
@@ -215,26 +219,40 @@ const handleReject = async (requestId) => {
       `}</style>
 
       {/* --- HEADER SECTION --- */}
-      <div style={headerSection}>
-        <div>
-          <h2 style={titleStyle}>Laboratory Queue</h2>
-          <div style={subtitleStyle}>
-            <div className="pulse-icon"></div>
-            <span>{filteredRequests.length} Pending requisitions awaiting sample collection</span>
-          </div>
-        </div>
-        <div style={searchWrapper}>
-          <Search size={18} style={searchIcon} />
-          <input 
-            type="text" 
-            placeholder="Search by Patient Name or UHID..." 
-            className="search-input"
-            style={searchInput}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+      <div style={{ ...headerSection, alignItems: 'center' }}>
+  {/* Left Side */}
+  <div>
+    <h2 style={titleStyle}>Laboratory Queue</h2>
+    <div style={subtitleStyle}>
+      <div className="pulse-icon"></div>
+      <span>{filteredRequests.length} Pending requisitions</span>
+    </div>
+  </div>
+
+  {/* Right Side: Search + Filter */}
+  <div style={{ display: 'flex', gap: '12px' }}>
+    <select 
+      style={{ ...searchInput, width: '150px', padding: '14px' }}
+      onChange={(e) => setPriorityFilter(e.target.value)}
+    >
+      <option value="All">All Priority</option>
+      <option value="Urgent">Urgent</option>
+      <option value="Normal">Normal</option>
+    </select>
+    
+    <div style={searchWrapper}>
+      <Search size={18} style={searchIcon} />
+      <input 
+        type="text" 
+        placeholder="Search..." 
+        style={searchInput}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+    </div>
+  </div>
+</div>
+      
 
       {/* --- QUEUE TABLE --- */}
       <div style={tableContainer}>
