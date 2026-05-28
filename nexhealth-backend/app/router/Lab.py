@@ -174,14 +174,13 @@ def get_request_details(request_id: int, db: Session = Depends(get_db)):
 @router.put("/requests/{request_id}/accept", response_model=schemas.LabRequestResponse)
 def accept_test_request(
     request_id: int, 
-    # Add a simple schema for confirmation (sample_type)
     confirmation: schemas.LabAcceptanceUpdate, 
     db: Session = Depends(get_db)
 ):
     """
     Initiates the Clinical Chain of Custody.
-    Updates status to 'In-Progress', generates an Accession Number, 
-    and confirms the sample type for labeling.
+    Updates status to 'Accepted', generates an Accession Number, 
+    and captures the exact timestamp of acceptance.
     """
     db_req = db.query(models.LabRequest).filter(models.LabRequest.id == request_id).first()
     
@@ -194,23 +193,27 @@ def accept_test_request(
     # 1. Update Status & Chain of Custody
     db_req.status = "Accepted" 
     
-    # 2. Generate Unique Accession Number for Barcoding
-    # Format: ACC-YYYYMMDD-HEX (Professional LIS Standard)
+    # 2. Generate Unique Accession Number
     date_str = datetime.now().strftime("%Y%m%d")
     unique_suffix = uuid.uuid4().hex[:4].upper()
     db_req.accession_number = f"ACC-{date_str}-{unique_suffix}"
     
-    # 3. Capture Clinical Metadata from the Technician
+    # 3. Capture Clinical Metadata & Precise Acceptance Timestamp
     db_req.sample_type = confirmation.sample_type
-    db_req.collection_started_at = datetime.now() # The "Handshake" timestamp
+    
+    # Using UTC to ensure consistency across time zones
+    db_req.accepted_at = datetime.now(timezone.utc) 
     
     try:
         db.commit()
         db.refresh(db_req)
-        return db_req
+        # Using the helper function you already have ensures the 
+        # flattened fields (patient_name, etc.) are included in the response
+        return flatten_lab_data(db_req)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Database error during acceptance")
+        raise HTTPException(status_code=500, detail=f"Database error during acceptance: {str(e)}")
+
 
 @router.put("/requests/{request_id}/reject", response_model=schemas.LabRequestResponse)
 def reject_test_request(request_id: int, db: Session = Depends(get_db)):

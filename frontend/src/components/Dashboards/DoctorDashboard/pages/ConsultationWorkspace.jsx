@@ -238,7 +238,10 @@ useEffect(() => {
         ...prescription, 
         { 
           ...newMed, 
-          quantity: calculatedQty, // System calculated
+          name: newMed.name,          // Ensure this key exists
+          medicine_name: newMed.name, // Added for backend compatibility
+          quantity: calculatedQty, 
+          route: newMed.route || "Oral", // Ensure route is included
           id: Date.now() 
         }
       ]);
@@ -436,92 +439,96 @@ const handleFinalize = async () => {
   </h3>
 
   {/* SECTION 1: MEDICINE ENTRY */}
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', position: 'relative' }}>
-    <div style={{ position: 'relative' }}>
-      <input 
-        style={{ ...styles.input, width: '100%', border: '1px solid #e2e8f0' }} 
-        placeholder="Search Medicine (e.g. Calpol)" 
-        value={newMed.name} 
-        onChange={(e) => {
-          const val = e.target.value;
-          setNewMed({...newMed, name: val});
-          if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-          if (val.length > 1) {
-            searchTimeoutRef.current = setTimeout(() => searchMedicines(val), 300);
-          } else {
-            setSuggestions([]);
-            setShowSuggestions(false);
-          }
-        }} 
-      />
+<div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', position: 'relative' }}>
+  <div style={{ position: 'relative' }}>
+    <input 
+      style={{ ...styles.input, width: '100%', border: '1px solid #e2e8f0' }} 
+      placeholder="Search Medicine (e.g. Calpol)" 
+      value={newMed.name} 
+      onChange={(e) => {
+        const val = e.target.value;
+        setNewMed({...newMed, name: val});
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        if (val.length > 1) {
+          searchTimeoutRef.current = setTimeout(() => searchMedicines(val), 300);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      }} 
+    />
 
-      {/* SUGGESTION DROPDOWN */}
-      {showSuggestions && suggestions.length > 0 && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0,
-          backgroundColor: 'white', border: '1px solid #e2e8f0',
-          borderRadius: '8px', zIndex: 9999,
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-          maxHeight: '250px', overflowY: 'auto'
-        }}>
-          {suggestions.map((item, idx) => (
-            <div 
-              key={idx}
-              onClick={() => {
-                setNewMed({
-                  name: item.name,
-                  dosage: item.strength || '', 
-                  frequency: '1-0-1',
-                  salt_composition: item.salt_composition
-                });
-                setShowSuggestions(false);
-              }}
-              style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-            >
-              <div style={{ fontWeight: '700', color: '#1e293b' }}>{item.name}</div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>{item.salt_composition}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-
-    <div style={{ display: 'flex', gap: '8px' }}>
-      <select 
-        style={{ ...styles.input, flex: 1 }}
-        value={newMed.frequency}
-        onChange={(e) => setNewMed({...newMed, frequency: e.target.value})}
-      >
-        <option value="1-0-1">1-0-1 (Twice Daily)</option>
-        <option value="1-1-1">1-1-1 (Thrice Daily)</option>
-        <option value="1-0-0">1-0-0 (Morning Only)</option>
-        <option value="0-0-1">0-0-1 (Night Only)</option>
-        <option value="SOS">SOS (As Needed)</option>
-      </select>
-     {/* 5. NEW DURATION SELECTOR */}
-     <select 
-            style={{ ...styles.input, flex: 1 }}
-            value={newMed.duration}
-            onChange={(e) => setNewMed({...newMed, duration: e.target.value})}
+    {/* SUGGESTION DROPDOWN */}
+    {showSuggestions && suggestions.length > 0 && (
+      <div style={{
+        position: 'absolute', top: '100%', left: 0, right: 0,
+        backgroundColor: 'white', border: '1px solid #e2e8f0',
+        borderRadius: '8px', zIndex: 9999,
+        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+        maxHeight: '250px', overflowY: 'auto'
+      }}>
+        {suggestions.map((item, idx) => (
+          <div 
+            key={idx}
+            onClick={() => {
+              setNewMed({
+                ...newMed,
+                name: item.name,
+                dosage: item.strength || '', 
+                frequency: '1-0-1',
+              });
+              setShowSuggestions(false);
+            }}
+            style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
           >
-            <option value="1 Day">1 Day</option>
-            <option value="3 Days">3 Days</option>
-            <option value="5 Days">5 Days</option>
-            <option value="7 Days">7 Days</option>
-            <option value="10 Days">10 Days</option>
-            <option value="15 Days">15 Days</option>
-            <option value="30 Days">30 Days</option>
-          </select>
-      <button 
-        onClick={addMedicine} 
-        style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer' }}
-      >
-        <Plus size={20} />
-      </button>
-    </div>
+            <div style={{ fontWeight: '700', color: '#1e293b' }}>{item.name}</div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>{item.salt_composition}</div>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
+
+  {/* SELECTORS ROW */}
+  <div style={{ display: 'flex', gap: '8px' }}>
+    <select 
+      style={{ ...styles.input, flex: 1 }}
+      value={newMed.frequency}
+      onChange={(e) => setNewMed({...newMed, frequency: e.target.value})}
+    >
+      <option value="1-0-1">1-0-1 (Twice Daily)</option>
+      <option value="1-1-1">1-1-1 (Thrice Daily)</option>
+      <option value="1-0-0">1-0-0 (Morning Only)</option>
+      <option value="0-0-1">0-0-1 (Night Only)</option>
+      <option value="SOS">SOS (As Needed)</option>
+    </select>
+
+    <select 
+      style={{ ...styles.input, flex: 1 }}
+      value={newMed.duration}
+      onChange={(e) => setNewMed({...newMed, duration: e.target.value})}
+    >
+      <option value="1 Day">1 Day</option>
+      <option value="3 Days">3 Days</option>
+      <option value="5 Days">5 Days</option>
+      <option value="7 Days">7 Days</option>
+      <option value="10 Days">10 Days</option>
+      <option value="15 Days">15 Days</option>
+      <option value="30 Days">30 Days</option>
+    </select>
+
+    
+
+    <button 
+      onClick={addMedicine} 
+      style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '0 15px', cursor: 'pointer' }}
+    >
+      <Plus size={20} />
+    </button>
+  </div>
+</div>
 
   {/* SECTION 2: MEDICINE LIST */}
   <div style={{ flex: 1, overflowY: 'auto', marginBottom: '15px' }}>

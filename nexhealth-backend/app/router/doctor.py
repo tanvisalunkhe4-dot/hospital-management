@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, WebSocketDisconnect, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 from typing import List, Dict, Any
-from datetime import date
+from datetime import date, datetime
 import shutil
 import os
 import io
@@ -24,7 +24,7 @@ from app.db.models import MedicineCatalog
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
 
-router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
+router = APIRouter(tags=["Doctor Portal"])
 
 class ScribeTextRequest(BaseModel):
     raw_text: str
@@ -37,7 +37,17 @@ class FinalizeConsultationRequest(BaseModel):
     hospital_id: int
     appointment_id: int  
     lab_tests: List[LabTestItem]
+class PrescriptionSchema(BaseModel):
+    medicine: str
+    dosage: str
+    duration: str
+    frequency: str
 
+class MedicalHistorySchema(BaseModel):
+    id: int
+    diagnosis: str
+    date: datetime
+    prescriptions: List[PrescriptionSchema]
 
 STATUS_VITALS_TAKEN = "Vitals Taken"
 STATUS_SCHEDULED = "Scheduled"
@@ -619,4 +629,56 @@ def get_reports_for_doctor_review(staff_id: str, db: Session = Depends(get_db)):
             "generated_at": r.report_generated_at
         }
         for r in reports
+    ]
+
+@router.get("/patient/{patient_id}/prescriptions")
+def get_patient_prescriptions(patient_id: int, db: Session = Depends(get_db)):
+    # 1. Fetch records with pre-loaded prescriptions
+    records = db.query(models.MedicalRecord)\
+        .options(joinedload(models.MedicalRecord.prescriptions))\
+        .filter(models.MedicalRecord.patient_id == patient_id)\
+        .order_by(models.MedicalRecord.created_at.desc())\
+        .all()
+    
+    # 2. Return structured, nested data
+    return [
+        {
+            "visit_date": r.created_at.strftime("%Y-%m-%d"),
+            "diagnosis": r.diagnosis,
+            "prescriptions": [
+                {
+                    "medicine": p.medicine_name,
+                    "dosage": p.dosage,
+                    "frequency": p.frequency,
+                    "duration": p.duration,
+                    "quantity": p.quantity
+                } for p in r.prescriptions
+            ]
+        } for r in records
+    ]
+
+@router.get("/patient/{patient_id}/full-history")
+def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
+    # Fetch medical records with pre-loaded prescriptions
+    records = db.query(models.MedicalRecord)\
+        .options(joinedload(models.MedicalRecord.prescriptions))\
+        .filter(models.MedicalRecord.patient_id == patient_id)\
+        .order_by(models.MedicalRecord.created_at.desc())\
+        .all()
+    
+    # Return a structured response
+    return [
+        {
+            "id": r.id,
+            "diagnosis": r.diagnosis,
+            "date": r.created_at,
+            "prescriptions": [
+                {
+                    "medicine": p.medicine_name,
+                    "dosage": p.dosage,
+                    "duration": p.duration,
+                    "frequency": p.frequency
+                } for p in r.prescriptions
+            ]
+        } for r in records
     ]
