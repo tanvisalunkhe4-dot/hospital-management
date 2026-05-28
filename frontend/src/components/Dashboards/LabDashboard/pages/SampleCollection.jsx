@@ -149,8 +149,7 @@ const SampleCollection = () => {
   
             <div class="field"><span class="label-title">Test:</span> <span>${sample.test_name}</span></div>
             <div class="field"><span class="label-title">Type:</span> <span>${sample.sample_type}</span></div>
-            <div class="field"><span class="label-title">Collected:</span> <span>${new Date().toLocaleString('en-IN')}</span></div>
-            
+<div class="field"><span class="label-title">Accepted/Queue:</span> <span>${formatIST(sample.accepted_at)}</span></div>            
             <div class="footer-section">
               <div class="field"><span class="label-title">Doctor:</span> <span>${sample.doctor_name || 'N/A'}</span></div>
               <div class="field"><span class="label-title">Dept:</span> <span>${sample.doctor_dept || 'N/A'}</span></div>
@@ -501,7 +500,8 @@ const SampleCollection = () => {
                     <td style={{ padding: '16px 24px' }}>
   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', fontWeight: '600', color: '#334155' }}>
     <Clock size={14} color="#94a3b8" /> 
-    {formatIST(sample.collection_time)}
+    {/* Use the field coming from your DB: sample.accepted_at */}
+    {formatIST(sample.accepted_at)} 
   </div>
 </td>
 

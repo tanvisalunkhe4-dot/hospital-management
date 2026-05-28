@@ -6,7 +6,6 @@ const DoctorHeader = ({ doctorName }) => {
     <header style={headerStyle}>
       <div style={searchWrapper}>
         <Search size={18} color="#94a3b8" />
-        <input type="text" placeholder="Search patient history..." style={searchInput} />
       </div>
       
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>

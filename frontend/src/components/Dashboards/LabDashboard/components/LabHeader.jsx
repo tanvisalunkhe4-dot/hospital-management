@@ -56,23 +56,7 @@ const LabHeader = () => {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-        {/* Search Mockup for realism */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '12px' }} />
-          <input 
-            type="text" 
-            placeholder="Search records..." 
-            style={{ 
-              padding: '10px 15px 10px 40px', 
-              borderRadius: '12px', 
-              border: '1px solid #f1f5f9', 
-              backgroundColor: '#f8fafc',
-              fontSize: '13px',
-              width: '220px',
-              outline: 'none'
-            }} 
-          />
-        </div>
+        
 
         {/* Notifications */}
         <div style={{ position: 'relative', cursor: 'pointer' }}>

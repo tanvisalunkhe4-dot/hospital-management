@@ -4,6 +4,7 @@ import datetime
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
+from fastapi.staticfiles import StaticFiles 
 
 
 # 1. Initialize the app ONLY ONCE
@@ -61,7 +62,7 @@ app.include_router(superadmin_router)
 
 # Your Specialized Portals
 app.include_router(receptionist_router.router)
-app.include_router(doctor_router.router)
+app.include_router(doctor_router.router, prefix="/api/v1/doctor")  
 app.include_router(nurse.router)
 
 app.include_router(pharmacy.router)
