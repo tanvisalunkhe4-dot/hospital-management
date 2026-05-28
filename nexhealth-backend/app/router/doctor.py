@@ -570,8 +570,8 @@ def accept_lab_report(request_id: int, db: Session = Depends(get_db)):
 @router.get("/patient/{patient_id}/history")
 def get_patient_medical_history(patient_id: int, db: Session = Depends(get_db)):
     """
-    Fetches history, allergies, and conditions for a specific patient,
-    including vitals linked to each visit's appointment.
+    Fetches patient history and vitals.
+    Updated to query Vitals based on patient_id and temporal proximity.
     """
     # 1. Fetch Patient Basic Info
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
@@ -586,27 +586,31 @@ def get_patient_medical_history(patient_id: int, db: Session = Depends(get_db)):
     # 3. Format Response
     visit_history_data = []
     for r in history:
-        # Fetch vitals associated with the specific appointment of this record
+        # Instead of appointment_id, query Vitals for this patient.
+        # We find the most recent Vitals entry that occurred on or before the visit date.
         vitals = db.query(models.Vitals).filter(
-            models.Vitals.appointment_id == r.appointment_id
-        ).first()
+            models.Vitals.patient_id == patient_id,
+            models.Vitals.recorded_at <= r.created_at
+        ).order_by(models.Vitals.recorded_at.desc()).first()
+        
+        # Safely extract BP components
+        bp_parts = vitals.blood_pressure.split('/') if vitals and vitals.blood_pressure and '/' in vitals.blood_pressure else [None, None]
         
         visit_history_data.append({
             "id": f"NX-{r.id}",
             "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
             "diagnosis": r.diagnosis,
             "notes": r.treatment_plan,
-            # Dynamically pass vitals if they exist, otherwise None
-            "systolic": vitals.blood_pressure.split('/')[0] if vitals and vitals.blood_pressure and '/' in vitals.blood_pressure else None,
-            "diastolic": vitals.blood_pressure.split('/')[1] if vitals and vitals.blood_pressure and '/' in vitals.blood_pressure else None,
+            "systolic": bp_parts[0],
+            "diastolic": bp_parts[1],
             "temperature": vitals.temperature if vitals else None
         })
 
     return {
         "patient_info": {
             "name": f"{patient.first_name} {patient.last_name}",
-            "age": patient.age if hasattr(patient, 'age') else "N/A",
-            "blood_group": patient.blood_group if hasattr(patient, 'blood_group') else "N/A"
+            "age": getattr(patient, 'age', 'N/A'),
+            "blood_group": getattr(patient, 'blood_group', 'N/A')
         },
         "allergies": [], 
         "chronic_conditions": [], 
@@ -695,29 +699,3 @@ def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
     ]
 
 
-
-@router.get("/patient/{patient_id}/full-history")
-def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
-    # Fetch medical records with pre-loaded prescriptions
-    records = db.query(models.MedicalRecord)\
-        .options(joinedload(models.MedicalRecord.prescriptions))\
-        .filter(models.MedicalRecord.patient_id == patient_id)\
-        .order_by(models.MedicalRecord.created_at.desc())\
-        .all()
-    
-    # Return a structured response
-    return [
-        {
-            "id": r.id,
-            "diagnosis": r.diagnosis,
-            "date": r.created_at,
-            "prescriptions": [
-                {
-                    "medicine": p.medicine_name,
-                    "dosage": p.dosage,
-                    "duration": p.duration,
-                    "frequency": p.frequency
-                } for p in r.prescriptions
-            ]
-        } for r in records
-    ]
