@@ -653,3 +653,31 @@ def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
             ]
         } for r in records
     ]
+
+
+
+@router.get("/patient/{patient_id}/full-history")
+def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
+    # Fetch medical records with pre-loaded prescriptions
+    records = db.query(models.MedicalRecord)\
+        .options(joinedload(models.MedicalRecord.prescriptions))\
+        .filter(models.MedicalRecord.patient_id == patient_id)\
+        .order_by(models.MedicalRecord.created_at.desc())\
+        .all()
+    
+    # Return a structured response
+    return [
+        {
+            "id": r.id,
+            "diagnosis": r.diagnosis,
+            "date": r.created_at,
+            "prescriptions": [
+                {
+                    "medicine": p.medicine_name,
+                    "dosage": p.dosage,
+                    "duration": p.duration,
+                    "frequency": p.frequency
+                } for p in r.prescriptions
+            ]
+        } for r in records
+    ]
