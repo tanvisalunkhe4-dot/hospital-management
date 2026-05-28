@@ -333,13 +333,16 @@ def get_billing_queue(hosp_id: int, db: Session = Depends(get_db)):
     Fetches patients eligible for front-desk checkout.
     Captures pre-priced pharmacy entries, normal consultation completions, and fallback parameters.
     """
-    allowed_statuses = ["Pharmacy-Verified", "Pending-Billing", "Ready-to-Dispense", "Pending-Pharmacy"]
+    allowed_statuses = ["Pharmacy-Verified", "Pending-Billing", "Pending-Pharmacy"]
 
     results = db.query(models.Appointment, models.Patient).join(
         models.Patient, models.Appointment.patient_id == models.Patient.id
-    ).filter(
+    ).outerjoin(
+    models.Invoice, models.Invoice.appointment_id == models.Appointment.id
+).filter(
         models.Appointment.hospital_id == hosp_id,
-        models.Appointment.status.in_(allowed_statuses)
+        models.Appointment.status.in_(allowed_statuses),
+        models.Invoice.id == None
     ).all()
 
     return [
@@ -444,13 +447,14 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
         next_id = (last_invoice.id + 1) if last_invoice else 1
         inv_number = f"INV-{datetime.date.today().year}-{next_id:04d}"
 
-        subtotal = sum(item.unit_price * (item.quantity or 1) for item in invoice_in.items)
+        subtotal = sum(float(item.subtotal) for item in invoice_in.items)
         final_total = (subtotal * (1 + (invoice_in.tax_rate or 0.05))) - (invoice_in.discount or 0)
 
         new_invoice = models.Invoice(
             invoice_number=inv_number,
             patient_id=invoice_in.patient_id,
             hospital_id=invoice_in.hospital_id,
+            appointment_id=invoice_in.appointment_id,
             total_amount=final_total,
             status="Pending"
         )
@@ -462,12 +466,12 @@ def generate_invoice(invoice_in: invoice_schema.InvoiceCreate, db: Session = Dep
                 invoice_id=new_invoice.id,
                 service_name=item.service_name,
                 unit_price=item.unit_price,
-                subtotal=item.unit_price * (item.quantity or 1)
+                subtotal=float(item.subtotal)
             )
             db.add(db_item)
 
             # DEFERRED STOCK DEDUCTION LOOP: Execute stock reductions on final cashier execution
-            if getattr(item, 'type', None) == "Pharmacy" or item.service_name != "Consultation Fee":
+            if getattr(item, 'type', None) == "Pharmacy":
                 catalog_item = db.query(models.MedicineCatalog).filter(
                     models.MedicineCatalog.hospital_id == invoice_in.hospital_id,
                     models.MedicineCatalog.name == item.service_name
@@ -604,7 +608,7 @@ def get_available_doctors(hosp_id: int, db: Session = Depends(get_db)):
     
     if not doctors:
         return []
-        
+
     return [
         {
             "id": doc.id,

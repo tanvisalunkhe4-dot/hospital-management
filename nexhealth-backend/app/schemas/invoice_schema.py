@@ -4,9 +4,9 @@ from datetime import datetime
 
 class InvoiceItemBase(BaseModel):
     service_name: str
-    # Kept for backward compatibility with existing invoice generation route.
     quantity: int = 1
     unit_price: float
+    subtotal: float
 
 class InvoiceCreate(BaseModel):
     patient_id: int

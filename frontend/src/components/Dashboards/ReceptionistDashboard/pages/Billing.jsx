@@ -751,10 +751,18 @@ useEffect(() => {
     }
 }, [apptId, hosp_id]);
 
-const calculateTotal = () => items
-  .filter(item => item.is_available !== false) 
+const calculateTotal = () => {
+  const total = items
+  .filter(item => item.is_available !== false)
   .filter(item => !(skipPharmacy && item.type === 'Pharmacy'))
-  .reduce((acc, item) => acc + (item.unit_price * (item.quantity || 1)), 0);
+  .reduce(
+    (acc, item) =>
+      acc + (Number(item.unit_price) * Number(item.quantity || 1)),
+    0
+  );
+
+return Number(total.toFixed(2));
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -772,7 +780,7 @@ const calculateTotal = () => items
             return {
                 service_name: item.service_name,
                 unit_price: price,
-                subtotal: price * qty // Calculate subtotal explicitly as expected by InvoiceItem
+                subtotal: Number((price * qty).toFixed(2))
             };
         });
 
@@ -784,7 +792,7 @@ const calculateTotal = () => items
                 patient_id: parseInt(patientId), 
                 hospital_id: parseInt(hosp_id),
                 appointment_id: apptId ? parseInt(apptId) : null,
-                total_amount: parseFloat(calculateTotal()), // Maps directly to Invoice.total_amount
+                total_amount: Number(calculateTotal().toFixed(2)),
                 items: payloadItems, // Clean matching InvoiceItem list arrays
                 discount: 0, 
                 tax_rate: 0.00 
