@@ -570,7 +570,8 @@ def accept_lab_report(request_id: int, db: Session = Depends(get_db)):
 @router.get("/patient/{patient_id}/history")
 def get_patient_medical_history(patient_id: int, db: Session = Depends(get_db)):
     """
-    Fetches history, allergies, and conditions for a specific patient.
+    Fetches history, allergies, and conditions for a specific patient,
+    including vitals linked to each visit's appointment.
     """
     # 1. Fetch Patient Basic Info
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
@@ -583,23 +584,33 @@ def get_patient_medical_history(patient_id: int, db: Session = Depends(get_db)):
     ).order_by(desc(models.MedicalRecord.created_at)).all()
 
     # 3. Format Response
+    visit_history_data = []
+    for r in history:
+        # Fetch vitals associated with the specific appointment of this record
+        vitals = db.query(models.Vitals).filter(
+            models.Vitals.appointment_id == r.appointment_id
+        ).first()
+        
+        visit_history_data.append({
+            "id": f"NX-{r.id}",
+            "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
+            "diagnosis": r.diagnosis,
+            "notes": r.treatment_plan,
+            # Dynamically pass vitals if they exist, otherwise None
+            "systolic": vitals.blood_pressure.split('/')[0] if vitals and vitals.blood_pressure and '/' in vitals.blood_pressure else None,
+            "diastolic": vitals.blood_pressure.split('/')[1] if vitals and vitals.blood_pressure and '/' in vitals.blood_pressure else None,
+            "temperature": vitals.temperature if vitals else None
+        })
+
     return {
         "patient_info": {
             "name": f"{patient.first_name} {patient.last_name}",
             "age": patient.age if hasattr(patient, 'age') else "N/A",
             "blood_group": patient.blood_group if hasattr(patient, 'blood_group') else "N/A"
         },
-        "allergies": [], # Replace with your actual Allergy model query if you have one
-        "chronic_conditions": [], # Replace with your actual Condition model query
-        "visit_history": [
-            {
-                "id": f"NX-{r.id}",
-                "visit_date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "N/A",
-                "diagnosis": r.diagnosis,
-                "notes": r.treatment_plan
-            }
-            for r in history
-        ]
+        "allergies": [], 
+        "chronic_conditions": [], 
+        "visit_history": visit_history_data
     }
 
 @router.get("/reports/pending-review/{staff_id}")
