@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, cast, Date
 from typing import List, Dict, Any
 from datetime import date, datetime
 import shutil
 import os
 import io
 from pydantic import BaseModel
+
+import logging
+
+# Set up logging to see what is happening on the server
+logger = logging.getLogger("uvicorn.error")
 
 from app.constants import (
     STATUS_VITALS_TAKEN, 
@@ -699,6 +704,7 @@ def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
     ]
 
 
+
 @router.get("/doctor-schedule")
 def get_doctor_schedule(
     staff_id: str, 
@@ -706,32 +712,91 @@ def get_doctor_schedule(
     db: Session = Depends(get_db)
 ):
     """
-    Fetches the schedule for a specific doctor on a specific date.
+    Fetches the schedule for a specific doctor on a specific date,
+    using SQL casting to ensure time-agnostic date matching.
     """
-    # 1. Resolve the internal database ID for the doctor
-    doctor = resolve_staff_record(staff_id, db)
-    
-    # 2. Query appointments for this doctor on the requested date
-    # Adjust 'models.Appointment' and fields to match your actual database schema
-    appointments = (
-        db.query(models.Appointment)
-        .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
-        .filter(
-            models.Appointment.doctor_id == doctor.id,
-            models.Appointment.appointment_date == date
+    try:
+        # 1. Resolve the internal database ID
+        doctor = resolve_staff_record(staff_id, db)
+        
+        # 2. Log the parameters to verify what the frontend is sending
+        logger.info(f"Fetching schedule for Doctor ID: {doctor.id} on Date: {date}")
+        
+        # 3. Query with cast to Date to ignore time components in the DB column
+        appointments = (
+            db.query(models.Appointment)
+            .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
+            .filter(
+                models.Appointment.doctor_id == doctor.id,
+                cast(models.Appointment.appointment_date, Date) == date
+            )
+            .order_by(models.Appointment.appointment_time.asc())
+            .all()
         )
-        .order_by(models.Appointment.appointment_time.asc())
-        .all()
-    )
+        
+        logger.info(f"Found {len(appointments)} appointments.")
 
-    # 3. Format the response
-    return [
-        {
-            "id": appt.id,
-            "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
-            "time": appt.appointment_time.strftime("%I:%M %p") if appt.appointment_time else "N/A",
-            "appointment_type": appt.reason, # or your specific appointment_type field
-            "status": appt.status
-        }
-        for appt in appointments
-    ]
+        # 4. Format the response
+        return [
+            {
+                "id": appt.id,
+                "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
+                "time": appt.appointment_time.strftime("%I:%M %p") if appt.appointment_time else "N/A",
+                "appointment_type": appt.reason,
+                "status": appt.status,
+                "priority": getattr(appt, 'priority', 'Normal'),
+                "abdm_verified": getattr(appt.patient, 'abdm_verified', False),
+                "last_visit": getattr(appt.patient, 'last_visit_date', None)
+            }
+            for appt in appointments
+        ]
+    
+    except Exception as e:
+        logger.error(f"Error fetching schedule: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error while fetching schedule.")
+
+@router.get("/dashboard-stats")
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    staff_record = db.query(models.Staff).filter(
+        models.Staff.email.ilike(current_user.email)
+    ).first()
+    
+    if not staff_record:
+        raise HTTPException(status_code=404, detail="Staff profile not found")
+
+    # FIX: Get the actual doctor_profile ID linked to this staff
+    doctor_profile = db.query(models.Doctor).filter(
+        models.Doctor.staff_ref_id == staff_record.id
+    ).first()
+    
+    if not doctor_profile:
+        # Fallback if they are staff but not a doctor, or just return 0s
+        return {"total_patients": "0", "today_patients": "0", "today_appointments": "0"}
+
+    today = date.today()
+    
+    # Use doctor_profile.id instead of staff_record.id
+    total_patients = db.query(models.MedicalRecord)\
+        .filter(models.MedicalRecord.doctor_id == doctor_profile.id)\
+        .distinct(models.MedicalRecord.patient_id).count()
+
+    today_patients = db.query(models.MedicalRecord)\
+        .filter(
+            models.MedicalRecord.doctor_id == doctor_profile.id,
+            cast(models.MedicalRecord.created_at, Date) == today # Added cast to be safe
+        ).count()
+
+    today_appointments = db.query(models.Appointment)\
+        .filter(
+            models.Appointment.doctor_id == staff_record.id, # Keep this IF Appointments link to Staff
+            cast(models.Appointment.appointment_date, Date) == today
+        ).count()
+
+    return {
+        "total_patients": str(total_patients),
+        "today_patients": str(today_patients),
+        "today_appointments": str(today_appointments)
+    }
