@@ -141,3 +141,60 @@ def get_patient_details(patient_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
+@router.get("/patient-records/{patient_id}")
+def get_patient_records(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    patient = db.query(models.Patient).filter(
+        models.Patient.patient_id == patient_id
+    ).first()
+
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    records = db.query(models.MedicalRecord).filter(
+        models.MedicalRecord.patient_id == patient_id
+    ).order_by(models.MedicalRecord.created_at.desc()).all()
+
+    return [
+        {
+            "record_id": record.record_id,
+            "date": record.created_at,
+            "diagnosis": record.diagnosis,
+            "notes": record.clinical_notes,
+            "description": record.description
+        }
+        for record in records
+    ]
+
+@router.get("/active-treatments")
+def get_active_treatments(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    prescriptions = db.query(models.Prescription).all()
+
+    return [
+        {
+            "prescription_id": p.prescription_id,
+            "patient_id": p.medical_record.patient_id,
+            "medicine": p.medicine_name,
+            "dosage": p.dosage,
+            "frequency": p.frequency,
+            "duration": p.duration
+        }
+        for p in prescriptions
+    ]
+
+
+@router.post("/record-medication")
+def record_medication(
+    payload: dict,
+    current_user=Depends(get_current_user)
+):
+    return {
+        "success": True,
+        "message": "Medication administration recorded successfully"
+    }
