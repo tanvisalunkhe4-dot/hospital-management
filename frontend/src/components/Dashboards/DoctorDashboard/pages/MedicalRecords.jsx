@@ -15,6 +15,7 @@ api.interceptors.request.use((config) => {
 });
 
 const MedicalRecords = () => {
+  const [sortOption, setSortOption] = useState("all");
   const [activePatientId, setActivePatientId] = useState(null);
   const [expandedVisit, setExpandedVisit] = useState(null); // Tracks the index of the open visit
   const [view, setView] = useState('list');
@@ -23,10 +24,35 @@ const MedicalRecords = () => {
   const [historyData, setHistoryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [labReports, setLabReports] = useState([]);
-  const uniquePatientsCount = new Set(records.map(r => r.patient_id)).size;
-  const uniquePatientList = Array.from(new Map(records.map(r => [r.patient_id, r])).values());
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState(null);
-  const totalVisits = records.length;
+
+
+  const filteredRecords = records.filter(r => {
+    const matchesSearch = r.patient_name?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "All" || r.status?.toLowerCase() === statusFilter.toLowerCase();
+    return matchesSearch && matchesStatus;
+  });
+
+  
+// 1. Get the unique list as you already have
+const uniquePatientList = Array.from(new Map(filteredRecords.map(r => [r.patient_id, r])).values());
+
+// 2. Add this sorting logic right after
+const sortedList = [...uniquePatientList].sort((a, b) => {
+  if (sortOption === "az") {
+    return a.patient_name.localeCompare(b.patient_name);
+  }
+  if (sortOption === "oldest") {
+    return new Date(a.visit_date) - new Date(b.visit_date);
+  }
+  // Default: "newest"
+  return new Date(b.visit_date) - new Date(a.visit_date);
+});
+
+const uniquePatientsCount = new Set(filteredRecords.map(r => r.patient_id)).size;
+const totalVisits = filteredRecords.length;
   const pendingLabs = 3; 
 
   const fetchRecords = async () => {
@@ -137,11 +163,51 @@ const fetchPrescriptions = async (patientId) => {
 
   if (loading) return <div style={{ padding: '60px', textAlign: 'center' }}><Loader2 className="animate-spin" size={32} color="#059669" /></div>;
 
+
   return (
     <div style={{ padding: '0 8px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* 1. LIST VIEW */}
       {view === 'list' ? (
         <>
+
+
+
+<div style={{ display: 'flex', gap: '16px', marginBottom: '24px', padding: '0 24px' }}>
+  {/* Search Bar */}
+  <div style={{ 
+    display: 'flex', alignItems: 'center', gap: '12px', 
+    backgroundColor: '#ffffff', padding: '10px 20px', 
+    borderRadius: '8px', border: '1px solid #e2e8f0', 
+    width: '320px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' 
+  }}>
+    <FileSearch size={18} color="#94a3b8" />
+    <input 
+      type="text" 
+      placeholder="Search patient name..." 
+      style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px' }}
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+    />
+  </div>
+
+  {/* Dropdown */}
+  <select 
+    value={sortOption} 
+    onChange={(e) => setSortOption(e.target.value)}
+    style={{ 
+      padding: '10px 16px', borderRadius: '8px', 
+      border: '1px solid #e2e8f0', color: '#475569', 
+      outline: 'none', cursor: 'pointer', fontSize: '14px',
+      backgroundColor: 'white', fontWeight: '500'
+    }}
+  >
+    <option value="all">All</option>
+    <option value="newest">Newest First</option>
+    <option value="oldest">Oldest First</option>
+    <option value="az">A-Z Name</option>
+  </select>
+</div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '24px' }}>
             <StatCard icon={Users} color="#059669" title="Active Patients" value={uniquePatientsCount} />
             <StatCard icon={Activity} color="#8b5cf6" title="Total Consultations" value={totalVisits} />
@@ -163,7 +229,7 @@ const fetchPrescriptions = async (patientId) => {
                 </tr>
               </thead>
               <tbody>
-                {uniquePatientList.map((r, i) => (
+              {sortedList.map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '16px 24px', fontWeight: '500', color: '#334155' }}>{r.patient_name}</td>
                     <td style={{ padding: '16px 24px', color: '#64748b', fontSize: '14px' }}>{r.visit_date}</td>

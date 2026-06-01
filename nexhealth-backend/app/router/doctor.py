@@ -697,3 +697,41 @@ def get_patient_full_history(patient_id: int, db: Session = Depends(get_db)):
             ]
         } for r in records
     ]
+
+
+@router.get("/doctor-schedule")
+def get_doctor_schedule(
+    staff_id: str, 
+    date: date = Query(...), 
+    db: Session = Depends(get_db)
+):
+    """
+    Fetches the schedule for a specific doctor on a specific date.
+    """
+    # 1. Resolve the internal database ID for the doctor
+    doctor = resolve_staff_record(staff_id, db)
+    
+    # 2. Query appointments for this doctor on the requested date
+    # Adjust 'models.Appointment' and fields to match your actual database schema
+    appointments = (
+        db.query(models.Appointment)
+        .join(models.Patient, models.Appointment.patient_id == models.Patient.id)
+        .filter(
+            models.Appointment.doctor_id == doctor.id,
+            models.Appointment.appointment_date == date
+        )
+        .order_by(models.Appointment.appointment_time.asc())
+        .all()
+    )
+
+    # 3. Format the response
+    return [
+        {
+            "id": appt.id,
+            "patient_name": f"{appt.patient.first_name} {appt.patient.last_name}",
+            "time": appt.appointment_time.strftime("%I:%M %p") if appt.appointment_time else "N/A",
+            "appointment_type": appt.reason, # or your specific appointment_type field
+            "status": appt.status
+        }
+        for appt in appointments
+    ]

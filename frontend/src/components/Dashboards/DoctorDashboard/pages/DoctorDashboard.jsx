@@ -11,6 +11,7 @@ import PatientQueue from "./PatientQueue";
 import ConsultationWorkspace from "./ConsultationWorkspace";
 import LabReports from "./LabReports";
 import MedicalRecords from "./MedicalRecords";
+import DoctorSchedule from "./Schedule";
 import { Medal } from "lucide-react";
 // A small reusable table component for Records/Reports
 const DataView = ({ title, icon, data, columns }) => (
@@ -114,6 +115,7 @@ const handleStartConsultation = (patient) => {
   const handleRequestTestNavigation = () => {
     setActiveTab('reports');
   };
+  
 
   const handleCompleteConsultation = () => {
     setSelectedPatient(null);
@@ -163,6 +165,10 @@ const handleStartConsultation = (patient) => {
                 isBusy={!!selectedPatient} // Prevents double-starting visits[cite: 7]
               />
             )}
+
+{activeTab === 'schedule' && (
+    <DoctorSchedule />
+  )}
             {activeTab === 'consultation' && (
   <ConsultationWorkspace 
     patient={selectedPatient} 

@@ -1,8 +1,7 @@
 import React from 'react';
 import { Users, FileText, Activity, Calendar, LogOut, ChevronRight, LayoutDashboard } from 'lucide-react';
 
-
-const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
+const DoctorSidebar = ({ activeTab, setActiveTab, onLogout, doctorName = "Dr. Sneha Kulkarni" }) => {
   const menuItems = [
     { id: 'overview', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { id: 'queue', label: 'Patient Queue', icon: <Users size={20} /> },
@@ -14,7 +13,7 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
   const styles = {
     sidebar: {
       width: '280px',
-      backgroundColor: '#ffffff', // Clean white background like Receptionist
+      backgroundColor: '#ffffff',
       color: '#1e293b',
       display: 'flex',
       flexDirection: 'column',
@@ -22,7 +21,7 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
       position: 'fixed',
       left: 0,
       top: 0,
-      borderRight: '1px solid #e2e8f0', // Subtle professional border
+      borderRight: '1px solid #e2e8f0',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
       zIndex: 100
     },
@@ -42,8 +41,7 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
       borderRadius: '12px',
       cursor: 'pointer',
       marginBottom: '8px',
-      // Uses the emerald theme color for active states
-      backgroundColor: isActive ? '#ecfdf5' : 'transparent', 
+      backgroundColor: isActive ? '#ecfdf5' : 'transparent',
       color: isActive ? '#059669' : '#64748b',
       transition: 'all 0.2s ease',
       fontWeight: isActive ? '700' : '500',
@@ -59,7 +57,7 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
       gap: '12px',
       padding: '12px 20px',
       cursor: 'pointer',
-      color: '#ef4444', // Professional red for logout
+      color: '#ef4444',
       borderRadius: '12px',
       transition: 'background 0.2s ease',
       fontWeight: '600',
@@ -84,9 +82,14 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
             key={item.id} 
             style={styles.navItem(activeTab === item.id)} 
             onClick={() => setActiveTab(item.id)}
+            onMouseEnter={(e) => {
+              if (activeTab !== item.id) e.currentTarget.style.backgroundColor = '#f8fafc';
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== item.id) e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {/* Icon color matches text for active/inactive states */}
               {React.cloneElement(item.icon, { 
                 size: 20, 
                 color: activeTab === item.id ? '#059669' : '#94a3b8' 
@@ -97,6 +100,18 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => {
           </div>
         ))}
       </nav>
+
+      <div style={{ padding: '20px', borderTop: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#059669', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '12px' }}>
+            {doctorName.split(' ').map(n => n[0]).join('')}
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>{doctorName}</p>
+            <p style={{ margin: 0, fontSize: '11px', color: '#64748b' }}>NexHealth Specialist</p>
+          </div>
+        </div>
+      </div>
        
       <div style={styles.logoutSection}>
         <div 
