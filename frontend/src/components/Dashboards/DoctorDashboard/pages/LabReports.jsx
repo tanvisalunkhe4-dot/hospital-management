@@ -15,6 +15,7 @@ const LabReports = ({ patient, onBack }) => {
   const [successMessage, setSuccessMessage] = useState(""); // Feedback for the doctor
   const [selectedPriority, setSelectedPriority] = useState("Normal");
   const [newlyAddedTests, setNewlyAddedTests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("All");
   const pId = patient?.patient_id || patient?.id;
   const [resultView, setResultView] = useState(null);
   const fetchReports = async () => {
