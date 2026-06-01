@@ -12,7 +12,7 @@ const NurseOverview = () => {
 
   return (
     <div style={containerStyle}>
-      <h2 style={welcomeStyle}>Daily Overview</h2>
+      <h2 style={welcomeStyle}>Nurse Dashboard</h2>
       
       {/* Statistics Grid */}
       <div style={statsGrid}>
