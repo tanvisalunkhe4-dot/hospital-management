@@ -2,37 +2,74 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import theme from '../theme/theme';
 import logo from '../assets/logo.png';
+import DemoModal from '../components/DemoModal';
 import { 
   Stethoscope, 
-  Wallet, 
-  Boxes, 
   FlaskConical, 
-  ReceiptIndianRupee, 
-  Video, 
-  Users,
-  ChevronDown, UserPlus, ShieldCheck, Link as LinkIcon, 
-  DownloadCloud, UploadCloud, FileCheck, CreditCard
+  ShieldCheck, 
+  Activity, 
+  Heart, 
+  LayoutGrid, 
+  FileSearch, 
+  ClipboardCheck, 
+  Database,
+  X,
+  Play,
+  ArrowRight,
+  CheckCircle2
 } from 'lucide-react';
 
 const LandingPage = ({ onNavigate, onGetStarted, onLoginClick }) => { 
+  const [showDemoModal, setShowDemoModal] = useState(false);
+  const [demoStep, setDemoStep] = useState(1);
+  
+  // Real project features mapped from your frontend modules
   const features = [
     { 
-      name: "ABDM Compliance", 
+      name: "ABDM Sync Core", 
       icon: (
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-          <path d="M12 2L3 7V12C3 17.5 7 21 12 23C17 21 21 17.5 21 12V7L12 2Z" fill="#005A9C"/>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L3 7V12C3 17.5 7 21 12 23C17 21 21 17.5 21 12V7L12 2Z" fill="#10b981"/>
           <path d="M12 6V18M8 10H16M8 14H16" stroke="white" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       ), 
-      desc: "Instant ABHA creation and seamless health record linking (ABD-M compliant)." 
+      desc: "Architectural tracking using Unique Health Identifiers (UHID) tied directly to active check-ins." 
     },
-    { name: "Doctor's Scribe", icon: <Stethoscope size={32} color="#10b981" />, desc: "AI-powered clinical notes and prescription management." },
-    { name: "Patient Wallet", icon: <Wallet size={32} color="#10b981" />, desc: "Seamless digital payments and credit management." },
-    { name: "Staff Inventory", icon: <Boxes size={32} color="#10b981" />, desc: "Real-time tracking of hospital supplies and medical stock." },
-    { name: "Lab & Diagnostics", icon: <FlaskConical size={32} color="#10b981" />, desc: "Integrated lab module for automated test results." },
-    { name: "GST Billing", icon: <ReceiptIndianRupee size={32} color="#10b981" />, desc: "Simplified tax-compliant invoicing for all services." },
-    { name: "Telehealth Hub", icon: <Video size={32} color="#10b981" />, desc: "Connect with patients via secure video calls." },
-    { name: "OPD Queue", icon: <Users size={32} color="#10b981" />, desc: "Live tracking of patient wait times and availability." },
+    { 
+      name: "Global Patient Lookup", 
+      icon: <FileSearch size={32} color="#10b981" />, 
+      desc: "Instantly fetch and reconstruct past records from the central patient archive matrix." 
+    },
+    { 
+      name: "Multi-Tab Clinical Desk", 
+      icon: <Stethoscope size={32} color="#10b981" />, 
+      desc: "Interactive panel bridging demographics, prescriptions, and diagnostics on one viewport." 
+    },
+    { 
+      name: "Vitals Telemetry Flowsheets", 
+      icon: <Activity size={32} color="#10b981" />, 
+      desc: "Structured entry logs for Pulse Rate, SpO2, Temperature, and Blood Pressure." 
+    },
+    { 
+      name: "Vitals Priority Flags", 
+      icon: <Heart size={32} color="#10b981" />, 
+      desc: "Automated alert tags tracking and highlighting out-of-bounds clinical metrics." 
+    },
+    { 
+      name: "12-Bed Smart Ward Matrix", 
+      icon: <LayoutGrid size={32} color="#10b981" />, 
+      desc: "Responsive grid mapping active patient check-ins and vacancy rates across floor boards." 
+    },
+    { 
+      name: "Diagnostic Lab Lifecycles", 
+      icon: <FlaskConical size={32} color="#10b981" />, 
+      desc: "Bidirectional processing tracking lab requests from order placement to finalization logs." 
+    },
+    { 
+      name: "Medication Execution Desk", 
+      icon: <ClipboardCheck size={32} color="#10b981" />, 
+      desc: "Real-time verification workspace tracking treatment states and drug dispatch actions." 
+    },
   ];
 
   const doubledFeatures = [...features, ...features];
@@ -47,21 +84,18 @@ const LandingPage = ({ onNavigate, onGetStarted, onLoginClick }) => {
         style={navbarStyle}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={logoStyle}>Nex<span style={{ color: theme.colors.primary }}>Health</span></span>
+          <span style={logoStyle}>Nex<span style={{ color: theme.colors.primary || '#10b981' }}>Health</span></span>
         </div>
 
         <div style={linkContainer}>
           <span style={navLink} onClick={() => onNavigate('about')}>About</span>
-          
-          
-
           <span style={navLink} onClick={() => onNavigate('features')}>Features</span>
           <span style={navLink} onClick={() => onNavigate('solutions')}>Solutions</span>
         </div>
         
         <div style={{ display: 'flex', gap: '16px' }}>
           <button onClick={onLoginClick} style={loginBtnStyle}>Login</button>
-          <button onClick={onGetStarted} style={getStartedBtnStyle}>Get Started</button>
+          <button onClick={() => setShowDemoModal(true)} style={getStartedBtnStyle}>Launch Live Demo</button>
         </div>
       </motion.nav>
 
@@ -75,30 +109,55 @@ const LandingPage = ({ onNavigate, onGetStarted, onLoginClick }) => {
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} style={{ position: 'relative', zIndex: 2 }}>
           <h1 style={heroH1}>
             The Digital Spine of <br />
-            <span style={heroGradientText}>Indian Healthcare.</span>
+            <span style={heroGradientText}>Clinical Operations.</span>
           </h1>
           <p style={heroSub}>
-            A unified, ABDM-compliant ecosystem designed for doctors and clinics. 
-            Automate your practice, link health records, and focus on patients.
+            A robust, high-fidelity clinical manager featuring multi-tenant database protection, 
+            real-time telemetry tracking, and integrated diagnostic tracking loops.
           </p>
           
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginBottom: '80px' }}>
-            <motion.button whileHover={{ y: -4 }} style={primaryBtn}>Start Free Trial</motion.button>
-            <motion.button whileHover={{ background: '#f1f5f9' }} style={secondaryBtn}>View Live Demo</motion.button>
+            {/* UPDATED: Launches Interactive Simulation UI instead of direct signups */}
+            <motion.button 
+              whileHover={{ y: -4 }} 
+              onClick={() => setShowDemoModal(true)} 
+              style={primaryBtn}
+            >
+              <Play size={18} style={{ marginRight: '8px', display: 'inline', verticalAlign: 'text-top' }} /> 
+              Launch Live Demo
+            </motion.button>
+            <motion.button whileHover={{ background: '#f1f5f9' }} onClick={() => onNavigate('features')} style={secondaryBtn}>Explore Features</motion.button>
           </div>
 
-          {/* Centered Dashboard Mockup */}
+          {/* Core Dashboard UI Architecture Mockup */}
           <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} style={mockupOuter}>
             <div style={mockupInner}>
               <div style={mockSidebar}>
-                {[1,2,3,4,5].map(i => <div key={i} style={{ ...mockLine, width: i === 1 ? '100%' : '70%', background: i === 1 ? '#10b98133' : '#e2e8f0' }} />)}
+                {[1, 2, 3, 4, 5].map(i => (
+                  <div key={i} style={{ ...mockLine, width: i === 1 ? '100%' : '75%', background: i === 1 ? '#10b98133' : '#e2e8f0' }} />
+                ))}
               </div>
-              <div style={{ flex: 1, padding: '40px' }}>
-                <div style={{ display: 'flex', gap: '20px', marginBottom: '40px' }}>
-                  <div style={mockMetricCard} />
-                  <div style={mockMetricCardLight} />
+              <div style={{ flex: 1, padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <div style={mockMetricCard}>
+                    <div style={{ width: '40%', height: '12px', background: '#10b981', borderRadius: '4px', margin: '12px' }} />
+                    <div style={{ width: '25%', height: '20px', background: '#047857', borderRadius: '4px', margin: '0 12px' }} />
+                  </div>
+                  <div style={mockMetricCardLight}>
+                    <div style={{ width: '50%', height: '12px', background: '#94a3b8', borderRadius: '4px', margin: '12px' }} />
+                    <div style={{ width: '30%', height: '20px', background: '#475569', borderRadius: '4px', margin: '0 12px' }} />
+                  </div>
                 </div>
-                <div style={mockChartArea} />
+                
+                <div style={mockChartArea}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', padding: '15px' }}>
+                    {Array.from({ length: 8 }).map((_, index) => (
+                      <div key={index} style={{ height: '50px', borderRadius: '8px', border: '1px solid #e2e8f0', background: index % 3 === 0 ? '#fef2f2' : '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: index % 3 === 0 ? '#ef4444' : '#10b981' }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -106,348 +165,279 @@ const LandingPage = ({ onNavigate, onGetStarted, onLoginClick }) => {
       </section>
 
       {/* 3. Feature Cards Flow - Infinite Marquee */}
-      {/* In your LandingPage.jsx */}
-<section style={{ padding: '100px 0' }}>
-  <h2 style={{ textAlign: 'center', marginBottom: '60px', fontSize: '2.8rem', fontWeight: '900' }}>
-     Powerful Solutions for Every Department
-  </h2>
-  <div style={marqueeWrapper}>
-    <motion.div 
-      animate={{ x: ["0%", "-50%"] }} 
-      transition={{ repeat: Infinity, duration: 45, ease: "linear" }} 
-      style={{ display: 'flex', gap: '30px', width: 'max-content' }}
-    >
-      {doubledFeatures.map((f, i) => (
-        <motion.div 
-          key={i} 
-          whileHover={{ y: -15, borderColor: '#10b981' }} 
-          // Redirect Trigger
-          onClick={() => onNavigate('features')} 
-          style={{ ...featureCardStyle, cursor: 'pointer' }}
-        >
-          <div style={featureIconWrapper}>{f.icon}</div>
-          <h4 style={featureTitle}>{f.name}</h4>
-          <p style={featureDesc}>{f.desc}</p>
-          <span style={featureLink}>Learn More ›</span>
-        </motion.div>
-      ))}
-    </motion.div>
-  </div>
-</section>
-    
-
-{/* --- 4. The "Unified Practice" Section (High-Fidelity Feature) --- */}
-<section style={{ padding: '120px 80px', background: theme.colors.cardWhite }}>
-  <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: '100px', alignItems: 'center' }}>
-      
-      {/* Left: Persuasive Content */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-      >
-        <div style={{ color: theme.colors.primary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '0.9rem', marginBottom: '20px' }}>
-          Clinical Intelligence
-        </div>
-        <h2 style={{ fontSize: '3.5rem', fontWeight: '900', color: theme.colors.text, lineHeight: 1.05, marginBottom: '30px', letterSpacing: '-1.5px' }}>
-          Every feature your <br /> practice needs to <br /> <span style={{ color: theme.colors.primary }}>work faster.</span>
+      <section style={{ padding: '100px 0', background: '#ffffff' }}>
+        <h2 style={{ textAlign: 'center', marginBottom: '16px', fontSize: '2.5rem', fontWeight: '900', color: '#0f172a', letterSpacing: '-1px' }}>
+           High-Fidelity Feature Matrix
         </h2>
-        <p style={{ fontSize: '1.25rem', color: theme.colors.subtitle, lineHeight: 1.6, marginBottom: '40px', maxWidth: '500px' }}>
-          NexHealth is a true all-in-one experience designed for Indian practitioners. Automate clinical notes with AI, simplify ABHA linking, and access everything in one optimized dashboard.
-        </p>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '40px' }}>
-          {['1-Minute AI Scribe', 'ABD-M Integrated', 'GST Ready Billing', 'WhatsApp Reports'].map((item) => (
-            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '700', color: theme.colors.text }}>
-              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: theme.colors.primary }} />
-              {item}
+        <p style={{ textAlign: 'center', color: '#64748b', marginBottom: '60px', fontSize: '1.1rem' }}>Fully synced frontend interfaces interacting directly with FastAPI database layers.</p>
+        <div style={marqueeWrapper}>
+          <motion.div 
+            animate={{ x: ["0%", "-50%"] }} 
+            transition={{ repeat: Infinity, duration: 35, ease: "linear" }} 
+            style={{ display: 'flex', gap: '30px', width: 'max-content' }}
+          >
+            {doubledFeatures.map((f, i) => (
+              <motion.div 
+                key={i} 
+                whileHover={{ y: -10, borderColor: '#10b981' }} 
+                onClick={() => onNavigate('features')} 
+                style={featureCardStyle}
+              >
+                <div style={featureIconWrapper}>{f.icon}</div>
+                <h4 style={featureTitle}>{f.name}</h4>
+                <p style={featureDesc}>{f.desc}</p>
+                <span style={featureLink}>Review Module Code ›</span>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+    
+      {/* 4. The "Unified Practice" Section */}
+      <section style={{ padding: '120px 80px', background: '#f8fafc' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: '100px', alignItems: 'center' }}>
+            
+            <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+              <div style={{ color: '#10b981', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '0.9rem', marginBottom: '20px' }}>
+                Secure Backend Architecture
+              </div>
+              <h2 style={{ fontSize: '3.2rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.1, marginBottom: '30px', letterSpacing: '-1.5px' }}>
+                Engineered for isolation, <br /> built for <span style={{ color: '#10b981' }}>clinical trust.</span>
+              </h2>
+              <p style={{ fontSize: '1.2rem', color: '#475569', lineHeight: 1.6, marginBottom: '40px' }}>
+                NexHealth coordinates mission-critical flows securely. Data operations are isolated under token-verified checks, preventing unauthorized cross-tenant queries.
+              </p>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '40px' }}>
+                {['Multi-Tenant Isolation', 'Role-Based RBAC Guards', 'Event-Driven Vitals Flags', 'SQLAlchemy Data Mapping'].map((item) => (
+                  <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '700', color: '#1e293b' }}>
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+                    {item}
+                  </div>
+                ))}
+              </div>
+
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowDemoModal(true)}
+                style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', padding: '18px 40px', borderRadius: '12px', border: 'none', fontWeight: '900', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(16,185,129,0.2)' }}
+              >
+                Simulate System Core
+              </motion.button>
+            </motion.div>
+
+            {/* Right Side: Vitals Priority Condition Visualizer */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} style={{ position: 'relative' }}>
+              <div style={{ background: '#ffffff', borderRadius: '32px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 40px 80px -15px rgba(0,0,0,0.08)' }}>
+                <div style={{ background: '#fff', borderRadius: '20px', height: '380px', width: '100%', overflow: 'hidden', border: '1px solid #f1f5f9', position: 'relative', padding: '20px' }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+                      <span style={{ fontWeight: '800', color: '#1e293b' }}>Live Patient Monitoring Engine</span>
+                      <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '6px' }}>API Live Status</span>
+                   </div>
+                   
+                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderRadius: '10px', background: '#f8fafc', marginBottom: '10px', alignItems: 'center' }}>
+                     <div>
+                       <div style={{ fontWeight: '700', fontSize: '14px', color: '#334155' }}>Patient Profile #223061</div>
+                       <div style={{ fontSize: '11px', color: '#64748b' }}>Bed Space 04 — Active Checked In</div>
+                     </div>
+                     <div style={{ display: 'flex', gap: '8px' }}>
+                       <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>98.4 °F</span>
+                       <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>72 BPM</span>
+                     </div>
+                   </div>
+
+                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fee2e2', alignItems: 'center' }}>
+                     <div>
+                       <div style={{ fontWeight: '700', fontSize: '14px', color: '#991b1b' }}>Patient Profile #223062</div>
+                       <div style={{ fontSize: '11px', color: '#b91c1c' }}>Bed Space 09 — Priority Emergency</div>
+                     </div>
+                     <div style={{ display: 'flex', gap: '8px' }}>
+                       <span style={{ background: '#fee2e2', color: '#ef4444', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>103.1 °F</span>
+                       <span style={{ background: '#fee2e2', color: '#ef4444', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>118 BPM</span>
+                     </div>
+                   </div>
+                </div>
+                
+                <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} style={{ position: 'absolute', bottom: '-20px', left: '-20px', background: '#0f172a', padding: '16px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: '12px', width: '280px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                     <Database size={20} color="#fff" />
+                  </div>
+                  <div>
+                     <div style={{ fontWeight: '700', fontSize: '0.85rem', color: '#fff' }}>RBAC Token Injection</div>
+                     <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: '700' }}>Bearer Dependency Verified</div>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Execution Pipeline Roadmap */}
+      <section style={{ padding: '100px 80px', background: '#ffffff' }}>
+        <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+          <h2 style={{ fontSize: '2.5rem', fontWeight: '900', color: '#0f172a' }}>Platform Data Verification <span style={{ color: '#10b981' }}>Pipeline</span></h2>
+          <p style={{ color: '#64748b', marginTop: '10px' }}>How medical operations map securely to backend persistence objects.</p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '60px', maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: '40px', left: '15%', right: '15%', height: '2px', zIndex: 0, borderTop: '2px dashed #e2e8f0' }} />
+
+          {[
+            { step: "01", title: "Endpoint Request Authorization", desc: "Frontends inject session storage cryptographic strings into outgoing Axios dependencies." },
+            { step: "02", title: "FastAPI Dependency Router", desc: "Backend decodes credentials and matches patient query contexts to strict structural tables." },
+            { step: "03", title: "State Update Cascade", desc: "Refreshed matrices push status shifts dynamically out to the ward maps and monitoring screens." }
+          ].map((item, i) => (
+            <div key={i} style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
+              <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: '900', margin: '0 auto 25px', boxShadow: '0 10px 20px rgba(16,185,129,0.15)' }}>
+                {item.step}
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', marginBottom: '10px' }}>{item.title}</h3>
+              <p style={{ color: '#475569', lineHeight: 1.6, fontSize: '0.95rem' }}>{item.desc}</p>
             </div>
           ))}
         </div>
+      </section>
 
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          style={{ background: theme.colors.buttonGradient, color: '#fff', padding: '18px 40px', borderRadius: theme.borderRadius.lg, border: 'none', fontWeight: '900', fontSize: '1.1rem', cursor: 'pointer', boxShadow: theme.boxShadow.card }}
-        >
-          Start Your Free Trial
-        </motion.button>
-      </motion.div>
-
-      {/* Right: The "Visual Proof" (Carepatron Mockup Style) */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        whileInView={{ opacity: 1, scale: 1 }}
-        style={{ position: 'relative' }}
-      >
-        {/* Main Interface Mockup */}
-        <div style={{ 
-          background: theme.colors.background, 
-          borderRadius: '40px', 
-          padding: '30px', 
-          border: `1px solid ${theme.colors.divider}`,
-          boxShadow: '0 50px 100px -20px rgba(0,0,0,0.12)'
-        }}>
-          <div style={{ background: '#fff', borderRadius: '24px', height: '450px', width: '100%', overflow: 'hidden', border: `1px solid ${theme.colors.divider}`, position: 'relative' }}>
-             {/* Fake Sidebar */}
-             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '60px', borderRight: `1px solid ${theme.colors.divider}`, background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px 10px' }}>
-                {[1,2,3,4].map(i => <div key={i} style={{ width: '100%', height: '30px', background: i === 1 ? theme.colors.primaryLight : '#e2e8f0', borderRadius: '8px' }} />)}
-             </div>
-             {/* Content Area */}
-             <div style={{ marginLeft: '80px', padding: '40px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
-                   <div style={{ height: '30px', width: '200px', background: '#f1f5f9', borderRadius: '6px' }} />
-                   <div style={{ height: '30px', width: '100px', background: theme.colors.primaryLight, borderRadius: '6px' }} />
-                </div>
-                <div style={{ height: '200px', width: '100%', background: '#f8fafc', borderRadius: '16px', border: `1px dashed ${theme.colors.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                   <span style={{ color: theme.colors.subtitle, fontWeight: '600' }}>Clinical Note Preview</span>
-                </div>
-             </div>
-          </div>
-          
-          {/* Overlapping Floating Context Card */}
-          <motion.div 
-            animate={{ y: [0, -15, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            style={{ 
-              position: 'absolute', top: '15%', left: '-40px', 
-              background: '#fff', padding: '20px', borderRadius: '24px', 
-              boxShadow: theme.boxShadow.dropdown, border: `1px solid ${theme.colors.divider}`,
-              display: 'flex', alignItems: 'center', gap: '15px', width: '260px'
-            }}
-          >
-            <div style={{ width: '45px', height: '45px', borderRadius: '12px', background: theme.colors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-               <span style={{ color: '#fff', fontWeight: 'bold' }}>AI</span>
-            </div>
-            <div>
-               <div style={{ fontWeight: '900', fontSize: '0.9rem' }}>AI Scribe Active</div>
-               <div style={{ fontSize: '0.75rem', color: theme.colors.primary, fontWeight: '700' }}>Transcribing...</div>
-            </div>
-          </motion.div>
-        </div>
-      </motion.div>
-    </div>
-  </div>
-</section>
-{/* --- 5. Implementation Roadmap --- */}
-<section style={{ padding: '100px 80px', background: theme.colors.backgroundGradient }}>
-  <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-    <h2 style={{ fontSize: theme.typography.fontSize.h1, fontWeight: theme.typography.weight.bold }}>Go Live in <span style={{ color: theme.colors.primary }}>3 Simple Steps</span></h2>
-  </div>
-
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '60px', maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
-    {/* Connector Line */}
-    <div style={{ position: 'absolute', top: '40px', left: '15%', right: '15%', height: '2px', background: `dashed ${theme.colors.border}`, zIndex: 0, borderTop: `2px dashed ${theme.colors.primary}44` }} />
-
-    {[
-      { step: "01", title: "Hospital Onboarding", desc: "Upload staff details and register your hospital under ABDM in minutes." },
-      { step: "02", title: "Smart Configuration", desc: "Set up your clinical templates, inventory alerts, and GST billing codes." },
-      { step: "03", title: "Digital Transformation", desc: "Start generating ABHA IDs and sending WhatsApp reports instantly." }
-    ].map((item, i) => (
-      <div key={i} style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
-        <div style={{ 
-          width: '80px', height: '80px', borderRadius: '50%', background: theme.colors.buttonGradient, 
-          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-          fontSize: '1.5rem', fontWeight: '900', margin: '0 auto 25px', boxShadow: theme.boxShadow.dropdown 
-        }}>
-          {item.step}
-        </div>
-        <h3 style={{ fontSize: theme.typography.fontSize.xl, fontWeight: 'bold', marginBottom: '10px' }}>{item.title}</h3>
-        <p style={{ color: theme.colors.subtitle, lineHeight: 1.6 }}>{item.desc}</p>
-      </div>
-    ))}
-  </div>
-</section>
-      {/* 4. Contact Us */}
+      {/* 6. System Deployment / Contact */}
       <section style={{ padding: '100px 80px', textAlign: 'center', background: '#fff', borderTop: '1px solid #f1f5f9' }}>
-          <h2 style={{ color: '#0f172a', fontSize: '2.5rem', fontWeight: '900' }}>Ready to modernize your hospital?</h2>
-          <p style={{ color: '#64748b', fontSize: '1.2rem', marginBottom: '40px' }}>Join 500+ Indian hospitals using NexHealth.</p>
-          <motion.button whileHover={{ scale: 1.05 }}
-            style={{ padding: '18px 50px', background: '#0f172a', color: '#fff', borderRadius: '15px', border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}>
-            Contact Sales
+          <h2 style={{ color: '#0f172a', fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-1px' }}>Ready to review NexHealth?</h2>
+          <p style={{ color: '#64748b', fontSize: '1.2rem', marginBottom: '40px' }}>Experience a secure ecosystem built for the modern digital health grid.</p>
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            onClick={() => setShowDemoModal(true)}
+            style={{ padding: '18px 50px', background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
+          >
+            Launch Interactive Demo Window
           </motion.button>
       </section>
       
+      {/* 7. Full-Width Specialized Green Footer */}
+      <footer style={{ width: '100%', backgroundColor: '#021205', backgroundImage: 'radial-gradient(circle at 50% -20%, #064e3b 0%, transparent 80%)', color: '#ffffff', padding: '100px 0 60px 0', borderTop: `1px solid rgba(16, 185, 129, 0.2)`, position: 'relative', zIndex: 2 }}>
+        <div style={{ width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '0 40px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', gap: '60px', marginBottom: '80px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: '800', letterSpacing: '-0.04em' }}>
+                  Nex<span style={{ color: '#10b981' }}>Health</span>
+                </span>
+              </div>
+              <p style={{ fontSize: '0.95rem', color: '#94a3b8', lineHeight: '1.6', maxWidth: '280px' }}>
+                A secure frontend clinical ecosystem running on a containerized FastAPI backend. Fully decoupled architecture.
+              </p>
+            </div>
 
-{/* --- 100% FULL-WIDTH GREEN FOOTER --- */}
-{/* --- PROFESSIONAL NEXHEALTH FOOTER --- */}
-<footer style={{ 
-  width: '100%',
-  backgroundColor: '#021205', // Slightly darker, richer black-green
-  backgroundImage: 'radial-gradient(circle at 50% -20%, #064e3b 0%, transparent 80%)', // Subtle green glow from top
-  color: '#ffffff', 
-  padding: '100px 0 60px 0',
-  fontFamily: "'Inter', sans-serif",
-  borderTop: `1px solid rgba(16, 185, 129, 0.2)`, // Thinner, more elegant border
-  position: 'relative',
-  zIndex: 2,
-}}>
-  <div style={{ 
-    width: '100%', 
-    maxWidth: '1280px', 
-    margin: '0 auto', 
-    padding: '0 40px',
-    boxSizing: 'border-box'
-  }}>
-    
-    <div style={{ 
-      display: 'grid', 
-      gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', // Give the branding column more space
-      gap: '60px',
-      marginBottom: '80px'
-    }}>
-      
-      {/* Brand & Mission Column */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img src={logo} alt="logo" style={{ height: '40px', filter: 'brightness(0) invert(1)' }} />
-          <span style={{ fontSize: '1.6rem', fontWeight: '800', letterSpacing: '-0.04em' }}>
-            Nex<span style={{ color: theme.colors.primary }}>Health</span>
-          </span>
+            <div>
+              <h4 style={footerHeadingStyle}>Frontend Interfaces</h4>
+              <ul style={footerListStyle}>
+                {['WardManagement', 'PatientMonitoring', 'LabReports', 'VitalsManagement', 'RecordsAccess'].map(item => (
+                  <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 style={footerHeadingStyle}>FastAPI Backend</h4>
+              <ul style={footerListStyle}>
+                {['Authentication Guard', 'Nurse Operations Router', 'Doctor Prescription API', 'SQLAlchemy Session Pipeline'].map(item => (
+                  <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 style={footerHeadingStyle}>Specifications</h4>
+              <ul style={footerListStyle}>
+                {['JSON Web Tokens', 'PostgreSQL Layer', 'Uvicorn Engine', 'Lucide Vector Assets'].map(item => (
+                  <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
+                ))}
+              </ul>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <h4 style={footerHeadingStyle}>Local Routing Node</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end', color: '#10b981', fontSize: '0.85rem', fontWeight: '600' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+                Server Instance Up
+              </div>
+              <div style={{ marginTop: '20px', opacity: 0.5, fontSize: '0.75rem', lineHeight: 1.5 }}>
+                Localhost Engine (Active)<br />
+                Asynchronous Network Mode
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '40px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+            <div style={{ display: 'flex', gap: '20px', opacity: 0.4 }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>UHID VALIDATED</span>
+              <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>RBAC PROTECTED</span>
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: 'auto' }}>
+              © 2026 NexHealth. Full Stack Architectural Blueprint.
+            </div>
+          </div>
         </div>
-        <p style={{ fontSize: '0.95rem', color: '#94a3b8', lineHeight: '1.6', maxWidth: '280px' }}>
-          Building the digital infrastructure for modern Indian clinics. Fully ABDM compliant and doctor-first.
-        </p>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          {['LinkedIn', 'Twitter', 'GitHub'].map(s => (
-            <motion.div 
-              whileHover={{ y: -3, color: theme.colors.primary }}
-              key={s} 
-              style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}
-            >
-              {s}
-            </motion.div>
-          ))}
-        </div>
-      </div>
+      </footer>
 
-      {/* Column: Features */}
-      <div>
-        <h4 style={footerHeadingStyle}>Platform</h4>
-        <ul style={footerListStyle}>
-          {['ABDM Sync', 'AI Scribe', 'Inventory', 'Billing', 'Telehealth'].map(item => (
-            <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
-          ))}
-        </ul>
-      </div>
+    {/* --- BRAND NEW INTERACTIVE PLATFORM DEMO SIMULATOR MODAL --- */}
+    <AnimatePresence>
+        {showDemoModal && (
+          <DemoModal 
+            isOpen={showDemoModal} 
+            onClose={() => { setShowDemoModal(false); setDemoStep(1); }}
+            currentStep={demoStep}
+            setStep={setDemoStep}
+          />
+        )}
+      </AnimatePresence>      
 
-      {/* Column: Resources */}
-      <div>
-        <h4 style={footerHeadingStyle}>Resources</h4>
-        <ul style={footerListStyle}>
-          {['API Docs', 'Help Center', 'ABDM Sandbox', 'Security'].map(item => (
-            <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Column: Company */}
-      <div>
-        <h4 style={footerHeadingStyle}>Company</h4>
-        <ul style={footerListStyle}>
-          {['About Us', 'Careers', 'Privacy', 'Terms'].map(item => (
-            <motion.li whileHover={{ x: 5 }} key={item} style={footerLinkStyle}>{item}</motion.li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Column: Status */}
-      <div style={{ textAlign: 'right' }}>
-        <h4 style={footerHeadingStyle}>System Status</h4>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end', color: '#10b981', fontSize: '0.85rem', fontWeight: '600' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
-          All Systems Operational
-        </div>
-        <div style={{ marginTop: '20px', opacity: 0.5, fontSize: '0.75rem' }}>
-          v2.4.0 (Stable)<br />
-          Asia-South1 Region
-        </div>
-      </div>
-    </div>
-
-    {/* Bottom Trust & Compliance Bar */}
-    <div style={{ 
-      borderTop: '1px solid rgba(255,255,255,0.05)', 
-      paddingTop: '40px', 
-      display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: '20px'
-    }}>
-      <div style={{ display: 'flex', gap: '30px', opacity: 0.4, filter: 'grayscale(1)' }}>
-        {/* Placeholder for small certification logos */}
-        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>ABDM CERTIFIED</span>
-        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>ISO 27001</span>
-        <span style={{ fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #fff', padding: '2px 6px', borderRadius: '4px' }}>HIPAA</span>
-      </div>
-      
-      <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-        © 2026 NexHealth. Built with  in India for the world.
-      </div>
-    </div>
-  </div>
-</footer>
     </div>
   );
 };
+
+// Layout Styles Summary
 const navbarStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 80px', height: '80px', background: 'rgba(248, 250, 252, 0.8)', backdropFilter: 'blur(12px)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, borderBottom: '1px solid rgba(16, 185, 129, 0.1)' };
 const logoStyle = { fontWeight: '800', fontSize: '1.6rem', letterSpacing: '-0.03em', color: '#0f172a' };
 const linkContainer = { display: 'flex', gap: '32px' };
 const navLink = { fontSize: '15px', fontWeight: '500', color: '#475569', cursor: 'pointer' };
-const navLinkActive = { ...navLink, display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' };
 
 const heroContainerStyle = { padding: '160px 0 100px', textAlign: 'center', position: 'relative', overflow: 'hidden', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center' };
-const bgBlurLayer = { position: 'absolute', inset: 0, backgroundImage: "url('https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=1000')", backgroundSize: 'cover', filter: 'blur(120px)', opacity: 0.1, zIndex: 0 };
+const bgBlurLayer = { position: 'absolute', inset: 0, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(120px)', opacity: 0.05, zIndex: 0 };
 const gridLayer = { position: 'absolute', inset: 0, zIndex: 1, backgroundSize: '80px 80px', backgroundImage: 'linear-gradient(to right, rgba(16, 185, 129, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(16, 185, 129, 0.06) 1px, transparent 1px)', maskImage: 'radial-gradient(circle at center, black 40%, transparent 90%)' };
 
-const heroH1 = { fontSize: '4.8rem', fontWeight: '800', color: '#0f172a', lineHeight: '1.05', letterSpacing: '-0.05em', marginBottom: '28px' };
+const heroH1 = { fontSize: '4.5rem', fontWeight: '800', color: '#0f172a', lineHeight: '1.1', letterSpacing: '-0.05em', marginBottom: '28px' };
 const heroGradientText = { background: 'linear-gradient(90deg, #10b981, #059669)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' };
-const heroSub = { fontSize: '1.3rem', color: '#475569', margin: '0 auto 48px auto', maxWidth: '700px', lineHeight: '1.6' };
+const heroSub = { fontSize: '1.25rem', color: '#475569', margin: '0 auto 48px auto', maxWidth: '700px', lineHeight: '1.6' };
 
-const primaryBtn = { background: '#10b981', color: '#fff', padding: '20px 44px', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 20px 40px rgba(16, 185, 129, 0.2)' };
+const primaryBtn = { background: '#10b981', color: '#fff', padding: '20px 44px', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 20px 40px rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center' };
 const secondaryBtn = { background: '#fff', color: '#0f172a', padding: '20px 44px', borderRadius: '14px', border: '1px solid #e2e8f0', fontWeight: '700', fontSize: '1.1rem', cursor: 'pointer' };
 const loginBtnStyle = { background: 'transparent', border: '1px solid #e2e8f0', padding: '10px 24px', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' };
 const getStartedBtnStyle = { background: '#10b981', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' };
 
 const mockupOuter = { width: '1000px', background: 'rgba(255,255,255,0.4)', backdropFilter: 'blur(20px)', borderRadius: '32px', padding: '12px', border: '1px solid rgba(255,255,255,0.7)', boxShadow: '0 40px 100px rgba(0,0,0,0.1)' };
-const mockupInner = { background: '#fff', borderRadius: '24px', height: '450px', display: 'flex', overflow: 'hidden' };
+const mockupInner = { background: '#fff', borderRadius: '24px', height: '320px', display: 'flex', overflow: 'hidden' };
 const mockSidebar = { width: '200px', background: '#f8fafc', borderRight: '1px solid #f1f5f9', padding: '30px 20px' };
 const mockLine = { height: '10px', borderRadius: '4px', marginBottom: '20px' };
 const mockMetricCard = { flex: 1, height: '80px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #d1fae5' };
 const mockMetricCardLight = { flex: 1, height: '80px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9' };
-const mockChartArea = { height: '200px', width: '100%', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #e2e8f0' };
+const mockChartArea = { height: '160px', width: '100%', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #e2e8f0' };
 
 const marqueeWrapper = { overflow: 'hidden', width: '100%', maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)' };
-const featureCardStyle = { flex: '0 0 320px', backgroundColor: '#f0fdf4', padding: '40px 30px', borderRadius: '32px', border: '2px solid #d1fae5', borderTop: '6px solid #10b981', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '15px', cursor: 'pointer', transition: '0.4s' };
-const featureIconWrapper = { fontSize: '2.2rem', background: '#fff', width: '70px', height: '70px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', boxShadow: '0 8px 15px rgba(16, 185, 129, 0.1)' };
-const featureTitle = { margin: 0, fontSize: '1.35rem', color: '#064e3b', fontWeight: '900' };
-const featureDesc = { fontSize: '0.95rem', color: '#374151', lineHeight: '1.6', margin: 0 };
-const featureLink = { color: '#10b981', fontWeight: '800', fontSize: '0.9rem', marginTop: 'auto' };
+const featureCardStyle = { flex: '0 0 320px', backgroundColor: '#f0fdf4', padding: '40px 30px', borderRadius: '32px', border: '2px solid #d1fae5', borderTop: '6px solid #10b981', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '15px', transition: '0.4s' };
+const featureIconWrapper = { fontSize: '2.2rem', background: '#fff', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', boxShadow: '0 8px 15px rgba(16, 185, 129, 0.1)' };
+const featureTitle = { margin: 0, fontSize: '1.25rem', color: '#064e3b', fontWeight: '900' };
+const featureDesc = { fontSize: '0.9rem', color: '#374151', lineHeight: '1.6', margin: 0 };
+const featureLink = { color: '#10b981', fontWeight: '800', fontSize: '0.85rem', marginTop: 'auto' };
 
-const footerHeadingStyle = { 
-  color: '#f8fafc', 
-  fontSize: '0.85rem', 
-  marginBottom: '24px', 
-  fontWeight: '700', 
-  textTransform: 'uppercase', 
-  letterSpacing: '1px' 
-};
+const footerHeadingStyle = { color: '#f8fafc', fontSize: '0.85rem', marginBottom: '24px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' };
+const footerListStyle = { listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '14px' };
+const footerLinkStyle = { cursor: 'pointer', color: '#94a3b8', fontSize: '0.9rem', transition: 'color 0.2s ease', display: 'inline-block' };
 
-const footerListStyle = { 
-  listStyle: 'none', 
-  padding: 0, 
-  display: 'flex', 
-  flexDirection: 'column', 
-  gap: '14px' 
-};
+// Modal Styles
+const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' };
+const modalContentStyle = { background: '#ffffff', width: '100%', maxWidth: '640px', borderRadius: '24px', padding: '32px', boxShadow: '0 30px 60px -15px rgba(0,0,0,0.25)', position: 'relative' };
+const closeModalBtn = { background: '#f1f5f9', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' };
 
-const footerLinkStyle = { 
-  cursor: 'pointer', 
-  color: '#94a3b8', 
-  fontSize: '0.9rem', 
-  transition: 'color 0.2s ease',
-  display: 'inline-block'
-};
 export default LandingPage;

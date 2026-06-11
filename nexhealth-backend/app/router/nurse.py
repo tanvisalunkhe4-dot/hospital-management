@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.db import models
 from app.router.deps import get_current_user
 from datetime import datetime, timedelta, timezone
+
 IST = timezone(timedelta(hours=5, minutes=30))
 
 router = APIRouter(prefix="/api/v1/nurse", tags=["Nurse Operations"])
@@ -13,14 +14,14 @@ router = APIRouter(prefix="/api/v1/nurse", tags=["Nurse Operations"])
 
 @router.get("/patients-monitoring", response_model=List[dict])
 def get_monitoring_data(db: Session = Depends(get_db)):
-    # 1. Get today's date to filter only current appointments
+    # 1. Get today's date to filter current clinic workflows
     today = datetime.now(IST).date()
 
-    # 2. Query only patients who have a "Checked-In" appointment TODAY
+    # 2. FIXED FILTER: Include ALL active states so patients don't vanish from beds after vitals are taken!
     active_appointments = db.query(models.Patient, models.Appointment)\
         .join(models.Appointment, models.Patient.id == models.Appointment.patient_id)\
         .filter(
-            models.Appointment.status == "Checked In",
+            models.Appointment.status.in_(["Checked In", "Vitals Taken", "In Consultation", "Completed"]),
             func.date(models.Appointment.appointment_date) == today
         ).all()
 
@@ -41,39 +42,57 @@ def get_monitoring_data(db: Session = Depends(get_db)):
         elif not latest_vital:
             status_type = "pending"
 
-        # --- FIX STARTS HERE ---
-        # We handle the timezone conversion safely before sending it to the React UI
         last_update_display = "Never"
         if latest_vital and latest_vital.recorded_at:
             v_time = latest_vital.recorded_at
-            # If the time coming from DB doesn't have a timezone, attach UTC then convert to IST
             if v_time.tzinfo is None:
                 v_time = v_time.replace(tzinfo=timezone.utc).astimezone(IST)
             else:
                 v_time = v_time.astimezone(IST)
             
-            # Format to 12-hour clock with AM/PM for easier reading
             last_update_display = v_time.strftime("%I:%M %p") 
-        # --- FIX ENDS HERE ---
 
         results.append({
             "id": patient.id,
             "name": f"{patient.first_name} {patient.last_name}".title(),
-            "uhid": patient.uhid or "NX-PENDING",
-            "bed_number":  "OPD",
-            "status": "Checked In",
+            "uhid": patient.uhid or f"NH-{patient.id}",
+            # Assigning a deterministic bed identifier based on patient id for your grid loop mockup
+            "bed_number": (patient.id % 12) + 1, 
+            "status": appt.status,  # Reflects accurate moving status
             "status_type": status_type,
             "checked_in": True,
             "vitals": {
                 "bp": latest_vital.blood_pressure if latest_vital else "N/A",
                 "pulse": latest_vital.pulse_rate if latest_vital else "N/A",
                 "temp": latest_vital.temperature if latest_vital else "N/A",
-                "last_update": last_update_display # Sending the corrected IST string
+                "last_update": last_update_display
             }
         })
     return results
 
-    
+
+@router.get("/patient/{patient_id}")
+def get_single_patient_profile(
+    patient_id: int, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    FIXED: Resolves 404 error from VitalsManagement.jsx header lookup.
+    """
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found")
+        
+    return {
+        "id": patient.id,
+        "name": f"{patient.first_name} {patient.last_name}".title(),
+        "uhid": patient.uhid or f"NH-{patient.id}",
+        "gender": patient.gender,
+        "blood_group": patient.blood_group
+    }
+
+
 @router.post("/vitals")
 def create_vitals(
     vital_data: dict, 
@@ -91,26 +110,21 @@ def create_vitals(
     if not staff_record:
         raise HTTPException(status_code=400, detail="User is not registered as official staff")
 
-    # 1. Capture Current IST Time
     current_time_ist = datetime.now(IST)
 
-    # 2. Create the Vitals record with explicit IST time
     new_vital = models.Vitals(
         patient_id=vital_data.get("patient_id"),
         nurse_id=staff_record.id,
         blood_pressure=vital_data.get("blood_pressure"),
-        pulse_rate=vital_data.get("pulse_rate"),
-        temperature=vital_data.get("temperature"),
-        sp_o2=vital_data.get("spo2"), 
+        pulse_rate=int(vital_data.get("pulse_rate")) if vital_data.get("pulse_rate") else None,
+        temperature=float(vital_data.get("temperature")) if vital_data.get("temperature") else None,
+        sp_o2=int(vital_data.get("spo2")) if vital_data.get("spo2") else None, 
         remarks=vital_data.get("notes"),
-        recorded_at=current_time_ist  # FIX: Forces IST in the DB
+        recorded_at=current_time_ist  
     )
     db.add(new_vital)
 
-    # 3. Update Appointment Status to move them to Doctor's Queue
-    # We filter by today's date (IST) to make sure we hit the right appointment
     today_ist = current_time_ist.date()
-    
     appointment = db.query(models.Appointment).filter(
         models.Appointment.patient_id == vital_data.get("patient_id"),
         models.Appointment.status == "Checked In",
@@ -118,15 +132,14 @@ def create_vitals(
     ).first()
     
     if appointment:
-        # This MUST match the constant the Doctor's Queue is looking for
         appointment.status = "Vitals Taken" 
 
     db.commit()
-    return {"message": "Vitals recorded and patient moved to Doctor's Queue"}
-    
+    return {"message": "Vitals recorded and patient advanced successfully."}
+
+
 @router.get("/vitals-history/{patient_id}")
 def get_vitals_history(patient_id: int, db: Session = Depends(get_db)):
-    # Fetch the last 10-15 records to show trends
     history = db.query(models.Vitals)\
         .filter(models.Vitals.patient_id == patient_id)\
         .order_by(desc(models.Vitals.recorded_at))\
@@ -134,40 +147,31 @@ def get_vitals_history(patient_id: int, db: Session = Depends(get_db)):
         .all()
     return history
 
+
 @router.get("/patient-records/{patient_id}")
 def get_patient_records(
     patient_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    """
-    Unified endpoint matching the UI Multi-Tab Clinical Chart expectations.
-    Returns: { profile: {}, prescriptions: [], lab_reports: [] }
-    """
-    # 1. Fetch Patient Profile Core Information
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient Profile not found")
 
-    # 2. Gather All Historical Structural Records for Prescriptions / Labs linking
     medical_records = db.query(models.MedicalRecord).filter(
         models.MedicalRecord.patient_id == patient_id
     ).all()
     
-    # FIXED: Change r.record_id -> r.id to match your MedicalRecord primary key
     record_ids = [r.id for r in medical_records]
-
-    # 3. Fetch Linked Prescriptions
     prescriptions_list = []
+
     if record_ids:
-        # FIXED: Change models.Prescription.record_id -> models.Prescription.medical_record_id
         prescriptions = db.query(models.Prescription).filter(
             models.Prescription.medical_record_id.in_(record_ids)
         ).all()
         
         prescriptions_list = [
             {
-                # FIXED: Change p.prescription_id -> p.id
                 "prescription_id": p.id,
                 "medicine_name": p.medicine_name,
                 "dosage": p.dosage,
@@ -177,10 +181,8 @@ def get_patient_records(
             for p in prescriptions
         ]
 
-    # 4. Fetch Linked Lab Requests from the correct table entity matching models.py
     lab_reports_list = []
     try:
-        # FIXED: Change models.LabReport -> models.LabRequest to match your schema setup
         labs = db.query(models.LabRequest).filter(models.LabRequest.patient_id == patient_id).all()
         lab_reports_list = [
             {
@@ -191,7 +193,6 @@ def get_patient_records(
             for l in labs
         ]
     except Exception as e:
-        # Graceful empty fall-through array if explicit lab structure operations fail
         print(f"Lab fetch fallback triggered: {e}")
         lab_reports_list = []
 
@@ -212,21 +213,16 @@ def get_active_treatments(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    """
-    Enhanced route joining Patient files to pass patient_name straight to the Active Medication Desk.
-    """
     prescriptions = db.query(models.Prescription).all()
     results = []
 
     for p in prescriptions:
         patient_name = "Inpatient Case"
-        # Safely extract patient information via the MedicalRecord -> Patient chain
         if p.medical_record and p.medical_record.patient:
             pat = p.medical_record.patient
             patient_name = f"{pat.first_name} {pat.last_name}".title()
 
         results.append({
-            # FIXED: Change p.prescription_id -> p.id
             "prescription_id": p.id,
             "patient_id": p.medical_record.patient_id if p.medical_record else None,
             "patient_name": patient_name,
@@ -246,9 +242,6 @@ def record_medication(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    """
-    Processes incoming 'Confirm Given' execution events from TreatmentSupport.jsx
-    """
     prescription_id = payload.get("prescription_id")
     if not prescription_id:
         raise HTTPException(status_code=400, detail="Missing prescription identifier reference")
