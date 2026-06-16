@@ -5,9 +5,14 @@ from typing import List, Dict, Any
 from datetime import date, datetime
 import shutil
 import os
+import time
 import io
 from pydantic import BaseModel
-
+from app.services.scribe import (
+    transcribe_audio,
+    generate_medical_summary,
+    whisper_model
+)
 import logging
 
 # Set up logging to see what is happening on the server
@@ -249,7 +254,7 @@ async def handle_ai_scribe(file: UploadFile = File(...)):
         }
         
     except Exception as e:
-        print(f"Scribe Router Error: {e}")
+        logger.exception("Scribe Router Error")
         return {
             "raw_transcript": "Error during processing",
             "clinical_note": "AI Summarization failed. Please enter notes manually."
@@ -376,67 +381,101 @@ async def finish_consultation(
 
     except Exception as e:
         db.rollback()
-        print(f"FINALIZE ERROR: {str(e)}")
+        logger.exception("Finalize Consultation Error")
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- AI Scribe Logic (Streaming & Finalization) ---
 
-model = WhisperModel("base", device="cpu", compute_type="int8")
+
 
 @router.websocket("/ws/scribe/stream")
 async def websocket_scribe_stream(websocket: WebSocket):
     await websocket.accept()
-    
-    # Store the EBML header from the very first packet
+
+    # Store entire conversation transcript
+    full_transcript = ""
+
+    # Store the EBML header from the first packet
     initial_header = None
-    # Current working buffer for the chunk
+
+    # Current working buffer
     current_chunk = bytearray()
-    
+
     try:
         while True:
             chunk = await websocket.receive_bytes()
+
+            # Capture header from first packet
             
-            # 1. Capture the header from the first packet ever received
-            if initial_header is None:
-                initial_header = chunk
-            
+
             current_chunk.extend(chunk)
 
-            # 2. Process when we have ~0.5MB of new data
-            if len(current_chunk) > 16000: 
+            # Process chunk when buffer is large enough
+            if len(current_chunk) > 256000:
+
+                if len(current_chunk) < 150000:
+                    continue
+
                 try:
-                    # 3. CRITICAL FIX: Prepend the initial header to the current chunk
-                    processing_buffer = initial_header + current_chunk
-                    
+                    # Add header to current chunk
+                    processing_buffer = bytes(current_chunk)
+
                     audio_fp = io.BytesIO(processing_buffer)
-                    audio_segment = AudioSegment.from_file(audio_fp, format="webm")
-                    
+
+                    audio_segment = AudioSegment.from_file(
+                        audio_fp,
+                        format="webm"
+                    )
+
                     # Convert to WAV for Whisper
                     wav_io = io.BytesIO()
                     audio_segment.export(wav_io, format="wav")
                     wav_io.seek(0)
 
-                    # Transcribe
-                    segments, _ = model.transcribe(
-                        wav_io, 
+                    # Transcribe audio
+                    segments, _ = whisper_model.transcribe(
+                        wav_io,
                         beam_size=5,
                         vad_filter=True,
-                        initial_prompt="A medical consultation regarding patient symptoms and diagnosis."
+                        language="en",
+                        initial_prompt="""
+                        Medical consultation.
+                        Common terms:
+                        fever, diabetes, hypertension,
+                        blood pressure, headache,
+                        cough, infection, paracetamol,
+                        amoxicillin, metformin.
+                        """
                     )
-                    
-                    transcript = " ".join([segment.text for segment in segments]).strip()
+
+                    transcript = " ".join(
+                        [segment.text for segment in segments]
+                    ).strip()
 
                     if transcript:
+                        logger.info(f"Transcript chunk: {transcript}")
+
+                        full_transcript += " " + transcript
+
+                        # Send latest chunk
                         await websocket.send_json({
                             "type": "partial_transcript",
                             "text": transcript
                         })
-                        
-                        # 4. Clear the chunk but keep the header for the next round
-                        current_chunk = bytearray()
-                    
+
+                        # Send complete transcript so far
+                        await websocket.send_json({
+                            "type": "conversation_update",
+                            "text": full_transcript.strip()
+                        })
+
+                        # Clear processed chunk
+                        current_chunk = current_chunk[-100000:]
+
                 except Exception as e:
-                    print(f"Slice decoding skipped (waiting for more data): {e}")
+                    print(
+                        f"Slice decoding skipped (waiting for more data): {e}"
+                    )
                     continue
 
     except WebSocketDisconnect:
@@ -455,14 +494,42 @@ def search_medicines(
 
 @router.post("/consultation/scribe-process-text")
 async def process_scribe_text(request: ScribeTextRequest):
+
+    logger.info(
+        f"Received transcript length: {len(request.raw_text)}"
+    )
+
+    logger.info(
+        f"Transcript Preview: {request.raw_text[:500]}"
+    )
+
     if not request.raw_text.strip():
-        raise HTTPException(status_code=400, detail="No transcript data provided.")
+        raise HTTPException(
+            status_code=400,
+            detail="No transcript data provided."
+        )
+
     try:
-        clinical_summary = await generate_medical_summary(request.raw_text)
-        return {"clinical_note": clinical_summary}
+        start = time.time()
+
+        clinical_summary = await generate_medical_summary(
+            request.raw_text
+        )
+
+        logger.info(
+            f"Total AI processing time: {time.time() - start:.2f}s"
+        )
+
+        return {
+            "clinical_note": clinical_summary
+        }
+
     except Exception as e:
-        print(f"Gemini Processing Error: {e}")
-        return {"clinical_note": request.raw_text}
+        logger.exception("Groq Processing Error")
+
+        return {
+            "clinical_note": request.raw_text
+        }
 
 
 @router.post("/lab-requests")

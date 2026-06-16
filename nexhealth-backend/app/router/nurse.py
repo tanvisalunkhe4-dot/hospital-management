@@ -12,6 +12,27 @@ IST = timezone(timedelta(hours=5, minutes=30))
 router = APIRouter(prefix="/api/v1/nurse", tags=["Nurse Operations"])
 
 
+def resolve_staff_for_user(current_user: models.User, db: Session) -> models.Staff:
+    staff_record = db.query(models.Staff).filter(
+        models.Staff.user_id == current_user.id,
+        models.Staff.is_active == True,
+    ).first()
+
+    if not staff_record and current_user.staff_id:
+        staff_record = db.query(models.Staff).filter(
+            models.Staff.staff_id == current_user.staff_id,
+            models.Staff.is_active == True,
+        ).first()
+        if staff_record and staff_record.user_id is None:
+            staff_record.user_id = current_user.id
+            db.commit()
+
+    if not staff_record:
+        raise HTTPException(status_code=400, detail="User is not registered as official staff")
+
+    return staff_record
+
+
 @router.get("/patients-monitoring", response_model=List[dict])
 def get_monitoring_data(db: Session = Depends(get_db)):
     # 1. Get today's date to filter current clinic workflows
@@ -102,13 +123,7 @@ def create_vitals(
     if current_user.role.lower() != "nurse":
         raise HTTPException(status_code=403, detail="Access denied")
 
-    staff_record = db.query(models.Staff).filter(
-        models.Staff.user_id == current_user.id,
-        models.Staff.is_active == True
-    ).first()
-
-    if not staff_record:
-        raise HTTPException(status_code=400, detail="User is not registered as official staff")
+    staff_record = resolve_staff_for_user(current_user, db)
 
     current_time_ist = datetime.now(IST)
 
@@ -147,6 +162,27 @@ def get_vitals_history(patient_id: int, db: Session = Depends(get_db)):
         .all()
     return history
 
+<<<<<<< HEAD
+=======
+@router.get("/patient/{patient_id}")
+def get_patient_profile(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    return {
+        "id": patient.id,
+        "first_name": patient.first_name,
+        "last_name": patient.last_name,
+        "uhid": patient.uhid or f"NH-{patient.id}",
+        "bed_number": "OPD",
+        "blood_group": patient.blood_group,
+    }
+>>>>>>> 5158ff75 (changes)
 
 @router.get("/patient-records/{patient_id}")
 def get_patient_records(

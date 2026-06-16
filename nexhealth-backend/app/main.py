@@ -57,8 +57,9 @@ app.add_middleware(
 # --- Include All Route Modules ---
 
 app.include_router(auth_router)
-app.include_router(admin_router)
 app.include_router(superadmin_router)
+
+app.include_router(admin_router)
 
 # Your Specialized Portals
 app.include_router(receptionist_router.router)

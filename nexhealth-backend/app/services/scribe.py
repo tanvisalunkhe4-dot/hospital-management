@@ -2,10 +2,12 @@ import os
 import asyncio
 import re
 import datetime
+
 from groq import Groq
 from faster_whisper import WhisperModel
 from dotenv import load_dotenv
-
+import time
+import traceback
 load_dotenv()
 
 # 1. Setup Whisper
@@ -37,22 +39,20 @@ async def stream_transcription(audio_path, websocket):
 
         for segment in segments:
 
-            partial = segment.text.strip()
+            text = segment.text.strip()
 
-            if not partial:
+            if not text:
                 continue
 
-            # Send realtime partial
+            full_text += " " + text
+
             await websocket.send_json({
                 "type": "partial_transcript",
-                "text": partial
+                "text": full_text.strip()
             })
-
-            full_text += " " + partial
 
             await asyncio.sleep(0.03)
 
-        # Send finalized text
         await websocket.send_json({
             "type": "final_transcript",
             "text": full_text.strip()
@@ -60,9 +60,15 @@ async def stream_transcription(audio_path, websocket):
 
     except Exception as e:
         print("Streaming Error:", e)
+    
 
 
-async def generate_medical_summary(transcript: str, max_retries: int = 2):
+async def generate_medical_summary(transcript: str, max_retries: int = 3):
+    print("=" * 60)
+    print("TRANSCRIPT LENGTH:", len(transcript))
+    print("TRANSCRIPT PREVIEW:")
+    print(transcript[:500])
+    print("=" * 60)
     """
     Uses Groq (Llama 3.1 8B) to generate a professional clinical report.
     Includes automated medical reasoning and suggested medications.
@@ -73,48 +79,52 @@ async def generate_medical_summary(transcript: str, max_retries: int = 2):
 
     transcript = re.sub(r'\b(uh|umm|hmm)\b', '', transcript, flags=re.IGNORECASE)
 
+    if len(transcript) > 3000:
+      transcript = transcript[:3000]
+      print("Transcript truncated to 3000 chars")
+
+      print(f"Transcript size after cleanup: {len(transcript)} chars")
     # Professional Medical Prompt
     prompt = f"""
-    Role: Senior Medical Scribe for NexHealth.
-    Task: Generate a high-density, professional 'Consultation Report' from the transcript.
-    
-    Structure the report exactly with these Markdown headers:
-    
-    ### 🏥 CLINICAL SUMMARY (SOAP)
-    **Subjective**: 
-    - Chief Complaint: (Primary reason for visit)
-    - HPI: (Brief narrative of symptoms, duration, and severity)
-    
-    **Objective**: 
-    - Observations: (Physical signs or distress mentioned or observed)
-    
-    **Assessment**: 
-    - Clinical Impression: (Potential diagnosis or clinical conclusion)
-    
-    ---
-    ### 💊 AI-ASSISTED TREATMENT PLAN
-    **Suggested Medications**: 
-    - (Suggest common first-line medications only if clearly supported by symptoms.
-If uncertain, write:
-"Physician review required.", dosage, and duration based on standard protocols for the discussed symptoms)
-    
-    **Patient Advice**: 
-    - (Lifestyle instructions or precautions given)
-    
-    **Follow-up**: 
-    - (Recommended timeframe for the next review)
+You are a professional medical scribe.
 
-    ---
-    **DISCLAIMER**: This report contains AI-generated clinical suggestions. The attending physician must verify, modify, and sign off on all details before finalization.
-    
-    Transcript: {transcript}
-    """
+Create a SOAP note from the consultation transcript.
+
+Format:
+
+### CLINICAL SUMMARY (SOAP)
+
+Subjective:
+- Chief Complaint
+- History of Present Illness
+
+Objective:
+- Findings or observations mentioned
+
+Assessment:
+- Likely diagnosis or clinical impression
+
+Plan:
+- Suggested medications (only if clearly supported)
+- Patient advice
+- Follow-up recommendations
+
+If information is missing, write "Not specified".
+
+Transcript:
+{transcript}
+"""
 
     for attempt in range(max_retries):
         try:
+            start_time = time.time()
+            print("Calling Groq...")
+            print(f"Transcript chars: {len(transcript)}")
+            print(f"Prompt chars: {len(prompt)}")
             # Using temperature 0.0 for deterministic, factual output
             response = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+            model="llama-3.1-8b-instant",
+            max_tokens=600,
                 messages=[
                     {
                         "role": "system", 
@@ -126,7 +136,9 @@ If uncertain, write:
             )
             
             summary = response.choices[0].message.content
-
+            print(
+    f"Groq completed in {time.time() - start_time:.2f} seconds"
+)
             # Enhanced Privacy Guardrails
             # Redacts Aadhaar (12 digits) and general sensitive ID patterns
             final_text = re.sub(r'\b\d{4}\s?\d{4}\s?\d{4}\b', '[ID Redacted]', summary)
@@ -144,7 +156,9 @@ If uncertain, write:
                 else:
                     return "AI Scribe (Groq) is currently busy. Please wait 10 seconds and try again."
             
-            print(f"Groq API Error: {e}")
+            print("GROQ ERROR")
+            print(str(e))
+            traceback.print_exc()
             return "AI Summarization failed. Please enter clinical notes manually."
 
     return "AI Summarization failed due to an unexpected error."

@@ -31,7 +31,7 @@ export const UserProvider = ({ children }) => {
     const isStaff = staffRoles.includes(normalizedRole);
 
     const endpoint = isStaff 
-      ? 'http://127.0.0.1:8000/api/v1/staff/profile' 
+      ? 'http://127.0.0.1:8000/api/v1/auth/me' 
       : 'http://127.0.0.1:8000/api/v1/patient/profile';
 
     try {

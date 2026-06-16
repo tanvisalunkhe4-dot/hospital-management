@@ -25,9 +25,10 @@ const ConsultationWorkspace = ({
   const [newMed, setNewMed] = useState({ name: '', dosage: '', frequency: '1-0-1', duration: '5 Days', quantity:1 });
   const [vitals, setVitals] = useState({ bp: '--', pulse: '--', temp: '--', spO2: '--' });
   const recorderRef = useRef(null);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const searchTimeoutRef = useRef(null); 
-  
+  const transcriptRef = useRef("");
 const socketRef = useRef(null);
   if (!patient) {
     return (
@@ -101,58 +102,99 @@ const [liveTranscript, setLiveTranscript] = useState("");
 const toggleScribe = async () => {
 
   if (isListening) {
-    if (recorderRef.current) recorderRef.current.stop();
-    if (socketRef.current) socketRef.current.close();
-    setIsListening(false);
-  } else {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      socketRef.current = new WebSocket("ws://127.0.0.1:8000/api/v1/doctor/ws/scribe/stream");
+    if (recorderRef.current) {
+      recorderRef.current.stop();
+    }
+  
+    if (socketRef.current) {
       
-      // Don't clear notes yet, just prepare liveTranscript
+    }
+  
+    setIsListening(false);
+    return;
+  } 
+  else {
+    try {
+  
+      // Clear previous consultation transcript
+      setFinalTranscript("");
+      setPartialTranscript("");
+      setClinicalSummary("");
+  
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  
+      socketRef.current = new WebSocket(
+        "ws://127.0.0.1:8000/api/v1/doctor/ws/scribe/stream"
+      );
+      
+      // Debug logs
+      socketRef.current.onopen = () => {
+        console.log("✅ WebSocket Connected");
+      };
+      
+      socketRef.current.onerror = (err) => {
+        console.error("❌ WebSocket Error:", err);
+      };
+      
+      socketRef.current.onclose = () => {
+        console.log("🔌 WebSocket Closed");
+      };
+      
       setLiveTranscript("Listening...");
-
-      // Inside toggleScribe
+      
       socketRef.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
       
+        console.log("Received:", data);
+      
         if (data.type === "partial_transcript") {
           setPartialTranscript(data.text);
+          setLiveTranscript(data.text);
         }
       
-        if (data.type === "final_transcript") {
-      
-          setFinalTranscript((prev) => {
-            return prev + " " + data.text;
-          });
-      
-          setPartialTranscript("");
+        if (data.type === "conversation_update") {
+          transcriptRef.current = data.text;
+          setFinalTranscript(data.text);
         }
+        
       };
 
 
       const mediaRecorder = new MediaRecorder(stream);
+
+console.log("Recorder MIME Type:", mediaRecorder.mimeType);
+
       recorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
-          socketRef.current.send(e.data);
+      mediaRecorder.ondataavailable = async (e) => {
+        if (
+          e.data.size > 0 &&
+          socketRef.current?.readyState === WebSocket.OPEN
+        ) {
+          const arrayBuffer = await e.data.arrayBuffer();
+          socketRef.current.send(arrayBuffer);
         }
       };
       
-      mediaRecorder.onstop = async () => { // Make this async
+      mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
+      
         setIsListening(false);
+      
+        console.log("Waiting for final transcript...");
+      
+        setTimeout(() => {
+          finalizeNotesWithGemini();
         
-        // ADD THIS: Small delay to ensure the last WebSocket message 
-        // is fully committed to the rawTranscript state
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        finalizeNotesWithGemini(); 
+          if (socketRef.current) {
+            socketRef.current.close();
+          }
+        }, 3000);
       };
 
       mediaRecorder.start(250); 
       setIsListening(true);
-    } catch (err) {
+    } 
+    catch (err) {
       alert("Mic error.");
     }
   }
@@ -160,10 +202,10 @@ const toggleScribe = async () => {
 
 
 const finalizeNotesWithGemini = async () => {
-  console.log("Sending to AI Scribe:", rawTranscript);
 
-  const fullTranscript = `${finalTranscript} ${partialTranscript}`;
+  const fullTranscript = transcriptRef.current.trim();
 
+console.log("Sending to AI Scribe:", fullTranscript);
 if (!fullTranscript.trim()) return;
   setIsProcessing(true);
   setLiveTranscript(""); 
@@ -190,9 +232,19 @@ if (!fullTranscript.trim()) return;
       }
   } catch (error) {
       console.error("Scribe Error:", error);
+
+      console.log("FINAL TRANSCRIPT:");
+console.log(finalTranscript);
+
+console.log("PARTIAL TRANSCRIPT:");
+console.log(partialTranscript);
+
+console.log("TOTAL LENGTH:", fullTranscript.length);
   } finally {
       setIsProcessing(false);
   }
+
+  
 };
 
 useEffect(() => {
